@@ -6,7 +6,7 @@ catalogue==2.0.10
 certifi==2025.7.14
 charset-normalizer==3.4.2
 click==8.2.1
-cloudpathlib==0.21.1
+cloudpathlib==0.22.0
 cobble==0.1.4
 confection==0.1.5
 cymem==2.0.11
