@@ -178,6 +178,19 @@ out/
 .env.test.local
 .env.production.local
 
+# Gradio specific
+.gradio/
+flagged/
+gradio_cached_examples/
+flagged-*
+
+# Modal specific (for serverless deployment)
+.modal/
+modal_auth.json
+
+# FastAPI / web framework cache
+.fastapi_cache/
+
 # Project-specific generated directories
 downloads/
 uploads/
@@ -249,6 +262,7 @@ _build/
 GEMINI.md
 .claude
 .vincent
+WARP.md
 
 # AI Development Tools
 # Augment AI specific
@@ -388,3 +402,66 @@ config/api_keys.json
 config/secrets.json
 config/*.key
 config/*.secret
+
+# Runtime database files that shouldn't be committed
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+database/user_choices*.db
+
+# OCR and processing temporary files
+dolphin_ocr/temp/
+dolphin_ocr/cache/
+processing_temp/
+
+# Generated PDFs and documents (unless explicitly versioned)
+*.pdf
+*.docx
+*.doc
+*.txt
+!README*.txt
+!requirements*.txt
+!LICENSE.txt
+!CHANGELOG.txt
+!docs/**/*.pdf
+!tests/fixtures/**/*.pdf
+!examples/**/*.pdf
+
+# User uploads and downloads (keep structure)
+uploads/*
+!uploads/.gitkeep
+!uploads/README.md
+downloads/*
+!downloads/.gitkeep
+!downloads/README.md
+
+# Translation cache and temporary processing
+translation_cache/
+processed_pdfs/
+ocr_results/
+layout_analysis/
+
+# Service logs and monitoring
+service_logs/
+metrics/
+performance_logs/
+
+# Development environment files
+.python-version
+.vscode/settings.json
+.idea/workspace.xml
+.idea/tasks.xml
+
+# Runtime configuration and state
+app_state.json
+runtime_config.json
+session_data/
+
+# Backup and recovery files
+*.backup
+*.recovery
+*_backup_*
+
+# MCP server authentication tokens
+.mcp_auth
+mcp_tokens.json

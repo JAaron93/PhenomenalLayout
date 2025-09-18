@@ -5,9 +5,10 @@ Modal deployment of the Dolphin OCR model for better performance and control.
 """
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
 import modal
+from fastapi import File, UploadFile
 
 try:
     from dolphin_ocr.logging_config import get_logger, setup_logging
@@ -51,7 +52,7 @@ dolphin_image = (
         "torchvision",
         "transformers>=4.30.0",
         "accelerate",
-        "pdf2image>=3.1.0",
+        "pdf2image>=1.17.0",
         "pillow>=9.0.0",
         "numpy>=1.21.0",
         "opencv-python-headless",
@@ -81,7 +82,7 @@ model_volume = modal.Volume.from_name("dolphin-ocr-models", create_if_missing=Tr
     volumes={MODEL_CACHE_PATH: model_volume},
     timeout=300,
     memory=8192,  # 8GB RAM
-    container_idle_timeout=300,  # 5 minutes
+    scaledown_window=300,  # 5 minutes
 )
 def download_model():
     """Download and cache the Dolphin OCR model."""
@@ -110,12 +111,14 @@ def download_model():
     volumes={MODEL_CACHE_PATH: model_volume},
     timeout=600,  # 10 minutes for processing
     memory=8192,
-    container_idle_timeout=600,
+    scaledown_window=600,  # 10 minutes
 )
 class DolphinOCRProcessor:
     """Cached Dolphin OCR processor that loads model once and reuses it."""
 
-    def __init__(self):
+    # Use modal.enter() instead of __init__ for Modal 1.0+ compatibility
+    @modal.enter()
+    def initialize_model(self):
         """Initialize the processor and load the model once."""
         import torch
         from transformers import AutoModelForVision2Seq, AutoProcessor
@@ -171,7 +174,7 @@ class DolphinOCRProcessor:
             )
         except Exception as e:
             logger.exception("Failed to convert PDF")
-            raise ValueError(f"PDF conversion failed: {e!s}")
+            raise ValueError(f"PDF conversion failed: {e!s}") from e
 
         logger.debug("Processing %d pages...", len(images))
 
@@ -232,7 +235,7 @@ dolphin_processor = DolphinOCRProcessor()
     volumes={MODEL_CACHE_PATH: model_volume},
     timeout=600,
     memory=8192,
-    container_idle_timeout=600,
+    scaledown_window=600,  # 10 minutes
 )
 def process_pdf_with_dolphin(pdf_bytes: bytes) -> dict[str, Any]:
     """Process a PDF with Dolphin OCR using cached model (backward compatibility wrapper).
@@ -284,7 +287,7 @@ def parse_dolphin_output(
                 bbox.get("x2", page_width),
                 bbox.get("y2", page_height),
             ]
-        if not (isinstance(bbox, (list, tuple)) and len(bbox) == 4):
+        if not (isinstance(bbox, list | tuple) and len(bbox) == 4):
             # Default to full page span if missing
             bbox = [0, 0, page_width, page_height]
         conf = obj.get("confidence") or obj.get("conf") or obj.get("score")
@@ -378,16 +381,21 @@ def parse_dolphin_output(
     image=dolphin_image,
     timeout=630,  # Slightly longer than processing function timeout
 )
-@modal.web_endpoint(method="POST", docs=True)
-def dolphin_ocr_endpoint(
-    pdf_file: bytes = modal.web_endpoint.FileUpload(),
+@modal.fastapi_endpoint(method="POST", docs=True)
+async def dolphin_ocr_endpoint(
+    pdf_file: Annotated[UploadFile, File()],
 ) -> dict[str, Any]:
     """HTTP endpoint for Dolphin OCR processing.
+
     Compatible with the existing dolphin_client.py interface.
     """
     # Validate file size (example: 50MB limit)
-    MAX_FILE_SIZE = 50 * 1024 * 1024
-    if len(pdf_file) > MAX_FILE_SIZE:
+    max_file_size = 50 * 1024 * 1024
+
+    # Read the file content
+    pdf_content = await pdf_file.read()
+
+    if len(pdf_content) > max_file_size:
         return {
             "error": "File too large. Maximum size is 50MB.",
             "status": "failed",
@@ -396,7 +404,7 @@ def dolphin_ocr_endpoint(
     try:
         # Process the PDF using cached processor for better performance
         # Properly invoke the Modal function
-        result = process_pdf_with_dolphin.remote(pdf_file)
+        result = process_pdf_with_dolphin.remote(pdf_content)
         return result
     except ValueError as e:
         return {

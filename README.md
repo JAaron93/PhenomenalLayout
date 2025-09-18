@@ -174,6 +174,8 @@ quality_score = (
 
 ## 🛠️ Installation
 
+### Quick Start
+
 1. Clone the repository
 2. Install dependencies:
    ```bash
@@ -188,6 +190,35 @@ quality_score = (
    ```bash
    python app.py
    ```
+
+### Development Setup
+
+**Prerequisites**: Python 3.11 or 3.12 recommended (match CI environment)
+
+```bash
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install development dependencies
+python -m pip install -U pip
+python -m pip install -r requirements-dev.txt
+
+# Install pre-commit hooks (auto-formatting and linting)
+pre-commit install
+
+# Run tests
+export GRADIO_SCHEMA_PATCH=true GRADIO_SHARE=true CI=true
+pytest -q
+
+# Manual linting and type checking
+ruff check .
+mypy .
+```
+
+**Note**: Pre-commit hooks auto-format code (Black, trailing whitespace) and may abort your first commit attempt. Simply re-stage files and commit again.
+
+For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Requirements
 

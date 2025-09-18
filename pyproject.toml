@@ -131,15 +131,12 @@ exclude = [
   "scripts/",
 ]
 
-# Development dependencies for code formatting and linting
+# Development dependencies are now managed via pip-tools
+# See dev-requirements.in for high-level dev dependencies
+# See dev-requirements.txt for pinned dev dependencies
 [project.optional-dependencies]
 dev = [
-    "black>=22.0.0,<26.0.0",  # Code formatting
-    "ruff>=0.1.0,<1.0.0",    # Fast Python linter
-    "pre-commit>=3.0.0",     # Git hooks framework
-    "pytest>=8.2.2",         # Test runner
-    "pytest-asyncio>=1.1.0", # Asyncio support for pytest
-    "pytest-cov>=4.1.0",       # Coverage plugin
-    "mypy>=1.10.0,<2.0.0",     # Static type checker
-    "pluggy>=1.6.0"            # Plugin system for Python
+    # Maintained in dev-requirements.in -> dev-requirements.txt
+    # Install with: pip-sync dev-requirements.txt
+    "pip-tools>=7.5,<8.0",  # For dependency management
 ]
