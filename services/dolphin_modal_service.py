@@ -5,6 +5,7 @@ Modal deployment of the Dolphin OCR model for better performance and control.
 """
 
 import logging
+import os
 from typing import Any
 
 import modal
@@ -31,6 +32,10 @@ app = modal.App("dolphin-ocr-service")
 MODEL_CACHE_PATH = "/models"
 DOLPHIN_MODEL_ID = "ByteDance/Dolphin"  # Adjust based on actual model ID
 PDF2IMAGE_DPI = 300
+
+# File size configuration
+# Default: 50MB, configurable via MAX_FILE_SIZE_BYTES environment variable
+DEFAULT_MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE_BYTES", str(50 * 1024 * 1024)))
 
 # Define the container image with all dependencies
 dolphin_image = (
@@ -264,7 +269,6 @@ def parse_dolphin_output(
     Returns a list of dicts with keys: text, bbox [x1,y1,x2,y2], confidence, block_type.
     """
     import json as _json
-    import logging as _logging
     import re as _re
 
     def _clip_bbox(b: list[float]) -> list[float]:
@@ -365,7 +369,7 @@ def parse_dolphin_output(
         return blocks
 
     # 4) Fallbacks: split on blank lines for paragraphs, use full-page bbox
-    _logging.warning("Falling back to simple Dolphin output parsing")
+    logger.warning("Falling back to simple Dolphin output parsing")
     paras = [p.strip() for p in raw_output.splitlines() if p.strip()]
     if not paras:
         return []
@@ -382,45 +386,178 @@ def parse_dolphin_output(
 )
 @modal.asgi_app()
 def dolphin_ocr_endpoint():
-    """FastAPI app with GET landing, GET /health, and POST / for OCR."""
-    from fastapi import FastAPI, File, UploadFile
+    """FastAPI app with basic security and file validation."""
+    import time
+
+    from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+    from fastapi.middleware.cors import CORSMiddleware
 
     api = FastAPI(title="Dolphin OCR Service")
 
-    @api.get("/")
-    def landing():
-        return {
-            "name": "dolphin-ocr-service",
-            "status": "ok",
-            "message": "POST a PDF to '/' using form-data field 'pdf_file' to run OCR.",
-            "limits": {"max_file_size_mb": 50},
-            "docs": "/docs",
-        }
+    # Basic CORS setup
+    allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+    )
+
+    # Simple rate limiting tracker (in-memory)
+    request_counts = {}
+    rate_limit = int(os.getenv("API_RATE_LIMIT_PER_MINUTE", "60"))
+
+    def check_rate_limit(client_ip: str) -> bool:
+        """Simple rate limiting check."""
+        current_time = time.time()
+        minute_ago = current_time - 60
+
+        # Clean old requests
+        if client_ip in request_counts:
+            request_counts[client_ip] = [
+                t for t in request_counts[client_ip] if t > minute_ago
+            ]
+        else:
+            request_counts[client_ip] = []
+
+        # Check limit
+        if len(request_counts[client_ip]) >= rate_limit:
+            return False
+
+        # Add current request
+        request_counts[client_ip].append(current_time)
+        return True
+
+    def validate_pdf_file(file: UploadFile) -> None:
+        """Basic PDF file validation."""
+        # Check content type
+        allowed_types = {"application/pdf", "application/x-pdf"}
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type. Expected PDF, got {file.content_type}",
+            )
+
+        # Check filename
+        if not file.filename or not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="File must have .pdf extension")
+
+        # Check for directory traversal
+        if ".." in file.filename or "/" in file.filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+
+    def validate_pdf_content(content: bytes) -> None:
+        """Validate PDF content and structure."""
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file")
+
+        # Check file size
+        if len(content) > DEFAULT_MAX_FILE_SIZE:
+            max_size_mb = DEFAULT_MAX_FILE_SIZE / (1024 * 1024)
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size is {max_size_mb:.0f}MB",
+            )
+
+        # Check PDF magic bytes
+        pdf_headers = [b"%PDF-1.", b"\x25\x50\x44\x46"]
+        if not any(content.startswith(header) for header in pdf_headers):
+            raise HTTPException(
+                status_code=400, detail="File is not a valid PDF document"
+            )
+
+    def check_api_key(request: Request) -> bool:
+        """Optional API key authentication."""
+        api_key = os.getenv("ADMIN_API_KEY")
+        if not api_key:
+            return True  # No authentication required if not set
+
+        # Check X-API-Key header
+        request_api_key = request.headers.get("X-API-Key")
+        return request_api_key == api_key
+
+    @api.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        """Add basic security headers."""
+        response = await call_next(request)
+
+        # Basic security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+
+        return response
 
     @api.get("/health")
-    def health():
+    async def health():
+        """Health check endpoint."""
         return {
             "status": "ok",
             "service": "dolphin-ocr",
+            "timestamp": time.time(),
+        }
+
+    @api.get("/")
+    async def landing(request: Request):
+        """Landing page with service information."""
+        client_ip = request.client.host if request.client else "unknown"
+
+        # Rate limiting
+        if not check_rate_limit(client_ip):
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+        # Optional authentication
+        if not check_api_key(request):
+            raise HTTPException(status_code=401, detail="API key required")
+
+        max_size_mb = DEFAULT_MAX_FILE_SIZE / (1024 * 1024)
+        return {
+            "name": "dolphin-ocr-service",
+            "status": "ok",
+            "message": "POST a PDF to '/' for OCR processing",
+            "limits": {"max_file_size_mb": int(max_size_mb)},
+            "rate_limit": f"{rate_limit} requests/minute",
         }
 
     @api.post("/")
-    async def ocr(pdf_file: UploadFile = File(...)) -> dict[str, Any]:
-        # Validate file size (example: 50MB limit)
-        max_file_size = 50 * 1024 * 1024
-        pdf_content = await pdf_file.read()
+    async def ocr(request: Request, pdf_file: UploadFile = File(...)) -> dict[str, Any]:
+        """OCR endpoint with basic security validation."""
+        client_ip = request.client.host if request.client else "unknown"
 
-        if len(pdf_content) > max_file_size:
-            return {
-                "error": "File too large. Maximum size is 50MB.",
-                "status": "failed",
-            }
+        # Rate limiting
+        if not check_rate_limit(client_ip):
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+        # Optional authentication
+        if not check_api_key(request):
+            raise HTTPException(status_code=401, detail="API key required")
+
         try:
+            # Validate file upload
+            validate_pdf_file(pdf_file)
+
+            # Read and validate content
+            pdf_content = await pdf_file.read()
+            validate_pdf_content(pdf_content)
+
+            logger.info(
+                f"Processing PDF: file={pdf_file.filename}, "
+                f"size={len(pdf_content)}, ip={client_ip}"
+            )
+
+            # Process with Dolphin OCR
             result = process_pdf_with_dolphin.remote(pdf_content)
+
+            logger.info(f"OCR completed: {pdf_file.filename}")
             return result
+
+        except HTTPException:
+            raise
         except ValueError as e:
+            logger.warning(f"Validation error: {e}")
             return {
-                "error": f"Invalid input: {e!s}",
+                "error": f"Validation error: {e!s}",
                 "status": "failed",
             }
         except Exception:

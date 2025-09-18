@@ -349,8 +349,21 @@ Common workflows
 ```
 
 Important
-- Don’t edit requirements.txt or dev-requirements.txt directly. Edit the *.in files and run ./scripts/update-deps.sh
+- Don't edit requirements.txt or dev-requirements.txt directly. Edit the *.in files and run ./scripts/update-deps.sh
 - pdf2image is pinned to >=1.17.0 for compatibility with Debian Bookworm + poppler-utils in the Modal image
+
+### Optional Security Scanning
+
+For additional security, you can run basic security scans:
+
+```bash
+# Install security tools (optional)
+pip install bandit safety
+
+# Run security scans
+bandit -r services/              # Static security analysis
+safety check                     # Check for known vulnerabilities
+```
 
 ## 🔧 Configuration
 
@@ -378,6 +391,7 @@ Configure these environment variables to optimize performance for your use case:
 - `TRANSLATION_MAX_RETRIES`: Maximum retry attempts for failed requests (default: 3)
 - `TRANSLATION_REQUEST_TIMEOUT`: Request timeout in seconds (default: 30.0)
 - `PARALLEL_PROCESSING_THRESHOLD`: Minimum texts to trigger parallel processing (default: 5)
+- `MAX_FILE_SIZE_BYTES`: Maximum file size for uploads in bytes (default: 52428800, which is 50MB)
 
 **Example configuration:**
 ```bash
@@ -388,12 +402,72 @@ export LINGO_API_KEY="your_lingo_api_key_here"
 export MAX_CONCURRENT_REQUESTS=15
 export MAX_REQUESTS_PER_SECOND=8.0
 export TRANSLATION_BATCH_SIZE=100
+export MAX_FILE_SIZE_BYTES=104857600  # 100MB
 
 # Conservative setup for API rate limits
 export MAX_CONCURRENT_REQUESTS=5
 export MAX_REQUESTS_PER_SECOND=2.0
 export TRANSLATION_BATCH_SIZE=25
+export MAX_FILE_SIZE_BYTES=26214400   # 25MB
 ```
+
+## 🔒 Security
+
+### Basic Security Features
+
+The Dolphin Modal service includes essential security measures:
+
+#### File Upload Security
+- **Content Validation**: PDF Content-Type and magic bytes validation
+- **File Size Limits**: Configurable via `MAX_FILE_SIZE_BYTES` (default: 50MB)
+- **Filename Sanitization**: Protection against directory traversal attacks
+
+#### Security Headers
+Basic security headers are automatically applied:
+```
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Strict-Transport-Security: max-age=31536000
+```
+
+#### Rate Limiting
+- Basic rate limiting: 60 requests per minute per IP (configurable)
+- Set via environment variable: `API_RATE_LIMIT_PER_MINUTE`
+
+#### Optional Authentication
+For production deployments, you can enable simple API key authentication:
+
+```bash
+# Set API key for protected access
+export ADMIN_API_KEY="your-secure-api-key"
+
+# Use API key in requests
+curl -X POST https://your-domain/ \
+  -H "X-API-Key: your-secure-api-key" \
+  -F "pdf_file=@document.pdf"
+```
+
+#### Environment Variables
+```bash
+# File upload limits
+export MAX_FILE_SIZE_BYTES="52428800"  # 50MB
+
+# Rate limiting
+export API_RATE_LIMIT_PER_MINUTE="60"
+
+# Optional authentication
+export ADMIN_API_KEY="your-api-key"  # Optional
+
+# CORS (for web apps)
+export ALLOWED_ORIGINS="*"  # Or specific domains
+```
+
+### Security Best Practices
+
+1. **Deploy with HTTPS**: Always use TLS in production
+2. **Limit File Sizes**: Adjust `MAX_FILE_SIZE_BYTES` for your needs
+3. **Monitor Logs**: Check for suspicious upload patterns
+4. **API Key Protection**: If using authentication, keep API keys secure
 
 ## 💻 Usage Examples
 
