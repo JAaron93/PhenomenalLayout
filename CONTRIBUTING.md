@@ -126,8 +126,6 @@ In CI/CD environments:
 
 ### Manual Quality Checks
 
-### Manual Quality Checks
-
 Run the test suite:
 
 ```bash

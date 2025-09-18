@@ -286,6 +286,72 @@ Example command:
 GRADIO_SCHEMA_PATCH=true GRADIO_SHARE=true pytest -q -m "not slow" tests/test_ui_gradio.py
 ```
 
+## ☁️ Dolphin OCR Service (Modal)
+
+The project ships with a GPU-accelerated Dolphin OCR service deployed on Modal. The service runs a FastAPI ASGI app and exposes three routes:
+
+- GET / → Landing JSON with usage and limits
+- GET /health → Simple health check: {"status":"ok","service":"dolphin-ocr"}
+- POST / → OCR endpoint; accepts multipart form-data with field name pdf_file (max 50MB)
+
+Quickstart (replace <endpoint> with your Modal URL)
+```bash
+# Health
+curl -s https://<endpoint>/health
+
+# Landing
+curl -s https://<endpoint>/
+
+# OCR
+curl -X POST \
+  -F "pdf_file=@/absolute/path/to/your.pdf" \
+  https://<endpoint>/
+```
+
+Deploy / update
+```bash
+# Deploy the service (recommended)
+modal deploy services/dolphin_modal_service.py
+
+# Optional: prefetch model assets into the persistent volume
+modal run services/dolphin_modal_service.py::setup_dolphin_service
+
+# Local hot-reload (runs until stopped)
+modal serve services/dolphin_modal_service.py
+```
+
+Notes
+- GPU: Configured for T4 by default in code; adjust @app.cls/@app.function if needed
+- Model cache: Stored in Modal Volume "dolphin-ocr-models" mounted at /models
+- Size limit: 50MB for uploaded PDFs; oversized files return a JSON error
+- Implementation: Uses modal.asgi_app(FastAPI) so multiple routes are supported
+
+## 📦 Dependency management (pip-tools)
+
+We manage pinned dependencies with pip-tools for reproducible builds.
+
+Core files
+- requirements.in → High-level runtime deps
+- requirements.txt → Pinned runtime deps (auto-generated)
+- dev-requirements.in → High-level dev deps (includes requirements.in)
+- dev-requirements.txt → Pinned dev deps (auto-generated)
+
+Common workflows
+```bash
+# Dev setup (installs dev deps)
+./scripts/sync-deps.sh
+
+# Prod-only setup (runtime deps)
+./scripts/sync-deps.sh prod
+
+# Update all pins from *.in
+./scripts/update-deps.sh
+```
+
+Important
+- Don’t edit requirements.txt or dev-requirements.txt directly. Edit the *.in files and run ./scripts/update-deps.sh
+- pdf2image is pinned to >=1.17.0 for compatibility with Debian Bookworm + poppler-utils in the Modal image
+
 ## 🔧 Configuration
 
 ### PDF Processing Settings

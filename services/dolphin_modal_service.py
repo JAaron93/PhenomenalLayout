@@ -5,10 +5,9 @@ Modal deployment of the Dolphin OCR model for better performance and control.
 """
 
 import logging
-from typing import Annotated, Any
+from typing import Any
 
 import modal
-from fastapi import File, UploadFile
 
 try:
     from dolphin_ocr.logging_config import get_logger, setup_logging
@@ -381,45 +380,60 @@ def parse_dolphin_output(
     image=dolphin_image,
     timeout=630,  # Slightly longer than processing function timeout
 )
-@modal.fastapi_endpoint(method="POST", docs=True)
-async def dolphin_ocr_endpoint(
-    pdf_file: Annotated[UploadFile, File()],
-) -> dict[str, Any]:
-    """HTTP endpoint for Dolphin OCR processing.
+@modal.asgi_app()
+def dolphin_ocr_endpoint():
+    """FastAPI app with GET landing, GET /health, and POST / for OCR."""
+    from fastapi import FastAPI, File, UploadFile
 
-    Compatible with the existing dolphin_client.py interface.
-    """
-    # Validate file size (example: 50MB limit)
-    max_file_size = 50 * 1024 * 1024
+    api = FastAPI(title="Dolphin OCR Service")
 
-    # Read the file content
-    pdf_content = await pdf_file.read()
-
-    if len(pdf_content) > max_file_size:
+    @api.get("/")
+    def landing():
         return {
-            "error": "File too large. Maximum size is 50MB.",
-            "status": "failed",
+            "name": "dolphin-ocr-service",
+            "status": "ok",
+            "message": "POST a PDF to '/' using form-data field 'pdf_file' to run OCR.",
+            "limits": {"max_file_size_mb": 50},
+            "docs": "/docs",
         }
 
-    try:
-        # Process the PDF using cached processor for better performance
-        # Properly invoke the Modal function
-        result = process_pdf_with_dolphin.remote(pdf_content)
-        return result
-    except ValueError as e:
+    @api.get("/health")
+    def health():
         return {
-            "error": f"Invalid input: {e!s}",
-            "status": "failed",
-        }
-    except Exception:
-        logger.exception("Unexpected error in OCR endpoint")
-        return {
-            "error": "Internal server error during OCR processing",
-            "status": "failed",
+            "status": "ok",
+            "service": "dolphin-ocr",
         }
 
+    @api.post("/")
+    async def ocr(pdf_file: UploadFile = File(...)) -> dict[str, Any]:
+        # Validate file size (example: 50MB limit)
+        max_file_size = 50 * 1024 * 1024
+        pdf_content = await pdf_file.read()
 
-@app.function()
+        if len(pdf_content) > max_file_size:
+            return {
+                "error": "File too large. Maximum size is 50MB.",
+                "status": "failed",
+            }
+        try:
+            result = process_pdf_with_dolphin.remote(pdf_content)
+            return result
+        except ValueError as e:
+            return {
+                "error": f"Invalid input: {e!s}",
+                "status": "failed",
+            }
+        except Exception:
+            logger.exception("Unexpected error in OCR endpoint")
+            return {
+                "error": "Internal server error during OCR processing",
+                "status": "failed",
+            }
+
+    return api
+
+
+@app.function(image=dolphin_image)
 def setup_dolphin_service():
     """Initialize the Dolphin service by downloading the model."""
     logger.info("Setting up Dolphin OCR service...")

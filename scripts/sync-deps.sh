@@ -2,7 +2,7 @@
 # sync-deps.sh - Sync virtual environment with pinned dependencies
 # Usage: ./scripts/sync-deps.sh [dev|prod]
 
-set -e
+set -euo pipefail
 
 MODE="${1:-dev}"
 
@@ -19,13 +19,13 @@ fi
 # Ensure pip-tools is installed
 if ! command -v pip-sync &> /dev/null; then
     echo "📥 Installing pip-tools..."
-    pip install pip-tools
+    python -m pip install "pip-tools>=7.5,<8.0"
 fi
 
 echo ""
 if [[ "$MODE" == "prod" ]]; then
     echo "⚙️  Production mode: Installing runtime dependencies only..."
-    pip-sync requirements.txt
+    pip-sync requirements-prod.txt
     echo "✅ Production dependencies synced!"
 else
     echo "⚙️  Development mode: Installing all dependencies..."
@@ -38,7 +38,6 @@ echo "📊 Environment status:"
 python -c "
 import sys
 print(f'  Python: {sys.version.split()[0]}')
-import pip
 try:
     import modal, fastapi, gradio
     print('  ✅ Core packages: OK')
