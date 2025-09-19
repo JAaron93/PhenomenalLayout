@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
 from models.neologism_models import NeologismAnalysis
 
 from .enhanced_document_processor import EnhancedDocumentProcessor
@@ -20,7 +21,6 @@ from .philosophy_enhanced_translation_service import (
     PhilosophyEnhancedTranslationService,
     PhilosophyTranslationProgress,
 )
-from .user_choice_manager import UserChoiceManager
 
 logger = logging.getLogger(__name__)
 

@@ -1015,6 +1015,10 @@ class UserChoiceManager:
 
 # Convenience functions for integration
 
+# NOTE: create_session_for_document has been moved to core.dynamic_choice_engine
+# for API consolidation. Import from there for unified API access:
+#   from core.dynamic_choice_engine import create_session_for_document
+
 
 def create_choice_manager(db_path: str = "user_choices.db") -> UserChoiceManager:
     """Create a UserChoiceManager instance."""
@@ -1028,20 +1032,3 @@ def process_neologism_analysis(
 ) -> dict[str, Any]:
     """Process a neologism analysis with the choice manager."""
     return manager.apply_choices_to_analysis(analysis, session_id)
-
-
-def create_session_for_document(
-    manager: UserChoiceManager,
-    document_name: str,
-    user_id: Optional[str] = None,
-    source_lang: str = "de",
-    target_lang: str = "en",
-) -> ChoiceSession:
-    """Create a session for processing a document."""
-    return manager.create_session(
-        session_name=f"Processing: {document_name}",
-        document_name=document_name,
-        user_id=user_id,
-        source_language=source_lang,
-        target_language=target_lang,
-    )

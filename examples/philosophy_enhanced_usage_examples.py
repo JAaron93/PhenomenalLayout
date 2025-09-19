@@ -9,6 +9,7 @@ for various translation scenarios involving philosophical texts with neologisms.
 import logging
 from typing import Any
 
+from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
 from models.user_choice_models import ChoiceSession, ChoiceType
 from services.philosophy_enhanced_document_processor import (
     create_philosophy_enhanced_document_processor,
@@ -18,7 +19,6 @@ from services.philosophy_enhanced_translation_service import (
     PhilosophyEnhancedTranslationService,
     PhilosophyTranslationProgress,
 )
-from services.user_choice_manager import UserChoiceManager
 
 
 def _configure_logging() -> None:

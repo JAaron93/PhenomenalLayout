@@ -630,7 +630,7 @@ class TestConvenienceFunctions:
 
     def test_create_session_for_document_convenience(self, temp_manager):
         """Test creating session for document convenience function."""
-        from services.user_choice_manager import create_session_for_document
+        from core.dynamic_choice_engine import create_session_for_document
 
         session = create_session_for_document(
             manager=temp_manager,

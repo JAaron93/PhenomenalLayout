@@ -16,18 +16,20 @@ from typing import Any, Optional, Union
 # heavyweight/unstable PyMuPDF dependency. Scope: non-docs code no longer imports
 # or references PyMuPDF/fitz; PDF handling is now PDF-only using Dolphin OCR.
 from config.settings import Settings
+
+# Import optimized dynamic programming implementations
+from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
+from core.dynamic_language_engine import OptimizedLanguageDetector as LanguageDetector
+from core.dynamic_validation_engine import OptimizedFileValidator as FileValidator
 from core.state_manager import state, translation_jobs
 from services.enhanced_document_processor import EnhancedDocumentProcessor
-from services.language_detector import LanguageDetector
 from services.neologism_detector import NeologismDetector
 from services.philosophy_enhanced_translation_service import (
     PhilosophyEnhancedTranslationService,
 )
 from services.translation_service import TranslationService
-from services.user_choice_manager import UserChoiceManager
 from utils.file_handler import FileHandler
 from utils.language_utils import extract_text_sample_for_language_detection
-from utils.validators import FileValidator
 
 # PDF preprocessing constants
 PDF_PREPROCESSING_DPI: int = (

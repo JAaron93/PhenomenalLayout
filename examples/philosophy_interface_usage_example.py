@@ -7,6 +7,7 @@ import asyncio
 import logging
 import traceback
 
+from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
 from models.user_choice_models import ChoiceScope, ChoiceType
 from services.neologism_detector import NeologismDetector
 
@@ -14,7 +15,6 @@ from services.neologism_detector import NeologismDetector
 from services.philosophy_enhanced_translation_service import (
     PhilosophyEnhancedTranslationService,
 )
-from services.user_choice_manager import UserChoiceManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

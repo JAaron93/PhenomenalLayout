@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dolphin_ocr.layout import LayoutPreservationEngine
+from core.dynamic_layout_engine import (
+    OptimizedLayoutPreservationEngine as LayoutPreservationEngine,
+)
 from dolphin_ocr.monitoring import MonitoringService
 from dolphin_ocr.pdf_to_image import PDFToImageConverter
 from services.dolphin_ocr_service import DolphinOCRService

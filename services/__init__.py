@@ -34,13 +34,15 @@ except ImportError as e:
     _service_availability["TRANSLATION_SERVICE_AVAILABLE"] = False
 
 try:
-    from .language_detector import LanguageDetector  # noqa: F401
+    from core.dynamic_language_engine import (  # noqa: F401
+        OptimizedLanguageDetector as LanguageDetector,
+    )
 
     _available_services.append("LanguageDetector")
     _service_availability["LANGUAGE_DETECTOR_AVAILABLE"] = True
-    logger.debug("LanguageDetector imported successfully")
+    logger.debug("OptimizedLanguageDetector imported successfully")
 except ImportError as e:
-    logger.debug(f"LanguageDetector not available: {e}")
+    logger.debug(f"OptimizedLanguageDetector not available: {e}")
     _service_availability["LANGUAGE_DETECTOR_AVAILABLE"] = False
 
 try:

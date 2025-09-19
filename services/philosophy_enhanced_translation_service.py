@@ -12,12 +12,12 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Optional
 
+from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
 from models.neologism_models import DetectedNeologism, NeologismAnalysis
 from models.user_choice_models import ChoiceType, UserChoice
 
 from .neologism_detector import NeologismDetector
 from .translation_service import TranslationService
-from .user_choice_manager import UserChoiceManager
 
 logger = logging.getLogger(__name__)
 
