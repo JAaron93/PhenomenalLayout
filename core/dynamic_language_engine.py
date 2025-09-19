@@ -241,11 +241,9 @@ class DynamicLanguageDetector:
         pattern_cache_size: int = 1024,
         result_cache_size: int = 512,
         confidence_threshold: float = 0.5,
-        enable_numpy_acceleration: bool = False,  # Disabled: vectorized scoring not yet implemented
         min_text_length: int = DEFAULT_MIN_TEXT_LENGTH,
     ):
         self.confidence_threshold = confidence_threshold
-        self.enable_numpy_acceleration = enable_numpy_acceleration
         self.min_text_length = max(1, min_text_length)  # Ensure minimum of 1
 
         # Caching systems
@@ -256,9 +254,8 @@ class DynamicLanguageDetector:
             max_size=result_cache_size, ttl_seconds=300  # 5 minute TTL for results
         )
 
-        # Pre-compiled patterns and scoring matrix
+        # Pre-compiled patterns
         self.compiled_patterns: dict[str, CompiledPattern] = {}
-        self.scoring_matrix: Optional[np.ndarray] = None
         self.language_index: dict[str, int] = {}
 
         # Performance tracking
@@ -301,10 +298,6 @@ class DynamicLanguageDetector:
                     compiled = self._compile_pattern(language, pattern_data)
                     self.compiled_patterns[language] = compiled
                     self.language_index[language] = len(self.language_index)
-
-                # Build scoring matrix if numpy is enabled
-                if self.enable_numpy_acceleration:
-                    self._build_scoring_matrix()
 
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self.pattern_metrics.record_operation(duration_ms)
@@ -354,28 +347,6 @@ class DynamicLanguageDetector:
             word_pattern_weight=word_pattern_weight,
             char_pattern_weight=char_pattern_weight,
         )
-
-    def _build_scoring_matrix(self) -> None:
-        """Build numpy scoring matrix for vectorized computation.
-
-        Currently not implemented. Vectorized scoring requires:
-        1. Converting text features to fixed-size vectors
-        2. Pre-computing language feature matrices
-        3. Implementing batch matrix operations
-        """
-        if not self.enable_numpy_acceleration:
-            return
-
-        # Disable numpy acceleration since it's not implemented
-        self.enable_numpy_acceleration = False
-        return
-
-        try:
-            # TODO: Implement actual matrix construction
-            pass
-        except ImportError:
-            # Numpy not available, fall back to non-vectorized approach
-            self.enable_numpy_acceleration = False
 
     @memoize(cache_size=256, ttl_seconds=300)
     def detect_language_optimized(
@@ -443,15 +414,7 @@ class DynamicLanguageDetector:
         self, fingerprint: TextFingerprint
     ) -> dict[str, LanguageScore]:
         """Compute scores for all languages using optimized patterns."""
-        scores = {}
-
-        # Use numpy acceleration if available
-        if self.enable_numpy_acceleration and self.scoring_matrix is not None:
-            scores = self._compute_scores_vectorized(fingerprint)
-        else:
-            scores = self._compute_scores_sequential(fingerprint)
-
-        return scores
+        return self._compute_scores_sequential(fingerprint)
 
     def _compute_scores_sequential(
         self, fingerprint: TextFingerprint
@@ -467,24 +430,6 @@ class DynamicLanguageDetector:
             scores[language] = score
 
         return scores
-
-    def _compute_scores_vectorized(
-        self, fingerprint: TextFingerprint
-    ) -> dict[str, LanguageScore]:
-        """Compute scores using numpy vectorization.
-
-        This method is not yet implemented. Vectorized scoring would require:
-        1. Converting TextFingerprint to feature vector representation
-        2. Ensuring shape alignment with pre-built language matrix
-        3. Using numpy matrix operations for batch scoring
-        4. Applying same normalization/weighting as sequential method
-
-        TODO: Implement proper vectorized scoring or remove numpy acceleration.
-        """
-        raise NotImplementedError(
-            "Vectorized scoring is not yet implemented. "
-            "Use enable_numpy_acceleration=False to disable this code path."
-        )
 
     @performance_monitor("batch_language_detection")
     def detect_languages_batch(self, texts: list[str]) -> list[str]:
@@ -511,10 +456,7 @@ class DynamicLanguageDetector:
 
         # Process cache misses in batch
         if cache_misses:
-            if self.enable_numpy_acceleration:
-                self._process_batch_vectorized(cache_misses, results)
-            else:
-                self._process_batch_sequential(cache_misses, results)
+            self._process_batch_sequential(cache_misses, results)
 
         return results
 
@@ -541,21 +483,6 @@ class DynamicLanguageDetector:
             # Cache the result
             cache_key = fingerprint.to_cache_key()
             self.result_cache.put(cache_key, best_language)
-
-    def _process_batch_vectorized(
-        self, cache_misses: list[tuple[int, TextFingerprint]], results: list[str]
-    ) -> None:
-        """Process batch misses using vectorized operations.
-
-        This method is not yet implemented. Vectorized batch processing would require
-        proper implementation of _compute_scores_vectorized first.
-
-        TODO: Implement vectorized batch processing or remove numpy acceleration.
-        """
-        raise NotImplementedError(
-            "Vectorized batch processing is not yet implemented. "
-            "Use enable_numpy_acceleration=False to disable this code path."
-        )
 
     def detect_language_with_confidence(
         self, text: str, min_length: Optional[int] = None
@@ -669,11 +596,7 @@ class DynamicLanguageDetector:
                 "result_cache": self.result_cache.stats(),
             },
             "optimization_status": {
-                "numpy_acceleration": self.enable_numpy_acceleration,
                 "patterns_compiled": len(self.compiled_patterns),
-                "scoring_matrix_size": self.scoring_matrix.shape
-                if self.scoring_matrix is not None
-                else None,
             },
             "memoization_stats": getattr(
                 self.detect_language_optimized, "cache_stats", lambda: {}

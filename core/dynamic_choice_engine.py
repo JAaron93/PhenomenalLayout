@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
@@ -251,8 +252,6 @@ class DynamicConflictResolutionEngine:
             return resolution_result
 
         except Exception as e:
-            import logging
-
             logging.error(f"Error resolving conflict {conflict.conflict_id}: {e}")
             duration_ms = (time.perf_counter() - start_time) * 1000
             self.metrics.record_operation(duration_ms, cache_hit=False)
@@ -366,7 +365,10 @@ CONFLICT_RESOLUTION_REGISTRY = DynamicRegistry[DynamicConflictResolutionEngine](
 )
 
 
-def register_conflict_resolver(name: str, resolver_factory: callable) -> None:
+def register_conflict_resolver(
+    name: str,
+    resolver_factory: Callable[..., Any],
+) -> None:
     """Register a custom conflict resolver."""
     CONFLICT_RESOLUTION_REGISTRY.register(name, resolver_factory)
 

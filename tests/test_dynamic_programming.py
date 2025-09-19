@@ -6,12 +6,18 @@ system.
 """
 
 import os
+import statistics
 import tempfile
 import time
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
+# Performance testing configuration
+PERFORMANCE_SAMPLE_COUNT = int(os.getenv("TEST_PERFORMANCE_SAMPLES", "5"))
+PERFORMANCE_PERCENTILE = float(os.getenv("TEST_PERFORMANCE_PERCENTILE", "90"))
+PERFORMANCE_MAX_RETRIES = int(os.getenv("TEST_PERFORMANCE_MAX_RETRIES", "3"))
 
 try:
     import psutil
@@ -183,7 +189,7 @@ class TestDynamicLayoutEngine:
         assert StrategyType.HYBRID in distribution
 
     def test_o1_strategy_lookup_performance(self):
-        """Test O(1) strategy lookup performance."""
+        """Test O(1) strategy lookup performance with percentile-based assertion."""
         engine = DynamicLayoutEngine()
 
         # Create test analysis
@@ -198,23 +204,48 @@ class TestDynamicLayoutEngine:
             can_wrap_within_height=True,
         )
 
-        # Benchmark lookup performance
-        iterations = 1000
-        start_time = time.perf_counter()
-
-        for _ in range(iterations):
-            strategy = engine.determine_strategy_optimized(analysis)
-            assert strategy is not None
-
-        duration = time.perf_counter() - start_time
-        avg_time_ms = (duration / iterations) * 1000
-
         # Configurable threshold for different CI environments
-        # Default: 5.0ms (more forgiving for CI), can be overridden via environment
         threshold = float(os.getenv("TEST_O1_THRESHOLD_MS", "5.0"))
 
-        # Should be very fast (configurable threshold)
-        assert avg_time_ms < threshold
+        def measure_performance_sample() -> list[float]:
+            """Measure performance across multiple iterations and return per-iteration times."""
+            iterations = 1000
+            times_ms = []
+
+            for _ in range(PERFORMANCE_SAMPLE_COUNT):
+                start_time = time.perf_counter()
+
+                for _ in range(iterations):
+                    strategy = engine.determine_strategy_optimized(analysis)
+                    assert strategy is not None
+
+                duration = time.perf_counter() - start_time
+                avg_time_ms = (duration / iterations) * 1000
+                times_ms.append(avg_time_ms)
+
+            return times_ms
+
+        # Retry measurement if needed
+        for attempt in range(PERFORMANCE_MAX_RETRIES):
+            try:
+                sample_times = measure_performance_sample()
+                percentile_time = statistics.quantile(
+                    sample_times, PERFORMANCE_PERCENTILE / 100.0
+                )
+
+                # Assert percentile performance
+                assert percentile_time < threshold, (
+                    f"P{PERFORMANCE_PERCENTILE} performance {percentile_time:.3f}ms "
+                    f"exceeds threshold {threshold}ms (samples: {sample_times}, attempt {attempt + 1})"
+                )
+                break  # Success, exit retry loop
+
+            except AssertionError as e:
+                if attempt == PERFORMANCE_MAX_RETRIES - 1:
+                    # Last attempt failed, re-raise
+                    raise e
+                # Retry on failure (except last attempt)
+                continue
 
     def test_strategy_key_generation(self):
         """Test strategy key generation and uniqueness."""
@@ -291,19 +322,36 @@ class TestDynamicLanguageEngine:
 
         test_text = "Der deutsche Text ist hier zu finden."
 
-        # First detection
-        start_time = time.perf_counter()
+        # Clear caches before test to ensure clean state
+        detector.clear_caches()
+
+        # Get initial cache metrics from the memoized wrapper
+        wrapper_metrics = detector.detect_language_optimized.metrics()
+        initial_hits = wrapper_metrics.cache_hits
+        initial_misses = wrapper_metrics.cache_misses
+
+        # First detection - should be a cache miss
         result1 = detector.detect_language_optimized(test_text)
-        first_duration = time.perf_counter() - start_time
+        after_first_hits = wrapper_metrics.cache_hits
+        after_first_misses = wrapper_metrics.cache_misses
 
-        # Second detection (should be cached)
-        start_time = time.perf_counter()
+        # Second detection - should be a cache hit
         result2 = detector.detect_language_optimized(test_text)
-        second_duration = time.perf_counter() - start_time
+        after_second_hits = wrapper_metrics.cache_hits
+        after_second_misses = wrapper_metrics.cache_misses
 
+        # Assert results are equal
         assert result1 == result2
-        # Cached call should be significantly faster
-        assert second_duration < first_duration * 0.5
+
+        # Assert cache behavior deterministically via wrapper metrics
+        assert (
+            after_first_misses == initial_misses + 1
+        ), "First call should be cache miss"
+        assert after_first_hits == initial_hits, "First call should not increase hits"
+        assert after_second_hits == initial_hits + 1, "Second call should be cache hit"
+        assert (
+            after_second_misses == initial_misses + 1
+        ), "Second call should not increase misses"
 
     def test_batch_detection_performance(self):
         """Test batch detection performance."""
@@ -421,19 +469,41 @@ class TestDynamicValidationEngine:
             file_path = tmp_file.name
 
         try:
-            # First validation
-            start_time = time.perf_counter()
+            # Clear caches to ensure deterministic state
+            engine.clear_caches()
+
+            # Use memoization wrapper metrics
+            # for deterministic cache assertions
+            wrapper_metrics = engine.validate_optimized.metrics()
+            initial_hits = wrapper_metrics.cache_hits
+            initial_misses = wrapper_metrics.cache_misses
+
+            # First validation - should be a cache miss
             results1 = engine.validate_optimized(file_path)
-            first_duration = time.perf_counter() - start_time
+            after_first_hits = wrapper_metrics.cache_hits
+            after_first_misses = wrapper_metrics.cache_misses
 
-            # Second validation (should be cached)
-            start_time = time.perf_counter()
+            # Second validation - should be a cache hit
             results2 = engine.validate_optimized(file_path)
-            second_duration = time.perf_counter() - start_time
+            after_second_hits = wrapper_metrics.cache_hits
+            after_second_misses = wrapper_metrics.cache_misses
 
+            # Results should be structurally equal in length
             assert len(results1) == len(results2)
-            # Cached call should be faster
-            assert second_duration < first_duration * 0.8
+
+            # Deterministic cache behavior assertions
+            assert (
+                after_first_misses == initial_misses + 1
+            ), "First call should be cache miss"
+            assert (
+                after_first_hits == initial_hits
+            ), "First call should not increase hits"
+            assert (
+                after_second_hits == initial_hits + 1
+            ), "Second call should be cache hit"
+            assert (
+                after_second_misses == initial_misses + 1
+            ), "Second call should not increase misses"
 
         finally:
             Path(file_path).unlink()

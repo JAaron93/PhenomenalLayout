@@ -302,6 +302,7 @@ CLAUDE.md
 claude_context.md
 
 # Other AI tools
+.augment/
 .cursor/
 .continue/
 .codeium/
@@ -310,6 +311,7 @@ copilot-instructions.md
 byterover-rules.md
 .windsurf
 .cursorindexingignore
+.zencoder
 WARP.md
 
 # Jupyter Notebook

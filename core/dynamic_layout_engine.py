@@ -10,7 +10,7 @@ from __future__ import annotations
 import itertools
 import logging
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -424,7 +424,7 @@ class DynamicLayoutEngine:
             )(),
             "strategy_distribution": self.get_strategy_distribution(),
             "table_size": len(self.strategy_table),
-            "registry_strategies": len(self.strategy_registry._strategies),
+            "registry_strategies": len(self.strategy_registry),
         }
 
     def benchmark_vs_original(
@@ -609,7 +609,10 @@ LAYOUT_STRATEGY_REGISTRY = get_registry(
 )
 
 
-def register_layout_strategy(name: str, strategy_factory: callable) -> None:
+def register_layout_strategy(
+    name: str,
+    strategy_factory: Callable[..., LayoutStrategy],
+) -> None:
     """Register a custom layout strategy."""
     LAYOUT_STRATEGY_REGISTRY.register(name, strategy_factory)
 

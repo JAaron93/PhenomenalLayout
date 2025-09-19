@@ -18,13 +18,9 @@ from pathlib import Path
 from typing import Any
 
 from core.dynamic_choice_engine import (
-    # Using OptimizedUserChoiceManager for performance:
-    # - 5-10x faster conflict resolution via pre-computed strategy tables
-    # - O(1) lookup vs O(n) sequential processing (see DYNAMIC_PROGRAMMING_REFACTORING.md)
-    # - Smart caching with TTL and memoization for >90% cache hit rates
-    # - Behavioral differences: Additional performance metrics, automatic cache warming
-    # - Backward compatible drop-in replacement for UserChoiceManager
-    # - Timeline: Original API deprecated Q3 2025, full consolidation Q4 2025
+    # OptimizedUserChoiceManager is a backward-compatible, higher-performance replacement.
+    # See PERFORMANCE_IMPROVEMENTS.md for details.
+    # TODO: Keep PERFORMANCE_IMPROVEMENTS.md in sync with any behavioral changes.
     OptimizedUserChoiceManager as UserChoiceManager,
 )
 from core.dynamic_choice_engine import (

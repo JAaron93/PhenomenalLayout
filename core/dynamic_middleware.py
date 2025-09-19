@@ -8,6 +8,7 @@ in the PhenomenalLayout system.
 from __future__ import annotations
 
 import functools
+import os
 import threading
 import time
 from collections import defaultdict
@@ -79,8 +80,25 @@ class MiddlewareMetrics:
 class DynamicProgrammingMonitor:
     """Monitor performance improvements from dynamic programming patterns."""
 
-    def __init__(self, cache_time_savings_factor: float = 0.9):
-        self.cache_time_savings_factor = cache_time_savings_factor
+    def __init__(self, cache_time_savings_factor: Optional[float] = None):
+        # Resolve cache time savings factor from argument or environment
+        if cache_time_savings_factor is None:
+            env_val = os.getenv("CACHE_TIME_SAVINGS_FACTOR", "0.9").strip()
+            try:
+                parsed = float(env_val)
+            except Exception as e:
+                raise ValueError(
+                    f"Invalid CACHE_TIME_SAVINGS_FACTOR: {env_val}. "
+                    "Must be a positive float."
+                ) from e
+            if parsed <= 0.0:
+                raise ValueError("CACHE_TIME_SAVINGS_FACTOR must be greater than 0")
+            self.cache_time_savings_factor = parsed
+        else:
+            if cache_time_savings_factor <= 0.0:
+                raise ValueError("cache_time_savings_factor must be greater than 0")
+            self.cache_time_savings_factor = cache_time_savings_factor
+
         self.metrics: dict[str, MiddlewareMetrics] = defaultdict(MiddlewareMetrics)
         self.pattern_usage: dict[str, int] = defaultdict(int)
         self._lock = threading.RLock()

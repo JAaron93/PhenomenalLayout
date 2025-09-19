@@ -12,6 +12,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -855,9 +856,13 @@ _file_validator = None
 def _get_file_validator():
     global _file_validator
     if _file_validator is None:
-        from utils.validators import FileValidator
+        try:
+            from utils.validators import FileValidator
 
-        _file_validator = FileValidator
+            _file_validator = FileValidator
+        except ImportError:
+            # Return None or a stub class
+            _file_validator = None
     return _file_validator
 
 
@@ -866,6 +871,8 @@ class OptimizedFileValidator:
 
     def __init__(self):
         validator_class = _get_file_validator()
+        if validator_class is None:
+            raise RuntimeError("FileValidator could not be imported")
         self.original_validator = validator_class()
         self.dynamic_engine = DynamicValidationEngine()
 
@@ -904,7 +911,9 @@ VALIDATION_ENGINE_REGISTRY = DynamicRegistry[DynamicValidationEngine](
 )
 
 
-def register_validation_engine(name: str, engine_factory: callable) -> None:
+def register_validation_engine(
+    name: str, engine_factory: Callable[..., DynamicValidationEngine]
+) -> None:
     """Register a custom validation engine."""
     VALIDATION_ENGINE_REGISTRY.register(name, engine_factory)
 

@@ -48,6 +48,13 @@ class PerformanceMetrics:
     max_duration_ms: float = 0.0
     total_duration_ms: float = 0.0
 
+    # Separate tracking for cached vs uncached operations
+    cache_hit_duration_ms: float = 0.0
+    cache_miss_duration_ms: float = 0.0
+
+    # Configurable cache time savings ratio (default: 90% savings)
+    cache_time_savings_ratio: float = 0.9
+
     @property
     def cache_hit_rate(self) -> float:
         """Calculate cache hit rate as percentage."""
@@ -57,24 +64,73 @@ class PerformanceMetrics:
 
     @property
     def performance_improvement(self) -> float:
-        """Estimate performance improvement from caching."""
-        if self.cache_misses == 0:
+        """Calculate performance improvement from caching.
+
+        Uses measured time differences between cached and uncached operations
+        when available, otherwise falls back to configured cache_time_savings_ratio.
+        Returns improvement as a percentage.
+        """
+        if self.cache_hits == 0 or self.total_duration_ms <= 0:
             return 0.0
-        cache_benefit = self.cache_hits * (
-            self.avg_duration_ms * 0.1
-        )  # Assume 90% time savings
-        total_time = self.total_duration_ms
-        return (cache_benefit / total_time) * 100 if total_time > 0 else 0.0
+
+        # Try to compute actual time savings from measurements
+        time_savings_ratio = self._compute_time_savings_ratio()
+
+        # Calculate average uncached duration for benefit estimation
+        if self.cache_misses > 0:
+            avg_uncached_duration = self.cache_miss_duration_ms / self.cache_misses
+        else:
+            avg_uncached_duration = self.avg_duration_ms
+
+        # Estimate time that would have been spent without caching
+        time_without_cache = self.cache_hits * avg_uncached_duration
+        time_with_cache = self.cache_hit_duration_ms
+
+        # Calculate actual benefit
+        if time_without_cache > 0:
+            actual_savings = time_without_cache - time_with_cache
+            return (actual_savings / self.total_duration_ms) * 100
+
+        # Fallback to ratio-based estimation
+        cache_benefit = self.cache_hits * (avg_uncached_duration * time_savings_ratio)
+        return (cache_benefit / self.total_duration_ms) * 100
+
+    def _compute_time_savings_ratio(self) -> float:
+        """Compute actual time savings ratio from measurements.
+
+        Returns the configured ratio if insufficient data is available.
+        Guards against division by zero and out-of-range ratios.
+        """
+        if self.cache_hits == 0 or self.cache_misses == 0:
+            # Not enough data, use configured ratio
+            return max(0.0, min(1.0, self.cache_time_savings_ratio))
+
+        avg_cached_duration = self.cache_hit_duration_ms / self.cache_hits
+        avg_uncached_duration = self.cache_miss_duration_ms / self.cache_misses
+
+        if avg_uncached_duration <= 0:
+            # Guard against division by zero
+            return max(0.0, min(1.0, self.cache_time_savings_ratio))
+
+        # Calculate actual savings ratio
+        measured_ratio = (
+            avg_uncached_duration - avg_cached_duration
+        ) / avg_uncached_duration
+
+        # Clamp to valid range [0.0, 1.0] and ensure sensible values
+        return max(0.0, min(1.0, measured_ratio))
 
     def record_operation(self, duration_ms: float, cache_hit: bool = False) -> None:
-        """Record a single operation's metrics."""
+        """Record a single operation's metrics with separate tracking for cached vs uncached."""
         self.total_calls += 1
         self.total_duration_ms += duration_ms
 
         if cache_hit:
             self.cache_hits += 1
+            self.cache_hit_duration_ms += duration_ms
         else:
             self.cache_misses += 1
+            self.cache_miss_duration_ms += duration_ms
 
         self.min_duration_ms = min(self.min_duration_ms, duration_ms)
         self.max_duration_ms = max(self.max_duration_ms, duration_ms)
@@ -119,7 +175,9 @@ class SmartCache(Generic[K, V]):
         self._lock = threading.RLock()
 
         # Policy-specific auxiliary structures
-        self._access_order: list[K] = []  # For LRU
+        from collections import deque
+
+        self._access_order: deque[K] = deque()  # For LRU
 
         # For LFU: min-heap of (access_count, insertion_order, key)
         self._lfu_heap: list[tuple[int, int, K]] = []
@@ -146,6 +204,7 @@ class SmartCache(Generic[K, V]):
                 if key in self._access_order:
                     self._access_order.remove(key)
                 self._access_order.append(key)
+                return entry.access()
             elif self.policy == CachePolicy.LFU:
                 # LFU: Update heap with new access count
                 # First increment the actual entry's access count
@@ -322,9 +381,74 @@ class DynamicRegistry(Generic[T]):
 
     def _create_cache_key(self, key: str, args: tuple, kwargs: dict) -> tuple:
         """Create a hashable cache key from arguments."""
-        # Convert kwargs to sorted tuple for consistent hashing
-        kwargs_tuple = tuple(sorted(kwargs.items()))
-        return (key, args, kwargs_tuple)
+
+        def _normalize_value(value):
+            """Recursively normalize unhashable values into hashable representations."""
+            try:
+                # Try to hash the value first - if it works, return as-is
+                hash(value)
+                return value
+            except TypeError:
+                # Value is unhashable, need to normalize it
+                if isinstance(value, list):
+                    return tuple(_normalize_value(item) for item in value)
+                elif isinstance(value, set):
+                    # Convert to sorted tuple for deterministic ordering
+                    try:
+                        return tuple(sorted(_normalize_value(item) for item in value))
+                    except TypeError:
+                        # Items might not be sortable, fall back to repr-based sorting
+                        return tuple(
+                            sorted((_normalize_value(item) for item in value), key=str)
+                        )
+                elif isinstance(value, dict):
+                    # Convert to tuple of sorted (key, value) pairs with recursive normalization
+                    normalized_items = []
+                    for k, v in sorted(value.items()):
+                        normalized_items.append(
+                            (_normalize_value(k), _normalize_value(v))
+                        )
+                    return tuple(normalized_items)
+                elif hasattr(value, "__dataclass_fields__"):
+                    # Handle dataclass objects
+                    import dataclasses
+
+                    normalized_fields = []
+                    for field_obj in sorted(
+                        dataclasses.fields(value), key=lambda f: f.name
+                    ):
+                        field_name = field_obj.name
+                        field_value = getattr(value, field_name)
+                        normalized_fields.append(
+                            (field_name, _normalize_value(field_value))
+                        )
+                    return (value.__class__.__name__, tuple(normalized_fields))
+                elif hasattr(value, "__dict__"):
+                    # Handle regular objects with __dict__
+                    normalized_attrs = []
+                    for k, v in sorted(value.__dict__.items()):
+                        normalized_attrs.append((k, _normalize_value(v)))
+                    return (value.__class__.__name__, tuple(normalized_attrs))
+                elif hasattr(value, "_name") and hasattr(value, "_value"):
+                    # Handle enum objects
+                    return (value.__class__.__name__, value._name, value._value)
+                elif hasattr(value, "name") and hasattr(value, "value"):
+                    # Handle enum objects (alternative pattern)
+                    return (value.__class__.__name__, value.name, value.value)
+                else:
+                    # For any other unhashable type, use repr as stable string representation
+                    return repr(value)
+
+        # Normalize args tuple recursively
+        normalized_args = tuple(_normalize_value(arg) for arg in args)
+
+        # Normalize kwargs dict recursively
+        normalized_kwargs_items = []
+        for k, v in sorted(kwargs.items()):
+            normalized_kwargs_items.append((_normalize_value(k), _normalize_value(v)))
+        normalized_kwargs = tuple(normalized_kwargs_items)
+
+        return (key, normalized_args, normalized_kwargs)
 
     def clear_cache(self) -> None:
         """Clear all cached instances."""
@@ -390,7 +514,9 @@ class DecisionTreeNode(Generic[T]):
         else:
             context_str = str(context)
 
-        return str(hash(context_str))[:16]
+        import hashlib
+
+        return hashlib.md5(context_str.encode(), usedforsecurity=False).hexdigest()[:16]
 
 
 class StrategyPattern(ABC, Generic[T]):
@@ -473,6 +599,29 @@ class StrategyRegistry(Generic[T]):
         """Get strategy selection performance metrics."""
         return self._metrics
 
+    @property
+    def strategy_count(self) -> int:
+        """Get the number of registered strategies.
+
+        Returns:
+            int: The total number of strategies currently registered in this registry.
+
+        Note:
+            This property provides public access to the strategy count without
+            exposing the internal _strategies list implementation.
+        """
+        return len(self._strategies)
+
+    def __len__(self) -> int:
+        """Return the number of registered strategies.
+
+        This enables using len(strategy_registry) for getting the strategy count.
+
+        Returns:
+            int: The total number of strategies currently registered.
+        """
+        return len(self._strategies)
+
 
 # Decorators for dynamic programming patterns
 
@@ -488,8 +637,76 @@ def memoize(cache_size: int = 128, ttl_seconds: Optional[float] = None):
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
-            # Create cache key
-            cache_key = (args, tuple(sorted(kwargs.items())))
+            def _normalize_value(value):
+                """Recursively normalize unhashable values into hashable representations."""
+                try:
+                    # Try to hash the value first - if it works, return as-is
+                    hash(value)
+                    return value
+                except TypeError:
+                    # Value is unhashable, need to normalize it
+                    if isinstance(value, list):
+                        return tuple(_normalize_value(item) for item in value)
+                    elif isinstance(value, set):
+                        # Convert to sorted tuple for deterministic ordering
+                        try:
+                            return tuple(
+                                sorted(_normalize_value(item) for item in value)
+                            )
+                        except TypeError:
+                            # Items might not be sortable, fall back to repr-based sorting
+                            return tuple(
+                                sorted(
+                                    (_normalize_value(item) for item in value), key=str
+                                )
+                            )
+                    elif isinstance(value, dict):
+                        # Convert to tuple of sorted (key, value) pairs with recursive normalization
+                        normalized_items = []
+                        for k, v in sorted(value.items()):
+                            normalized_items.append(
+                                (_normalize_value(k), _normalize_value(v))
+                            )
+                        return tuple(normalized_items)
+                    elif hasattr(value, "__dataclass_fields__"):
+                        # Handle dataclass objects
+                        import dataclasses
+
+                        normalized_fields = []
+                        for field_obj in sorted(
+                            dataclasses.fields(value), key=lambda f: f.name
+                        ):
+                            field_name = field_obj.name
+                            field_value = getattr(value, field_name)
+                            normalized_fields.append(
+                                (field_name, _normalize_value(field_value))
+                            )
+                        return (value.__class__.__name__, tuple(normalized_fields))
+                    elif hasattr(value, "__dict__"):
+                        # Handle regular objects with __dict__
+                        normalized_attrs = []
+                        for k, v in sorted(value.__dict__.items()):
+                            normalized_attrs.append((k, _normalize_value(v)))
+                        return (value.__class__.__name__, tuple(normalized_attrs))
+                    elif hasattr(value, "_name") and hasattr(value, "_value"):
+                        # Handle enum objects
+                        return (value.__class__.__name__, value._name, value._value)
+                    elif hasattr(value, "name") and hasattr(value, "value"):
+                        # Handle enum objects (alternative pattern)
+                        return (value.__class__.__name__, value.name, value.value)
+                    else:
+                        # For any other unhashable type, use repr as stable string representation
+                        return repr(value)
+
+            # Create cache key with normalization
+            normalized_args = tuple(_normalize_value(arg) for arg in args)
+            normalized_kwargs_items = []
+            for k, v in sorted(kwargs.items()):
+                normalized_kwargs_items.append(
+                    (_normalize_value(k), _normalize_value(v))
+                )
+            normalized_kwargs = tuple(normalized_kwargs_items)
+            cache_key = (normalized_args, normalized_kwargs)
 
             start_time = time.perf_counter()
 
