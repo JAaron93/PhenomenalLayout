@@ -282,8 +282,9 @@ WARP.md
 .kiro/
 
 # Qoder specific
-.qoder
-.qoder/
+# .qoder
+.qoder/rules
+.qoder/repowiki/en/meta
 
 # MCP (Model Context Protocol) configurations - keep workspace configs
 mcp.json
