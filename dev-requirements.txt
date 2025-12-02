@@ -49,6 +49,8 @@ certifi==2025.8.3
     #   httpx
     #   modal
     #   requests
+cffi==2.0.0
+    # via cryptography
 cfgv==3.4.0
     # via pre-commit
 charset-normalizer==3.4.3
@@ -70,6 +72,8 @@ confection==0.1.5
     #   weasel
 coverage[toml]==7.10.6
     # via pytest-cov
+cryptography==46.0.3
+    # via pyjwt
 cymem==2.0.11
     # via
     #   preshed
@@ -162,7 +166,7 @@ markupsafe==3.0.2
     # via
     #   gradio
     #   jinja2
-mcp==1.14.0
+mcp==1.23.0
     # via -r requirements.in
 mdurl==0.1.2
     # via markdown-it-py
@@ -244,6 +248,8 @@ protobuf==6.32.1
     # via modal
 psutil==7.1.0
     # via -r requirements.in
+pycparser==2.23
+    # via cffi
 pydantic==2.11.9
     # via
     #   confection
@@ -264,6 +270,8 @@ pygments==2.19.2
     # via
     #   pytest
     #   rich
+pyjwt[crypto]==2.10.1
+    # via mcp
 pypdf==5.9.0
     # via -r requirements.in
 pyproject-hooks==1.2.0
@@ -385,6 +393,7 @@ typing-extensions==4.15.0
     #   gradio
     #   gradio-client
     #   huggingface-hub
+    #   mcp
     #   modal
     #   mypy
     #   pydantic
@@ -394,6 +403,7 @@ typing-extensions==4.15.0
     #   typing-inspection
 typing-inspection==0.4.1
     # via
+    #   mcp
     #   pydantic
     #   pydantic-settings
 tzdata==2025.2
