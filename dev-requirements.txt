@@ -206,6 +206,7 @@ packaging==25.0
     #   spacy
     #   thinc
     #   weasel
+    #   wheel
 pandas==2.3.2
     # via gradio
 pathspec==0.12.1
@@ -424,7 +425,7 @@ websockets==15.0.1
     # via
     #   gradio-client
     #   uvicorn
-wheel==0.45.1
+wheel==0.46.2
     # via pip-tools
 wrapt==1.17.3
     # via smart-open
