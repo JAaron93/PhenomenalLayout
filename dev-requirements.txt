@@ -264,7 +264,7 @@ pygments==2.19.2
     # via
     #   pytest
     #   rich
-pypdf==5.9.0
+pypdf==6.7.1
     # via -r requirements.in
 pyproject-hooks==1.2.0
     # via
