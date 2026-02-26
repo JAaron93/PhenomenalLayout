@@ -1787,9 +1787,9 @@ referencing==0.36.2 \
     # via
     #   jsonschema
     #   jsonschema-specifications
-reportlab==4.4.3 \
-    --hash=sha256:073b0975dab69536acd3251858e6b0524ed3e087e71f1d0d1895acb50acf9c7b \
-    --hash=sha256:df905dc5ec5ddaae91fc9cb3371af863311271d555236410954961c5ee6ee1b5
+reportlab==4.4.4 \
+    --hash=sha256:299b3b0534e7202bb94ed2ddcd7179b818dcda7de9d8518a57c85a58a1ebaadb \
+    --hash=sha256:cb2f658b7f4a15be2cc68f7203aa67faef67213edd4f2d4bdd3eb20dab75a80d
     # via -r requirements.in
 requests==2.32.5 \
     --hash=sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6 \
