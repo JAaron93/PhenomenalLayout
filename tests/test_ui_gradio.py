@@ -52,7 +52,7 @@ def test_ui_valid_pdf_upload(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
                 {"info": "ocr details", "metrics": {"ocr_conf": 0.9}},
             )
 
-        monkeypatch.setattr(gi, "process_file_upload", fake_process)
+        monkeypatch.setattr(gi, "process_file_upload_sync", fake_process)
 
         # Exercise the API using gradio_client
         from gradio_client import Client, handle_file
@@ -88,7 +88,7 @@ def test_ui_non_pdf_validation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
                 "message": "Only PDF format supported",
             }
 
-        monkeypatch.setattr(gi, "process_file_upload", fake_process)
+        monkeypatch.setattr(gi, "process_file_upload_sync", fake_process)
 
         from gradio_client import Client, handle_file
 
@@ -120,7 +120,7 @@ def test_ui_encrypted_pdf_validation(
                 ),
             }
 
-        monkeypatch.setattr(gi, "process_file_upload", fake_process)
+        monkeypatch.setattr(gi, "process_file_upload_sync", fake_process)
 
         from gradio_client import Client, handle_file
 
@@ -161,7 +161,7 @@ def test_ui_translation_progress(monkeypatch: pytest.MonkeyPatch) -> None:
         def fake_status():
             return "processing 50%", 0.5, True
 
-        monkeypatch.setattr(gi, "start_translation", fake_start)
+        monkeypatch.setattr(gi, "start_translation_sync", fake_start)
         monkeypatch.setattr(gi, "get_translation_status", fake_status)
 
         from gradio_client import Client
