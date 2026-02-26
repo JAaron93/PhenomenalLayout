@@ -73,19 +73,9 @@ version_compare() {
     fi
 }
 
-# Check if pre-commit is installed
-echo "1. Checking pre-commit installation..."
-if ! command -v pre-commit &> /dev/null; then
-    echo "   ❌ pre-commit is not installed!"
-    echo "   Please install it with: pip install pre-commit"
-    exit 1
-else
-    echo "   ✅ pre-commit is installed ($(pre-commit --version))"
-fi
-echo ""
 
 # Check if Black is installed
-echo "2. Checking Black installation..."
+echo "1. Checking Black installation..."
 if ! command -v black &> /dev/null; then
     echo "   ❌ Black is not installed!"
     echo "   Please install it with: pip install -e .[dev]"
@@ -115,7 +105,7 @@ fi
 echo ""
 
 # Check if Ruff is installed
-echo "3. Checking Ruff installation..."
+echo "2. Checking Ruff installation..."
 if ! command -v ruff &> /dev/null; then
     echo "   ❌ Ruff is not installed!"
     echo "   Please install it with: pip install -e .[dev]"
@@ -143,25 +133,18 @@ else
 fi
 echo ""
 
-# Install pre-commit hooks
-echo "4. Installing pre-commit hooks..."
-pre-commit clean
-pre-commit install
-echo "   ✅ Pre-commit hooks installed"
-echo ""
-
 # Capture before statistics (if baseline exists)
-echo "5. Capturing statistics..."
+echo "3. Capturing statistics..."
 echo ""
 
 # Count Python files (excluding .git and other build directories for performance)
 PY_FILE_COUNT=$(find . \( -name ".git" -o -name ".venv" -o -name "__pycache__" -o -name "build" -o -name "dist" \) -prune -o -name "*.py" -type f -print | wc -l)
 echo "   📊 Python files found: $PY_FILE_COUNT"
 
-# Run pre-commit and capture results
+# Run tools directly and capture results
 echo ""
-echo "6. Running pre-commit on all files..."
-echo "   This may take a moment and might modify files..."
+echo "4. Running Black and Ruff on all files..."
+echo "   This may take a moment..."
 echo ""
 
 # Create temporary file for output
@@ -173,10 +156,16 @@ TEMP_OUTPUT=$(mktemp) || {
 # Cleanup on exit or interrupt
 trap 'rm -f "$TEMP_OUTPUT"' EXIT
 
-# Run pre-commit and capture exit code
+# Run tools and capture exit code
 set +e  # Temporarily disable exit on error
-pre-commit run --all-files 2>&1 | tee "$TEMP_OUTPUT"
-EXIT_CODE=$?
+echo "--- Black Check ---" >> "$TEMP_OUTPUT"
+black --check . 2>&1 | tee -a "$TEMP_OUTPUT"
+BLACK_EXIT=$?
+echo "" >> "$TEMP_OUTPUT"
+echo "--- Ruff Check ---" >> "$TEMP_OUTPUT"
+ruff check . 2>&1 | tee -a "$TEMP_OUTPUT"
+RUFF_EXIT=$?
+EXIT_CODE=$((BLACK_EXIT || RUFF_EXIT))
 set -e  # Re-enable exit on error
 
 echo ""
@@ -190,16 +179,13 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo "✅ All checks passed! No issues found."
 else
     echo "⚠️  Some files were modified or issues were found."
-    # Count modifications by tool
-    BLACK_MODS=$(grep -c "Format Python code with Black.*Failed" "$TEMP_OUTPUT" || true)
-    RUFF_MODS=$(grep -c "Lint Python code with Ruff.*Failed" "$TEMP_OUTPUT" || true)
 
-    if [ $BLACK_MODS -gt 0 ]; then
-        echo "   📝 Black formatted files"
+    if [ $BLACK_EXIT -ne 0 ]; then
+        echo "   📝 Black found formatting issues"
     fi
 
-    if [ $RUFF_MODS -gt 0 ]; then
-        echo "   🔧 Ruff fixed linting issues"
+    if [ $RUFF_EXIT -ne 0 ]; then
+        echo "   🔧 Ruff found linting issues"
     fi
 fi
 

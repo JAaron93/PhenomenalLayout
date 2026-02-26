@@ -204,8 +204,9 @@ source .venv/bin/activate
 python -m pip install -U pip
 python -m pip install -r requirements-dev.txt
 
-# Install pre-commit hooks (auto-formatting and linting)
-pre-commit install
+# Run linter and formatter manually
+black --check .
+ruff check .
 
 # Run tests
 export GRADIO_SCHEMA_PATCH=true GRADIO_SHARE=true CI=true

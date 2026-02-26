@@ -207,7 +207,7 @@ Validates the migration from Flake8 to Black + Ruff tooling.
 
 **Features:**
 - Validates Black and Ruff installation and configuration
-- Checks pre-commit hooks setup
+- Validates Black and Ruff setup and formatting
 - Tests code formatting and linting on project files
 - Provides detailed reporting of any issues found
 - Robust error handling with proper shell syntax

@@ -391,7 +391,3 @@ class EnhancedDocumentProcessor:
             # Log unexpected exceptions with traceback and re-raise
             logger.exception("Unexpected error while generating preview")
             raise
-
-    def _get_backup_path(self, original_path: str) -> str:
-        """Generate backup path for layout information."""
-        return ""

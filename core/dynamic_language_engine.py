@@ -17,14 +17,6 @@ from dataclasses import dataclass
 from re import Pattern
 from typing import Any, Optional
 
-try:
-    import numpy as np
-
-    HAS_NUMPY = True
-except ImportError:
-    np = None
-    HAS_NUMPY = False
-
 from core.dynamic_programming import (
     DynamicRegistry,
     PerformanceMetrics,

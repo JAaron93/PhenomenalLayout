@@ -78,25 +78,6 @@ class PhilosophyTranslationProgress:
             + translation_progress * translation_weight
         ) * 100.0
 
-        # Legacy computation path
-        detection_weight = 0.3
-        choice_weight = 0.2
-        translation_weight = 0.5
-
-        detection_progress = self.processed_chunks / max(1, self.total_chunks)
-        choice_progress = (
-            (self.processed_neologisms / max(1, self.total_neologisms))
-            if self.total_neologisms > 0
-            else 1.0
-        )
-        translation_progress = self.translation_progress / 100.0
-
-        return (
-            detection_progress * detection_weight
-            + choice_progress * choice_weight
-            + translation_progress * translation_weight
-        ) * 100.0
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {

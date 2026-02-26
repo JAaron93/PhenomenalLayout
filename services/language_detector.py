@@ -472,7 +472,7 @@ class LanguageDetector:
                 detected_code: str = detect_func(text)
             except (lang_exc, ValueError) as e:  # type: ignore[misc]
                 logger.warning("Language detection error: %s", e)
-            return "Unknown"
+                return "Unknown"
             mapped_lang = self.language_map.get(detected_code, detected_code.upper())
             if mapped_lang == detected_code.upper():
                 logger.debug(

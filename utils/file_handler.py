@@ -183,22 +183,3 @@ class FileHandler:
         except Exception as e:
             logger.error(f"Unexpected error during cleanup: {e}")
             raise
-
-        logger.info(
-            f"Cleanup completed: {cleanup_count} files removed, {error_count} errors"
-        )
-        import time
-
-        current_time = time.time()
-        max_age_seconds = max_age_hours * 3600
-
-        for directory in [self.upload_dir, self.download_dir, self.temp_dir]:
-            try:
-                for file_path in Path(directory).glob("*"):
-                    if file_path.is_file():
-                        file_age = current_time - file_path.stat().st_mtime
-                        if file_age > max_age_seconds:
-                            file_path.unlink()
-                            logger.info(f"Cleaned up old file: {file_path}")
-            except Exception as e:
-                logger.warning(f"Cleanup error in {directory}: {e}")

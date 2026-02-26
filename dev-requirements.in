@@ -6,7 +6,6 @@
 black>=25.1,<26.0
 ruff>=0.12,<1.0
 mypy>=1.17,<2.0
-pre-commit>=4.3,<5.0
 
 # Testing Framework
 pytest>=8.4,<9.0
