@@ -68,7 +68,7 @@ dolphin_image = (
     )
     .env(
         {
-            "HF_HUB_ENABLE_HF_TRANSFER": "1",
+            "HF_XET_HIGH_PERFORMANCE": "1",
             "HF_HUB_CACHE": MODEL_CACHE_PATH,
             "TRANSFORMERS_CACHE": MODEL_CACHE_PATH,
             "TORCH_HOME": MODEL_CACHE_PATH,

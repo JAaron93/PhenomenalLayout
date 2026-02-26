@@ -17,7 +17,7 @@ def _launch_blocks() -> tuple[gr.blocks.Blocks, str]:
     demo = create_gradio_interface()
     # Launch in headless mode; request a share link as fallback
     app, local_url, share_url = demo.launch(
-        prevent_thread_lock=True, show_api=False, share=True
+        prevent_thread_lock=True, share=True
     )
     # Prefer share_url if provided, otherwise local_url
     url = share_url or local_url or ""

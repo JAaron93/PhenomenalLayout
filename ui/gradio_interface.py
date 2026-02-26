@@ -275,8 +275,6 @@ def create_gradio_interface() -> gr.Blocks:
 
     with gr.Blocks(
         title=APP_TITLE,
-        theme=gr.themes.Soft(),
-        css=css_content,
     ) as interface:
         with gr.Row():
             with gr.Column(scale=1):
@@ -459,5 +457,11 @@ def create_gradio_interface() -> gr.Blocks:
             inputs=[output_format],
             outputs=[download_file],
         )
+
+    # Apply theme and css directly to the Blocks instance to avoid Gradio 6 deprecation warnings on the constructor.
+    # Note: When mounting via gr.mount_gradio_app in FastAPI, launch() is not called directly,
+    # so we set these properties before mounting/launching.
+    interface.theme = gr.themes.Soft()
+    interface.css = css_content
 
     return interface
