@@ -10,7 +10,7 @@ mypy>=1.17,<2.0
 # Testing Framework
 pytest>=8.4,<9.0
 pytest-asyncio>=1.1,<2.0
-pytest-cov>=6.2,<7.0
+pytest-cov>=6.2,<8.0
 
 # Build Tools (already installed but good to have explicit)
 pip-tools>=7.5,<8.0
