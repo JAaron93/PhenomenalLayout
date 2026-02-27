@@ -177,11 +177,13 @@ class AsyncDocumentProcessor:
         )
         if process_pool is not None:
             self._pool = process_pool
+            self._owns_pool = False
         else:
             # Use a conservative default based on CPU count
             cpu = os.cpu_count() or 2
             workers = max(1, cpu - 1)
             self._pool = ProcessPoolExecutor(max_workers=workers)
+            self._owns_pool = True
 
     async def process_document(
         self,
@@ -336,6 +338,34 @@ class AsyncDocumentProcessor:
                 on_progress("reconstructed", {"output_path": output_path})
 
             return layout
+
+    async def aclose(self) -> None:
+        """Async cleanup method to shutdown the process pool if owned."""
+        if self._owns_pool and hasattr(self, '_pool') and self._pool is not None:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._pool.shutdown, True)
+
+    def close(self) -> None:
+        """Synchronous cleanup method to shutdown the process pool if owned."""
+        if self._owns_pool and hasattr(self, '_pool') and self._pool is not None:
+            self._pool.shutdown(wait=True)
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit with cleanup."""
+        await self.aclose()
+
+    def __del__(self):
+        """Fallback cleanup in destructor."""
+        try:
+            if self._owns_pool and hasattr(self, '_pool') and self._pool is not None:
+                self._pool.shutdown(wait=False)
+        except Exception:
+            # Ignore errors during cleanup in destructor
+            pass
 
     # -------------------------- Helpers --------------------------
 

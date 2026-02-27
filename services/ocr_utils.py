@@ -57,6 +57,9 @@ def parse_ocr_result(result: dict[str, Any]) -> list[list[TextBlock]]:
                     bbox_values[2] = 100.0
                 if bbox_values[3] <= 0:
                     bbox_values[3] = 20.0
+            except (TypeError, ValueError, IndexError):
+                bbox_values = [0.0, 0.0, 100.0, 20.0]
+            
             try:
                 ocr_conf = float(blk["confidence"]) if "confidence" in blk else None
             except (TypeError, ValueError):
