@@ -205,64 +205,17 @@ def create_gradio_interface() -> gr.Blocks:
     """
     # Load supported languages from config (fallback to defaults)
     languages_path = Path(__file__).parent.parent / "config" / "languages.json"
+    from utils.language_utils import DEFAULT_SUPPORTED_LANGUAGES
     try:
         data = json.loads(languages_path.read_text())
         supported_languages = data.get(
             "supported_languages",
-            [
-                "English",
-                "Spanish",
-                "French",
-                "German",
-                "Italian",
-                "Portuguese",
-                "Russian",
-                "Chinese",
-                "Japanese",
-                "Korean",
-                "Arabic",
-                "Hindi",
-                "Dutch",
-                "Swedish",
-                "Norwegian",
-            ],
+            DEFAULT_SUPPORTED_LANGUAGES,
         )
     except FileNotFoundError:
-        supported_languages = [
-            "English",
-            "Spanish",
-            "French",
-            "German",
-            "Italian",
-            "Portuguese",
-            "Russian",
-            "Chinese",
-            "Japanese",
-            "Korean",
-            "Arabic",
-            "Hindi",
-            "Dutch",
-            "Swedish",
-            "Norwegian",
-        ]
+        supported_languages = DEFAULT_SUPPORTED_LANGUAGES
     except json.JSONDecodeError:
-        supported_languages = [
-            "English",
-            "Spanish",
-            "French",
-            "German",
-            "Italian",
-            "Portuguese",
-            "Russian",
-            "Chinese",
-            "Japanese",
-            "Korean",
-            "Arabic",
-            "Hindi",
-            "Dutch",
-            "Swedish",
-            "Norwegian",
-        ]
+        supported_languages = DEFAULT_SUPPORTED_LANGUAGES
 
     # Load CSS from external file
     css_path = Path(__file__).parent.parent / "static" / "styles.css"

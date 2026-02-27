@@ -311,58 +311,8 @@ class NeologismDetector:
 
     def _load_german_patterns(self) -> dict[str, list[str]]:
         """Load German morphological patterns for compound analysis."""
-        return {
-            "compound_linking": ["s", "n", "es", "en", "er", "e", "ns", "ts"],
-            "philosophical_prefixes": [
-                "vor",
-                "nach",
-                "über",
-                "unter",
-                "zwischen",
-                "gegen",
-                "mit",
-                "ur",
-                "proto",
-                "meta",
-                "anti",
-                "pseudo",
-                "neo",
-                "para",
-            ],
-            "abstract_suffixes": [
-                "heit",
-                "keit",
-                "ung",
-                "schaft",
-                "tum",
-                "nis",
-                "sal",
-                "ismus",
-                "ität",
-                "ation",
-                "ismus",
-                "logie",
-                "sophie",
-            ],
-            "philosophical_endings": [
-                "bewusstsein",
-                "wirklichkeit",
-                "erkenntnis",
-                "wahrnehmung",
-                "philosophie",
-                "theorie",
-                "anschauung",
-                "thematik",
-            ],
-            "compound_patterns": [
-                # Standard compound linking
-                r"\w+(?:s|n|es|en|er|e|ns|ts)\w+",
-                # Philosophical compounds
-                r"\w+(?:bewusstsein|wirklichkeit|erkenntnis|wahrnehmung)",
-                # Philosophical prefix compounds
-                r"(?:welt|lebens|seins|geist|seele)\w+",
-            ],
-        }
+        from utils.language_utils import get_german_morphological_patterns
+        return get_german_morphological_patterns()
 
     def analyze_text(
         self, text: str, text_id: str = "unknown", chunk_size: int = 2000

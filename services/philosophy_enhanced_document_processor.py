@@ -407,14 +407,16 @@ class PhilosophyEnhancedDocumentProcessor:
     ) -> str:
         """Create a new user session for document processing."""
         document_name = Path(file_path).name
-
+        
+        from core.dynamic_choice_engine import create_session_for_document
+        
         session = await asyncio.to_thread(
-            self.user_choice_manager.create_session,
-            session_name=f"Processing: {document_name}",
+            create_session_for_document,
+            manager=self.user_choice_manager,
             document_name=document_name,
             user_id=user_id,
-            source_language=source_lang,
-            target_language=target_lang,
+            source_lang=source_lang,
+            target_lang=target_lang,
         )
 
         return session.session_id

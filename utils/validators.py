@@ -146,25 +146,10 @@ class FileValidator:
                 return json.load(f)
         except Exception as e:
             logger.error(f"Failed to load language config: {e}")
+            from utils.language_utils import DEFAULT_SUPPORTED_LANGUAGES
             # Fallback to default values if config loading fails
             return {
-                "supported_languages": [
-                    "English",
-                    "Spanish",
-                    "French",
-                    "German",
-                    "Italian",
-                    "Portuguese",
-                    "Russian",
-                    "Chinese",
-                    "Japanese",
-                    "Korean",
-                    "Arabic",
-                    "Hindi",
-                    "Dutch",
-                    "Swedish",
-                    "Norwegian",
-                ],
+                "supported_languages": DEFAULT_SUPPORTED_LANGUAGES,
                 "supported_formats": ["PDF"],
             }
 

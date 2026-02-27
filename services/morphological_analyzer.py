@@ -36,54 +36,8 @@ class MorphologicalAnalyzer:
 
     def _load_german_patterns(self) -> dict[str, list[str]]:
         """Load German morphological patterns for compound analysis."""
-        return {
-            "compound_linking": ["s", "n", "es", "en", "er", "e", "ns", "ts"],
-            "philosophical_prefixes": [
-                "vor",
-                "nach",
-                "über",
-                "unter",
-                "zwischen",
-                "gegen",
-                "mit",
-                "ur",
-                "proto",
-                "meta",
-                "anti",
-                "pseudo",
-                "neo",
-                "para",
-            ],
-            "abstract_suffixes": [
-                "heit",
-                "keit",
-                "ung",
-                "schaft",
-                "tum",
-                "nis",
-                "sal",
-                "ismus",
-                "ität",
-                "ation",
-                "logie",
-                "sophie",
-            ],
-            "philosophical_endings": [
-                "bewusstsein",
-                "wirklichkeit",
-                "erkenntnis",
-                "wahrnehmung",
-                "philosophie",
-                "theorie",
-                "anschauung",
-                "thematik",
-            ],
-            "compound_patterns": [
-                r"\w+(?:s|n|es|en|er|e|ns|ts)\w+",
-                r"\w+(?:bewusstsein|wirklichkeit|erkenntnis|wahrnehmung)",
-                r"(?:welt|lebens|seins|geist|seele)\w+",
-            ],
-        }
+        from utils.language_utils import get_german_morphological_patterns
+        return get_german_morphological_patterns()
 
     def _analyze_uncached(self, term: str) -> MorphologicalAnalysis:
         """Analyze morphological structure of a term (uncached version)."""

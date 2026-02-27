@@ -158,7 +158,8 @@ class DocumentProcessor:
             self._monitor.record_operation("ocr", ocr_ms, success=True)
 
         # Build TextBlocks from OCR result
-        blocks_per_page = self._parse_ocr_result(ocr_result)
+        from services.ocr_utils import parse_ocr_result
+        blocks_per_page = parse_ocr_result(ocr_result)
 
         # Translation in fixed-size batches to avoid memory/API limits
         start_tx = time.perf_counter()
@@ -256,65 +257,7 @@ class DocumentProcessor:
         )
 
     # ---------------------------- Internal ----------------------------
-    def _parse_ocr_result(self, result: dict) -> list[list[TextBlock]]:
-        """Convert OCR JSON into per-page TextBlocks.
-
-        The expected shape in the result is flexible. We look for:
-        result["pages"][i]["text_blocks"] where each block has:
-          - text: str
-          - bbox: [x, y, w, h]
-          - font_info: {family, size, weight, style, color}
-          - confidence: float (optional)
-        Missing fields fall back to reasonable defaults.
-        """
-        pages_out: list[list[TextBlock]] = []
-        pages = result.get("pages", []) if isinstance(result, dict) else []
-        for page in pages:
-            page_blocks: list[TextBlock] = []
-            blocks = page.get("text_blocks", []) if isinstance(page, dict) else []
-            for blk in blocks:
-                text = str(blk.get("text", ""))
-                bbox = blk.get("bbox", [0.0, 0.0, 100.0, 20.0])
-                font = blk.get("font_info", {})
-                color_raw = font.get("color", (0, 0, 0))
-                if isinstance(color_raw, (list, tuple)) and len(color_raw) >= 3:
-                    color = tuple(color_raw[:3])
-                else:
-                    color = (0, 0, 0)
-                font_info = FontInfo(
-                    family=str(font.get("family", "Helvetica")),
-                    size=float(font.get("size", 12.0)),
-                    weight=str(font.get("weight", "normal")),
-                    style=str(font.get("style", "normal")),
-                    color=(int(color[0]), int(color[1]), int(color[2])),
-                )
-                # Validate and sanitize bbox values
-                try:
-                    bbox_values = [
-                        float(bbox[i]) if i < len(bbox) else 0.0 for i in range(4)
-                    ]
-                    if bbox_values[2] <= 0:
-                        bbox_values[2] = 100.0
-                    if bbox_values[3] <= 0:
-                        bbox_values[3] = 20.0
-                except (TypeError, ValueError):
-                    bbox_values = [0.0, 0.0, 100.0, 20.0]
-
-                layout_ctx = LayoutContext(
-                    bbox=BoundingBox(
-                        bbox_values[0],
-                        bbox_values[1],
-                        bbox_values[2],
-                        bbox_values[3],
-                    ),
-                    font=font_info,
-                    ocr_confidence=(
-                        float(blk["confidence"]) if "confidence" in blk else None
-                    ),
-                )
-                page_blocks.append(TextBlock(text=text, layout=layout_ctx))
-            pages_out.append(page_blocks)
-        return pages_out
+    # Deprecated: _parse_ocr_result has been moved to services.ocr_utils.parse_ocr_result
 
 
 def _default_output_path(input_path: str) -> str:

@@ -5,6 +5,74 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_SUPPORTED_LANGUAGES = [
+    "English",
+    "Spanish",
+    "French",
+    "German",
+    "Italian",
+    "Portuguese",
+    "Russian",
+    "Chinese",
+    "Japanese",
+    "Korean",
+    "Arabic",
+    "Hindi",
+    "Dutch",
+    "Swedish",
+    "Norwegian",
+]
+
+def get_german_morphological_patterns() -> dict[str, list[str]]:
+    """Load German morphological patterns for compound analysis."""
+    return {
+        "compound_linking": ["s", "n", "es", "en", "er", "e", "ns", "ts"],
+        "philosophical_prefixes": [
+            "vor",
+            "nach",
+            "über",
+            "unter",
+            "zwischen",
+            "gegen",
+            "mit",
+            "ur",
+            "proto",
+            "meta",
+            "anti",
+            "pseudo",
+            "neo",
+            "para",
+        ],
+        "abstract_suffixes": [
+            "heit",
+            "keit",
+            "ung",
+            "schaft",
+            "tum",
+            "nis",
+            "sal",
+            "ismus",
+            "ität",
+            "ation",
+            "logie",
+            "sophie",
+        ],
+        "philosophical_endings": [
+            "bewusstsein",
+            "wirklichkeit",
+            "erkenntnis",
+            "wahrnehmung",
+            "philosophie",
+            "theorie",
+            "anschauung",
+            "thematik",
+        ],
+        "compound_patterns": [
+            r"\w+(?:s|n|es|en|er|e|ns|ts)\w+",
+            r"\w+(?:bewusstsein|wirklichkeit|erkenntnis|wahrnehmung)",
+            r"(?:welt|lebens|seins|geist|seele)\w+",
+        ],
+    }
 
 def extract_text_sample_for_language_detection(content: dict[str, Any]) -> str:
     """Extract a text sample from document content for language detection.

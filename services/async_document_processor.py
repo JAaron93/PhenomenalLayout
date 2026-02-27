@@ -238,7 +238,8 @@ class AsyncDocumentProcessor:
                 on_progress("ocr", {"pages": len(optimized)})
 
             # 3) Build TextBlocks
-            blocks_per_page = self._parse_ocr_result(ocr_result)
+            from services.ocr_utils import parse_ocr_result
+            blocks_per_page = parse_ocr_result(ocr_result)
 
             # 4) Translation with batching + concurrency
             all_blocks: list[TextBlock] = []
@@ -337,46 +338,7 @@ class AsyncDocumentProcessor:
             return layout
 
     # -------------------------- Helpers --------------------------
-    def _parse_ocr_result(self, result: dict) -> list[list[TextBlock]]:
-        """Convert OCR service JSON into per-page lists of TextBlock."""
-        pages_out: list[list[TextBlock]] = []
-        pages = result.get("pages", []) if isinstance(result, dict) else []
-        for page in pages:
-            page_blocks: list[TextBlock] = []
-            blocks = page.get("text_blocks", []) if isinstance(page, dict) else []
-            for blk in blocks:
-                text = str(blk.get("text", ""))
-                bbox = blk.get("bbox", [0.0, 0.0, 100.0, 20.0])
-                font = blk.get("font_info", {})
-                color_data = font.get("color", (0, 0, 0))
-                if isinstance(color_data, (list, tuple)) and (len(color_data) >= 3):
-                    color = tuple(color_data[:3])
-                else:
-                    color = (0, 0, 0)
-                font_info = FontInfo(
-                    family=str(font.get("family", "Helvetica")),
-                    size=float(font.get("size", 12.0)),
-                    weight=str(font.get("weight", "normal")),
-                    style=str(font.get("style", "normal")),
-                    color=(int(color[0]), int(color[1]), int(color[2])),
-                )
-                layout_ctx = LayoutContext(
-                    bbox=BoundingBox(
-                        float(bbox[0]),
-                        float(bbox[1]),
-                        float(bbox[2]),
-                        float(bbox[3]),
-                    ),
-                    font=font_info,
-                    ocr_confidence=(
-                        float(blk.get("confidence", 0.0))
-                        if "confidence" in blk
-                        else None
-                    ),
-                )
-                page_blocks.append(TextBlock(text=text, layout=layout_ctx))
-            pages_out.append(page_blocks)
-        return pages_out
+    # Deprecated: _parse_ocr_result has been moved to services.ocr_utils.parse_ocr_result
 
 
 def _default_output_path(input_path: str) -> str:
