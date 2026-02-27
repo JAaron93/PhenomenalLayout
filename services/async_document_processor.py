@@ -21,6 +21,7 @@ from pathlib import Path
 from dolphin_ocr.layout import BoundingBox, FontInfo
 from dolphin_ocr.pdf_to_image import PDFToImageConverter
 from services.dolphin_ocr_service import DolphinOCRService
+from services.ocr_utils import parse_ocr_result
 from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
     LayoutContext,
@@ -238,7 +239,6 @@ class AsyncDocumentProcessor:
                 on_progress("ocr", {"pages": len(optimized)})
 
             # 3) Build TextBlocks
-            from services.ocr_utils import parse_ocr_result
             blocks_per_page = parse_ocr_result(ocr_result)
 
             # 4) Translation with batching + concurrency
@@ -338,7 +338,6 @@ class AsyncDocumentProcessor:
             return layout
 
     # -------------------------- Helpers --------------------------
-    # Deprecated: _parse_ocr_result has been moved to services.ocr_utils.parse_ocr_result
 
 
 def _default_output_path(input_path: str) -> str:

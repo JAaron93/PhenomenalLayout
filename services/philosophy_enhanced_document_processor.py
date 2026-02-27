@@ -12,7 +12,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
+from core.dynamic_choice_engine import (
+    OptimizedUserChoiceManager as UserChoiceManager,
+    create_session_for_document,
+)
 from models.neologism_models import NeologismAnalysis
 
 from .enhanced_document_processor import EnhancedDocumentProcessor
@@ -407,8 +410,6 @@ class PhilosophyEnhancedDocumentProcessor:
     ) -> str:
         """Create a new user session for document processing."""
         document_name = Path(file_path).name
-        
-        from core.dynamic_choice_engine import create_session_for_document
         
         session = await asyncio.to_thread(
             create_session_for_document,

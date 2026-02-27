@@ -1,11 +1,12 @@
 """Utility functions for language detection and text extraction."""
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SUPPORTED_LANGUAGES = [
+DEFAULT_SUPPORTED_LANGUAGES = (
     "English",
     "Spanish",
     "French",
@@ -21,10 +22,14 @@ DEFAULT_SUPPORTED_LANGUAGES = [
     "Dutch",
     "Swedish",
     "Norwegian",
-]
+)
 
 def get_german_morphological_patterns() -> dict[str, list[str]]:
-    """Load German morphological patterns for compound analysis."""
+    """Return German morphological patterns for compound analysis.
+
+    The patterns are predefined constants rather than loaded from an external
+    source, providing consistent morphological analysis for German text processing.
+    """
     return {
         "compound_linking": ["s", "n", "es", "en", "er", "e", "ns", "ts"],
         "philosophical_prefixes": [

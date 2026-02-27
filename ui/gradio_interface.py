@@ -11,6 +11,7 @@ from core.translation_handler import (
     process_file_upload_sync,
     start_translation_sync,
 )
+from utils.language_utils import DEFAULT_SUPPORTED_LANGUAGES
 
 
 def render_metrics(metrics_dict: dict) -> str:
@@ -205,7 +206,6 @@ def create_gradio_interface() -> gr.Blocks:
     """
     # Load supported languages from config (fallback to defaults)
     languages_path = Path(__file__).parent.parent / "config" / "languages.json"
-    from utils.language_utils import DEFAULT_SUPPORTED_LANGUAGES
     try:
         data = json.loads(languages_path.read_text())
         supported_languages = data.get(

@@ -16,6 +16,7 @@ from dolphin_ocr.layout import BoundingBox, FontInfo
 from dolphin_ocr.monitoring import MonitoringService
 from dolphin_ocr.pdf_to_image import PDFToImageConverter
 from services.dolphin_ocr_service import DolphinOCRService
+from services.ocr_utils import parse_ocr_result
 from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
     LayoutContext,
@@ -158,7 +159,6 @@ class DocumentProcessor:
             self._monitor.record_operation("ocr", ocr_ms, success=True)
 
         # Build TextBlocks from OCR result
-        from services.ocr_utils import parse_ocr_result
         blocks_per_page = parse_ocr_result(ocr_result)
 
         # Translation in fixed-size batches to avoid memory/API limits

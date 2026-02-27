@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import UploadFile
+from utils.language_utils import DEFAULT_SUPPORTED_LANGUAGES
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,6 @@ class FileValidator:
                 return json.load(f)
         except Exception as e:
             logger.error(f"Failed to load language config: {e}")
-            from utils.language_utils import DEFAULT_SUPPORTED_LANGUAGES
             # Fallback to default values if config loading fails
             return {
                 "supported_languages": DEFAULT_SUPPORTED_LANGUAGES,

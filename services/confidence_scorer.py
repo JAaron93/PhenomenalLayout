@@ -100,40 +100,8 @@ class ConfidenceScorer:
 
     def _load_default_patterns(self) -> dict[str, list[str]]:
         """Load default German morphological patterns."""
-        return {
-            "compound_linking": ["s", "n", "es", "en", "er", "e", "ns", "ts"],
-            "philosophical_prefixes": [
-                "vor",
-                "nach",
-                "über",
-                "unter",
-                "zwischen",
-                "gegen",
-                "mit",
-                "ur",
-                "proto",
-                "meta",
-                "anti",
-                "pseudo",
-                "neo",
-                "para",
-            ],
-            "abstract_suffixes": [
-                "heit",
-                "keit",
-                "ung",
-                "schaft",
-                "tum",
-                "nis",
-                "sal",
-                "ismus",
-                "ität",
-                "ation",
-                "ismus",
-                "logie",
-                "sophie",
-            ],
-        }
+        from utils.language_utils import get_german_morphological_patterns
+        return get_german_morphological_patterns()
 
     def calculate_confidence_factors(
         self,
