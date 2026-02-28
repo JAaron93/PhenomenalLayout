@@ -65,10 +65,11 @@ async def test_start_translation_single_flight_cancels_previous(monkeypatch: pyt
 
     finally:
         # Cleanup task if it exists
-        if state.get_tracked_translation_task() is not None:
+        task = state.get_tracked_translation_task()
+        if task is not None:
             state.cancel_tracked_translation_task()
             try:
-                await state.get_tracked_translation_task()
+                await task
             except asyncio.CancelledError:
                 pass
             state.drop_tracked_translation_task()
