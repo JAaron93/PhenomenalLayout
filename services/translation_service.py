@@ -89,9 +89,18 @@ class LingoTranslator(BaseTranslator):
         )
 
     def close(self) -> None:
-        """Close underlying HTTP session resources."""
+        """Close underlying HTTP session resources with timeout verification."""
         try:
+            logger.debug("Closing LingoTranslator HTTP session")
             self.session.close()
+            # Verify session is actually closed
+            if hasattr(self.session, 'closed') and self.session.closed:
+                logger.debug("LingoTranslator HTTP session verified as closed")
+            else:
+                logger.warning(
+                    "LingoTranslator HTTP session closure could not be "
+                    "verified"
+                )
         except Exception:
             logger.exception("Failed to close LingoTranslator session")
 
@@ -331,19 +340,45 @@ class TranslationService:
 
     def close(self) -> None:
         """Best-effort synchronous cleanup of provider resources."""
+        logger.info(
+            "Starting synchronous cleanup of %d translation providers",
+            len(self.providers)
+        )
+        cleaned_count = 0
         for name, provider in list(self.providers.items()):
             try:
+                logger.debug("Closing provider: %s", name)
                 provider.close()
+                cleaned_count += 1
+                logger.debug("Successfully closed provider: %s", name)
             except Exception:
                 logger.exception("Failed to close provider %s", name)
 
+        logger.info(
+            "Completed synchronous cleanup: %d/%d providers closed "
+            "successfully", cleaned_count, len(self.providers)
+        )
+
     async def aclose(self) -> None:
         """Best-effort async cleanup of provider resources."""
+        logger.info(
+            "Starting async cleanup of %d translation providers",
+            len(self.providers)
+        )
+        cleaned_count = 0
         for name, provider in list(self.providers.items()):
             try:
+                logger.debug("Async closing provider: %s", name)
                 await provider.aclose()
+                cleaned_count += 1
+                logger.debug("Successfully async closed provider: %s", name)
             except Exception:
                 logger.exception("Failed to aclose provider %s", name)
+
+        logger.info(
+            "Completed async cleanup: %d/%d providers closed successfully",
+            cleaned_count, len(self.providers)
+        )
 
     async def translate_batch(
         self,

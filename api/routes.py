@@ -16,6 +16,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from api.memory_routes import router as memory_router
 from core.state_manager import state, translation_jobs
 from core.translation_handler import (
     document_processor,
@@ -48,6 +49,9 @@ templates: Jinja2Templates = Jinja2Templates(directory="templates")
 # Create APIRouter instances
 api_router: APIRouter = APIRouter()
 app_router: APIRouter = APIRouter()
+
+# Include memory monitoring routes
+api_router.include_router(memory_router)
 
 # Type aliases for better readability
 ChoiceData = dict[str, Any]

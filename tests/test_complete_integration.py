@@ -604,23 +604,28 @@ async def test_async_complete_integration():
     try:
         from services.enhanced_document_processor import EnhancedDocumentProcessor
         EnhancedDocumentProcessor()
-    except (ImportError, Exception) as e:
+    except ImportError as e:
         pytest.skip(
             "PDF processing not available - "
             f"requires enhanced document processor: {e}"
         )
     
     # Check if we can create test files
-    fd, test_file_path = tempfile.mkstemp(suffix='.txt', prefix='test_input_')
     try:
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            mode='w',
+            encoding='utf-8',
+            suffix='.txt',
+            prefix='test_input_'
+        ) as f:
+            test_file_path = f.name
             f.write(
                 "Dasein is fundamental to Heideggerian philosophy. "
                 "Angst reveals groundlessness."
             )
 
     except OSError:
-        os.close(fd)
         pytest.skip("Cannot create test files in current environment")
 
     try:

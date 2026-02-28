@@ -140,18 +140,58 @@ class McpLingoClient:
         await self._discover_tool_name()
 
     async def stop(self) -> None:
+        """Close session and underlying stdio transport with enhanced cleanup."""
+        logger.info("Starting MCP client shutdown")
+        cleanup_errors = []
+
         # Close session and underlying stdio transport
         if self._session is not None and self._session_ctx is not None:
             try:
-                await self._session_ctx.__aexit__(None, None, None)
+                logger.debug("Closing MCP session")
+                await asyncio.wait_for(
+                    self._session_ctx.__aexit__(None, None, None),
+                    timeout=10.0
+                )
+                logger.debug("MCP session closed successfully")
+            except TimeoutError:
+                cleanup_errors.append("Session cleanup timeout")
+                logger.warning("MCP session cleanup timed out")
+            except Exception as e:
+                cleanup_errors.append(f"Session cleanup error: {e}")
+                logger.exception("Failed to close MCP session")
             finally:
                 self._session = None
                 self._session_ctx = None
+
         if self._stdio_ctx is not None:
             try:
-                await self._stdio_ctx.__aexit__(None, None, None)
+                logger.debug("Closing stdio transport")
+                await asyncio.wait_for(
+                    self._stdio_ctx.__aexit__(None, None, None),
+                    timeout=10.0
+                )
+                logger.debug("Stdio transport closed successfully")
+            except TimeoutError:
+                cleanup_errors.append("Stdio cleanup timeout")
+                logger.warning("Stdio transport cleanup timed out")
+            except Exception as e:
+                cleanup_errors.append(f"Stdio cleanup error: {e}")
+                logger.exception("Failed to close stdio transport")
             finally:
                 self._stdio_ctx = None
+
+        # Log cleanup summary
+        if cleanup_errors:
+            logger.warning(
+                "MCP client completed with %d cleanup errors: %s",
+                len(cleanup_errors), "; ".join(cleanup_errors)
+            )
+        else:
+            logger.info("MCP client shutdown completed successfully")
+
+        # Clear tool discovery cache
+        self._tool_name = None
+        self._tool_schema = None
 
     async def _discover_tool_name(self) -> None:
         if self._session is None:

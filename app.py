@@ -73,6 +73,17 @@ async def lifespan(_app: FastAPI):
             logger.info("Created directory: %s", d)
     logger.info("All required directories verified on startup")
 
+    # Start memory monitoring if enabled
+    if os.getenv("ENABLE_MEMORY_MONITORING", "").lower() == "true":
+        try:
+            from utils.memory_monitor import start_memory_monitoring
+            check_interval = float(os.getenv("MEMORY_CHECK_INTERVAL", "60"))
+            alert_threshold = float(os.getenv("MEMORY_ALERT_THRESHOLD_MB", "100"))
+            start_memory_monitoring(check_interval, alert_threshold)
+            logger.info("Memory monitoring enabled")
+        except Exception as e:
+            logger.warning("Failed to start memory monitoring: %s", e)
+
     yield
 
     # Shutdown logic
@@ -90,6 +101,14 @@ async def lifespan(_app: FastAPI):
                     "Exception during tracked translation task shutdown"
                 )
     state.drop_tracked_translation_task()
+
+    # Stop memory monitoring
+    try:
+        from utils.memory_monitor import stop_memory_monitoring, log_memory_usage
+        log_memory_usage("shutdown")
+        stop_memory_monitoring()
+    except Exception:
+        logger.exception("Error stopping memory monitoring")
 
     try:
         await translation_service.aclose()
