@@ -2,12 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import math
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 import services.async_document_processor as adp
 from dolphin_ocr.layout import LayoutStrategy, StrategyType
 from services.layout_aware_translation_service import TextBlock, TranslationResult
+
+
+@pytest.fixture
+def process_pool() -> ThreadPoolExecutor:
+    """Create a ThreadPoolExecutor for testing and ensure proper cleanup."""
+    executor = ThreadPoolExecutor(max_workers=4)
+    yield executor
+    executor.shutdown(wait=True)
 
 
 class FakeConverters:
@@ -94,7 +103,9 @@ def _patch_converters(monkeypatch: pytest.MonkeyPatch, pages: int = 3) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_translation_batching(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_async_translation_batching(
+    monkeypatch: pytest.MonkeyPatch, process_pool: ThreadPoolExecutor
+) -> None:
     _patch_converters(monkeypatch, pages=4)
     ocr = FakeOCR(blocks_per_page=5)  # 20 blocks total
     translator = FakeTranslator()
@@ -108,6 +119,7 @@ async def test_async_translation_batching(monkeypatch: pytest.MonkeyPatch) -> No
         translation_batch_size=6,
         translation_concurrency=3,
         max_concurrent_requests=2,
+        process_pool=process_pool,
     )
 
     req = adp.AsyncDocumentRequest(
@@ -123,7 +135,9 @@ async def test_async_translation_batching(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_token_bucket_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_token_bucket_is_used(
+    monkeypatch: pytest.MonkeyPatch, process_pool: ThreadPoolExecutor
+) -> None:
     _patch_converters(monkeypatch, pages=1)
     ocr = FakeOCR(blocks_per_page=1)
     translator = FakeTranslator()
@@ -136,6 +150,7 @@ async def test_token_bucket_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
         reconstructor=recon,  # type: ignore[arg-type]
         ocr_rate_capacity=1,
         ocr_rate_per_sec=100.0,
+        process_pool=process_pool,
     )
 
     calls = {"count": 0}
@@ -154,7 +169,9 @@ async def test_token_bucket_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrency_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_concurrency_cap(
+    monkeypatch: pytest.MonkeyPatch, process_pool: ThreadPoolExecutor
+) -> None:
     _patch_converters(monkeypatch, pages=1)
     ocr = FakeOCR(blocks_per_page=1)
     translator = FakeTranslator()
@@ -166,21 +183,21 @@ async def test_concurrency_cap(monkeypatch: pytest.MonkeyPatch) -> None:
         translation_service=translator,  # type: ignore[arg-type]
         reconstructor=recon,  # type: ignore[arg-type]
         max_concurrent_requests=2,
+        ocr_rate_capacity=100,
+        ocr_rate_per_sec=1_000.0,
+        process_pool=process_pool,
     )
 
     active = 0
     max_active = 0
-    lock = asyncio.Lock()
 
-    async def on_progress(stage: str, _payload: dict) -> None:
+    def on_progress(stage: str, _payload: dict) -> None:
         nonlocal active, max_active
         if stage == "validated":
-            async with lock:
-                active += 1
-                max_active = max(max_active, active)
+            active += 1
+            max_active = max(max_active, active)
         if stage == "reconstructed":
-            async with lock:
-                active -= 1
+            active -= 1
 
     async def run_one(idx: int) -> None:
         req = adp.AsyncDocumentRequest(

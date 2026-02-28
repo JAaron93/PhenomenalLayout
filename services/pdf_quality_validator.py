@@ -235,11 +235,37 @@ class PDFQualityValidator:
                             0.1,
                             overall_timeout - (time.time() - start_ts),
                         )
-                        return pytesseract.image_to_string(
-                            img,
-                            lang=tess_lang,
-                            timeout=remaining,
-                        )
+                        try:
+                            return pytesseract.image_to_string(
+                                img,
+                                lang=tess_lang,
+                                timeout=remaining,
+                            )
+                        except TypeError:
+                            try:
+                                return pytesseract.image_to_string(
+                                    img,
+                                    tess_lang,
+                                    timeout=remaining,
+                                )
+                            except TypeError:
+                                try:
+                                    return pytesseract.image_to_string(
+                                        img,
+                                        lang=tess_lang,
+                                    )
+                                except TypeError:
+                                    try:
+                                        return pytesseract.image_to_string(
+                                            img,
+                                            tess_lang,
+                                            remaining,
+                                        )
+                                    except TypeError:
+                                        return pytesseract.image_to_string(
+                                            img,
+                                            tess_lang,
+                                        )
                     except (RuntimeError, ValueError):
                         # Some tesseract wrappers raise ValueError on timeouts
                         return ""
@@ -258,13 +284,47 @@ class PDFQualityValidator:
                     first = page_range.start + 1
                     last = page_range.stop
                     try:
-                        images = pdf2image.convert_from_path(
-                            pdf_path,
-                            dpi=target_dpi,
-                            first_page=first,
-                            last_page=last,
-                            poppler_path=poppler_path,
-                        )
+                        try:
+                            images = pdf2image.convert_from_path(
+                                pdf_path,
+                                dpi=target_dpi,
+                                first_page=first,
+                                last_page=last,
+                                poppler_path=poppler_path,
+                            )
+                        except TypeError:
+                            try:
+                                images = pdf2image.convert_from_path(
+                                    pdf_path,
+                                    dpi=target_dpi,
+                                    first_page=first,
+                                    last_page=last,
+                                )
+                            except TypeError:
+                                try:
+                                    images = pdf2image.convert_from_path(
+                                        pdf_path,
+                                        target_dpi,
+                                        first_page=first,
+                                        last_page=last,
+                                    )
+                                except TypeError:
+                                    # Some wrappers expose first/last as positional-only args.
+                                    try:
+                                        images = pdf2image.convert_from_path(
+                                            pdf_path,
+                                            target_dpi,
+                                            first,
+                                            last,
+                                            poppler_path,
+                                        )
+                                    except TypeError:
+                                        images = pdf2image.convert_from_path(
+                                            pdf_path,
+                                            target_dpi,
+                                            first,
+                                            last,
+                                        )
                     except (OSError, ValueError, RuntimeError) as e:
                         # Handle poppler absence gracefully
                         et = type(e).__name__

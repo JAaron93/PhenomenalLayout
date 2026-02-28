@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import inspect
 import logging
 import math
 import os
@@ -79,6 +80,13 @@ class LingoTranslator(BaseTranslator):
                 "User-Agent": USER_AGENT,
             }
         )
+
+    def close(self) -> None:
+        """Close underlying HTTP session resources."""
+        try:
+            self.session.close()
+        except Exception:
+            logger.exception("Failed to close LingoTranslator session")
 
     async def translate_text(
         self, text: str, source_lang: str, target_lang: str
@@ -181,6 +189,43 @@ class MCPLingoTranslator(BaseTranslator):
             logger.error(f"MCP Lingo translate_batch error: {e}")
             return texts
 
+    async def aclose(self) -> None:
+        """Stop the underlying MCP session if it was started."""
+        async with self._lock:
+            if not self._started:
+                return
+            try:
+                await self._client.stop()
+            finally:
+                self._started = False
+
+    def close(self) -> None:
+        """Best-effort synchronous cleanup.
+
+        MCP shutdown is inherently async; this method triggers `aclose()`.
+        """
+        logger.warning(
+            "MCPLingoTranslator.close() is best-effort; "
+            "use aclose() for reliable cleanup"
+        )
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            try:
+                asyncio.run(self.aclose())
+            except Exception:
+                logger.exception(
+                    "Failed to aclose MCPLingoTranslator from close()"
+                )
+            return
+
+        try:
+            loop.create_task(self.aclose())
+        except Exception:
+            logger.exception(
+                "Failed to schedule MCPLingoTranslator.aclose() from close()"
+            )
+
 
 def _parse_positive_float_env(name: str, default: float) -> float:
     """Parse a positive float environment variable with validation and logging.
@@ -276,6 +321,36 @@ class TranslationService:
         """Get list of available translation providers."""
         return list(self.providers.keys())
 
+    def close(self) -> None:
+        """Best-effort synchronous cleanup of provider resources."""
+        for name, provider in list(self.providers.items()):
+            close_fn = getattr(provider, "close", None)
+            if callable(close_fn):
+                try:
+                    close_fn()
+                except Exception:
+                    logger.exception("Failed to close provider %s", name)
+
+    async def aclose(self) -> None:
+        """Best-effort async cleanup of provider resources."""
+        for name, provider in list(self.providers.items()):
+            aclose_fn = getattr(provider, "aclose", None)
+            if callable(aclose_fn):
+                try:
+                    result = aclose_fn()
+                    if inspect.isawaitable(result):
+                        await result
+                    continue
+                except Exception:
+                    logger.exception("Failed to aclose provider %s", name)
+
+            close_fn = getattr(provider, "close", None)
+            if callable(close_fn):
+                try:
+                    close_fn()
+                except Exception:
+                    logger.exception("Failed to close provider %s", name)
+
     async def translate_batch(
         self,
         texts: list[str],
@@ -369,7 +444,7 @@ class TranslationService:
         translated_blocks: list[dict[str, Any]] = []
 
         for i in range(0, total_blocks, batch_size):
-            batch: list[dict[str, Any]] = text_blocks[i : i + batch_size]
+            batch: list[dict[str, Any]] = text_blocks[i: i + batch_size]
             batch_texts: list[str] = [block["text"] for block in batch]
 
             # Apply terminology preprocessing if configured

@@ -6,7 +6,6 @@ system.
 """
 
 import os
-import statistics
 import tempfile
 import time
 from pathlib import Path
@@ -229,9 +228,11 @@ class TestDynamicLayoutEngine:
         for attempt in range(PERFORMANCE_MAX_RETRIES):
             try:
                 sample_times = measure_performance_sample()
-                percentile_time = statistics.quantile(
-                    sample_times, PERFORMANCE_PERCENTILE / 100.0
+                percentile_index = min(
+                    len(sample_times) - 1,
+                    int(len(sample_times) * int(PERFORMANCE_PERCENTILE) / 100)
                 )
+                percentile_time = sorted(sample_times)[percentile_index]
 
                 # Assert percentile performance
                 assert percentile_time < threshold, (

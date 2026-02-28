@@ -1,11 +1,13 @@
-"""PhenomenalLayout: Advanced Layout Preservation Engine for Document Translation.
+"""PhenomenalLayout application.
 
 Orchestrates Lingo.dev translation services with Dolphin OCR for pixel-perfect
 formatting integrity during document translation.
 """
 
+import contextlib
 import logging
 import os
+from contextlib import asynccontextmanager
 
 import gradio as gr
 import uvicorn
@@ -14,6 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.routes import api_router, app_router
+from core.state_manager import state
+from core.translation_handler import translation_service
 
 # Import refactored components
 from ui.gradio_interface import create_gradio_interface
@@ -57,6 +61,38 @@ if _created_early:
         logger.info("Created directory: %s", _d)
     logger.info("All required directories verified/created before logging")
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Manage application startup and shutdown lifecycle."""
+    # Startup logic
+    created = []
+    for directory in _REQUIRED_DIRECTORIES:
+        if not os.path.isdir(directory):
+            os.makedirs(directory, exist_ok=True)
+            created.append(directory)
+    if created:
+        for d in created:
+            logger.info("Created directory: %s", d)
+    logger.info("All required directories verified on startup")
+
+    yield
+
+    # Shutdown logic
+    with contextlib.suppress(RuntimeError):
+        state.cancel_tracked_translation_task()
+        task = state.get_tracked_translation_task()
+        if task is not None:
+            with contextlib.suppress(BaseException):
+                await task
+    state.drop_tracked_translation_task()
+
+    try:
+        await translation_service.aclose()
+    except Exception:
+        logger.exception("Failed to shutdown translation service")
+
+
 # FastAPI app
 app = FastAPI(
     title="PhenomenalLayout",
@@ -66,6 +102,7 @@ app = FastAPI(
         "for pixel-perfect formatting integrity"
     ),
     version="2.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware
@@ -83,20 +120,6 @@ app.include_router(api_router, prefix="/api/v1")  # API routes with versioning
 
 # Static files mount
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Verify required directories exist on startup (create if missing)."""
-    created = []
-    for directory in _REQUIRED_DIRECTORIES:
-        if not os.path.isdir(directory):
-            os.makedirs(directory, exist_ok=True)
-            created.append(directory)
-    if created:
-        for d in created:
-            logger.info("Created directory: %s", d)
-    logger.info("All required directories verified on startup")
 
 
 def main() -> None:

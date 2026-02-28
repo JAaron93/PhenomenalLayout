@@ -51,12 +51,26 @@ def setup_logging(
             # Best-effort directory creation; fallback to console-only
             log_file = None
 
-    if log_file and not any(
-        isinstance(h, logging.FileHandler) for h in logger.handlers
-    ):
-        file_handler = logging.FileHandler(str(log_file))
-        file_handler.setFormatter(fmt)
-        logger.addHandler(file_handler)
+    if log_file:
+        desired = Path(log_file).resolve()
+        for h in list(logger.handlers):
+            if isinstance(h, logging.FileHandler):
+                current = getattr(h, "baseFilename", None)
+                if current and Path(current).resolve() != desired:
+                    logger.removeHandler(h)
+                    try:
+                        h.close()
+                    except Exception:
+                        pass
+
+        if not any(
+            isinstance(h, logging.FileHandler)
+            and Path(getattr(h, "baseFilename", ".")).resolve() == desired
+            for h in logger.handlers
+        ):
+            file_handler = logging.FileHandler(str(desired))
+            file_handler.setFormatter(fmt)
+            logger.addHandler(file_handler)
 
     return logger
 

@@ -11,12 +11,15 @@ async alternative for higher throughput and responsive servers.
 """
 
 import asyncio
+import inspect
+import logging
 import os
 import time
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 from dolphin_ocr.layout import BoundingBox, FontInfo
 from dolphin_ocr.pdf_to_image import PDFToImageConverter
@@ -33,6 +36,8 @@ from services.pdf_document_reconstructor import (
     TranslatedLayout,
     TranslatedPage,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -189,12 +194,28 @@ class AsyncDocumentProcessor:
         self,
         request: AsyncDocumentRequest,
         *,
-        on_progress: Callable[[str, dict], None] | None = None,
+        on_progress: Callable[[str, dict], object] | None = None,
     ) -> TranslatedLayout:
         """Run the full async pipeline and return a TranslatedLayout."""
+        async def _report(stage: str, payload: dict) -> None:
+            if not on_progress:
+                return
+            try:
+                result = on_progress(stage, payload)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception as e:
+                # Progress callbacks must never crash the pipeline
+                logger.debug(
+                    "Progress callback error for stage %s with payload %s: %s",
+                    stage,
+                    {k: type(v).__name__ for k, v in payload.items()},
+                    e
+                )
+                return
+
         async with self._req_sema:
-            if on_progress:
-                on_progress("validated", {"path": request.file_path})
+            await _report("validated", {"path": request.file_path})
 
             loop = asyncio.get_running_loop()
 
@@ -208,8 +229,7 @@ class AsyncDocumentProcessor:
                 self._converter.poppler_path,
             )
 
-            if on_progress:
-                on_progress("converted", {"pages": len(images)})
+            await _report("converted", {"pages": len(images)})
 
             # Optimize each image (process pool map)
             optimized = []
@@ -237,8 +257,7 @@ class AsyncDocumentProcessor:
                     self._ocr.process_document_images,
                     optimized,
                 )
-            if on_progress:
-                on_progress("ocr", {"pages": len(optimized)})
+            await _report("ocr", {"pages": len(optimized)})
 
             # 3) Build TextBlocks
             blocks_per_page = parse_ocr_result(ocr_result)
@@ -276,11 +295,7 @@ class AsyncDocumentProcessor:
                     batch = all_blocks[i : i + self._batch_size]
                     tg.create_task(_bounded_worker(i, batch, sema))
 
-            if on_progress:
-                on_progress(
-                    "translated",
-                    {"count": len(all_blocks)},
-                )
+            await _report("translated", {"count": len(all_blocks)})
 
             # 5) Map back to pages and build TranslatedLayout
             pages: list[TranslatedPage] = []
@@ -334,8 +349,7 @@ class AsyncDocumentProcessor:
                 output_path=output_path,
             )
 
-            if on_progress:
-                on_progress("reconstructed", {"output_path": output_path})
+            await _report("reconstructed", {"output_path": output_path})
 
             return layout
 
@@ -344,17 +358,19 @@ class AsyncDocumentProcessor:
         if self._owns_pool and hasattr(self, '_pool') and self._pool is not None:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, self._pool.shutdown, True)
+            self._pool = None
 
     def close(self) -> None:
         """Synchronous cleanup method to shutdown the process pool if owned."""
         if self._owns_pool and hasattr(self, '_pool') and self._pool is not None:
             self._pool.shutdown(wait=True)
+            self._pool = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit with cleanup."""
         await self.aclose()
 
@@ -363,6 +379,7 @@ class AsyncDocumentProcessor:
         try:
             if self._owns_pool and hasattr(self, '_pool') and self._pool is not None:
                 self._pool.shutdown(wait=False)
+                self._pool = None
         except Exception:
             # Ignore errors during cleanup in destructor
             pass

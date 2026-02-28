@@ -118,11 +118,12 @@ def test_pypdf_parse_error_emits_warning_but_validation_succeeds(
         PdfReader = _StubPdfReader
 
     import importlib as _il
+    _orig_import_module = _il.import_module
 
     def _fake_import(name: str, *args, **kwargs):
         if name == "pypdf":
             return _StubPypdf
-        return _il.import_module(name, *args, **kwargs)
+        return _orig_import_module(name, *args, **kwargs)
 
     # If pypdf isn't installed, this still works since we intercept import
     monkeypatch.setattr("importlib.import_module", _fake_import)

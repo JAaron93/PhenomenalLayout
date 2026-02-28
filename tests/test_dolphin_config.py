@@ -34,6 +34,8 @@ def test_performance_config_invalid_dpi(monkeypatch, invalid_dpi):
 
 def test_dolphin_config_validation_failures(monkeypatch):
     # Test missing HF_TOKEN
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("DOLPHIN_MODAL_ENDPOINT", raising=False)
     cfg = DolphinConfig()
     with pytest.raises(ValueError, match="HF_TOKEN is required"):
         cfg.validate()

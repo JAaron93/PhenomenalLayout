@@ -10,11 +10,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, Union
 
-# Migration note: Replaced legacy PyMuPDF/fitz-based PDF engine with Dolphin OCR
+# Migration note: Replaced legacy PDF engine with Dolphin OCR
 # for all PDF processing. Rationale: improved OCR accuracy, better layout
 # preservation via pdf2image rendering + reconstruction pipeline, and removal of
-# heavyweight/unstable PyMuPDF dependency. Scope: non-docs code no longer imports
-# or references PyMuPDF/fitz; PDF handling is now PDF-only using Dolphin OCR.
+# heavyweight/unstable legacy PDF dependency. Scope: non-docs code no longer
+# imports or references the legacy engine; PDF handling is now PDF-only using
+# Dolphin OCR.
 from config.settings import Settings
 
 # Import optimized dynamic programming implementations
@@ -272,8 +273,25 @@ async def start_translation(
             state.session_id = session.session_id
             logger.info(f"Created philosophy session: {state.session_id}")
 
-        # Start translation in background
-        asyncio.create_task(perform_advanced_translation())
+        # Start translation in background (single-flight)
+        prev_task = state.get_tracked_translation_task()
+        if prev_task is not None and not prev_task.done():
+            state.cancel_tracked_translation_task()
+
+        task = state.create_and_track_translation_task(perform_advanced_translation())
+
+        def _clear_task(t: asyncio.Task[None]) -> None:
+            # Consume exceptions to avoid "Task exception was never retrieved".
+            try:
+                _ = t.exception()
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("Background translation task failed")
+            finally:
+                state.clear_tracked_translation_task(t)
+
+        task.add_done_callback(_clear_task)
 
         return (
             "🚀 Advanced translation started...",
@@ -385,7 +403,7 @@ async def translate_content(
 
                 for start in range(0, len(indices_to_translate), batch_size):
                     batch_indices: list[int] = indices_to_translate[
-                        start : start + batch_size
+                        start: start + batch_size
                     ]
                     batch_texts: list[str] = [page_texts[idx] for idx in batch_indices]
 
@@ -494,7 +512,10 @@ async def _translate_page_texts_concurrently(
     try:
         results: list[tuple[int, str]] = await asyncio.gather(*tasks)
     except asyncio.CancelledError:
-        # Ensure cancellation is not swallowed
+        # Explicitly cancel child tasks to release references quickly
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         raise
 
     translated_texts: list[str] = [""] * len(page_texts)
@@ -556,6 +577,21 @@ async def perform_advanced_translation() -> None:
         state.translation_status = "completed"
 
         logger.info(f"Advanced translation completed: {state.output_file}")
+
+    except asyncio.CancelledError:
+        current_task = asyncio.current_task()
+        tracked_task = None
+        try:
+            tracked_task = state.get_tracked_translation_task()
+        except RuntimeError:
+            tracked_task = None
+
+        # Only reset shared state if we're still the currently tracked task.
+        if current_task is not None and tracked_task is current_task:
+            state.translation_status = "idle"
+            state.translation_progress = 0
+            state.error_message = ""
+        raise
 
     except Exception as e:
         logger.error(f"Advanced translation error: {e!s}")

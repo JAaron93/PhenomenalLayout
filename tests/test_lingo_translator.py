@@ -444,7 +444,7 @@ class TestTranslationServiceWithLingo:
                 await service.translate_text("Hello", "en", "de", "auto")
 
     @pytest.mark.asyncio
-    async def test_invalid_language_codes(self, mock_lingo_translator):
+    async def test_invalid_language_codes(self, lingo_translator):
         """Test handling of invalid language codes."""
         with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
             # Mock API response for invalid language codes
@@ -453,7 +453,7 @@ class TestTranslationServiceWithLingo:
             mock_response.text = "Invalid language code"
             mock_to_thread.return_value = mock_response
 
-            result = await mock_lingo_translator.translate_text(
+            result = await lingo_translator.translate_text(
                 "Hello", "invalid_lang", "also_invalid"
             )
 
@@ -478,7 +478,7 @@ class TestTranslationServiceWithLingo:
             assert all(result.startswith("German text") for result in results)
 
     @pytest.mark.asyncio
-    async def test_rate_limiting_with_retry_simulation(self, mock_lingo_translator):
+    async def test_rate_limiting_with_retry_simulation(self, lingo_translator):
         """Test realistic rate limiting scenario."""
         with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
             # First call returns rate limit, subsequent calls succeed
@@ -493,9 +493,9 @@ class TestTranslationServiceWithLingo:
             mock_to_thread.side_effect = [rate_limit_response, success_response]
 
             # First call should fail due to rate limiting
-            result1 = await mock_lingo_translator.translate_text("Hello", "en", "de")
+            result1 = await lingo_translator.translate_text("Hello", "en", "de")
             assert result1 == "Hello"  # Fallback to original
 
             # Second call should succeed
-            result2 = await mock_lingo_translator.translate_text("Hello", "en", "de")
+            result2 = await lingo_translator.translate_text("Hello", "en", "de")
             assert result2 == "Success"

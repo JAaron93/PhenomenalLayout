@@ -4,34 +4,75 @@ Based on a comprehensive review of the core files (`neologism_detector.py`, `neo
 
 In fact, it is exceptionally well-structured, robust, and employs advanced software engineering patterns. Here is a breakdown of why it is in excellent shape:
 
-## 1. Highly Modular Architecture
-The detector is not a monolithic script. The `NeologismDetector` class acts as an orchestrator that delegates responsibilities to highly specialized components:
-- `MorphologicalAnalyzer`: Handles linguistic structure.
-- `PhilosophicalContextAnalyzer`: Evaluates semantic and philosophical relevance.
-- `ConfidenceScorer`: Computes the probability of a word being a valid neologism based on tunable heuristics.
+## Getting Started / Quick Reference
 
-## 2. Excellent Data Modeling
-The `models/neologism_models.py` file uses Python dataclasses to strictly define the shapes of data moving through the system (`MorphologicalAnalysis`, `PhilosophicalContext`, `ConfidenceFactors`, and `DetectedNeologism`). This enforces strong typing and standardized serialization (e.g., `to_dict()`, `to_json()`), making the API predictable and solid.
+Minimal setup and example usage for `NeologismDetector`:
 
-## 3. Graceful Fallbacks
-The detector is designed for high resilience:
-- It attempts to use `spacy` with specific German models (e.g., `de_core_news_sm`). 
-- If `spacy` or the models are unavailable, it gracefully downgrades entirely to regex-based candidate extraction and internal heuristics (`_extract_candidates_regex`, `get_compound_patterns`), ensuring the system never permanently crashes due to missing NLP libraries.
+```python
+from services.neologism_detector import NeologismDetector
 
-## 4. Performance Optimizations
-- **Lazy Loading:** Heavy resources (`spacy` models, terminology maps, indicators) are implemented as properties with lazy loading (`self._initialize_spacy_model`). This dramatically speeds up initialization and saves memory when certain features aren't immediately accessed.
-- **Caching:** It utilizes LRU caching for morphological analyses, preventing redundant intensive computations on terms like *Bewusstsein* that appear frequently.
-- **Chunking:** Documents are parsed into chunks (`_chunk_text`) for memory-efficient processing of large philosophical texts.
+# Initialize the detector
+detector = NeologismDetector()
 
-## 5. Highly Tunable Heuristics
-The `ConfidenceScorer` uses thoughtfully designed and well-documented tunable constants (`DEFAULT_BASELINE_FREQ`, `COMPOUND_FREQ_FACTOR`, `LENGTH_PENALTY_MIN`). It accurately models German philosophical word formation (e.g., compounding rules, philosophical prefixes like *welt-*, *lebens-*, *seins-*).
+# Analyze a text for neologisms
+text = "Der Daseinsentwurf offenbart die In-der-Welt-sein-Struktur."
+results = detector.analyze(text)
 
-## 6. Exhaustive Testing
-The test suite (`tests/test_neologism_detector.py`) contains over 700 lines of robust tests natively mocking the absence of `spacy`. It extensively tests:
-- Compound splitting and syllable counting.
-- Confidence calculation algorithms.
-- Extreme edge cases (empty texts, massive texts, malformed configurations).
-- Performance and memory regressions.
+# Access findings
+for neologism in results:
+    print(f"Word: {neologism.word}, Confidence: {neologism.confidence}")
+```
+
+**Prerequisites:** 
+Ensure `spacy` and the German language model (e.g., `de_core_news_sm`) are installed for optimal performance.
+
+## Known Issues and Workarounds
+
+The detector is designed for high resilience, particularly when external NLP libraries fail:
+- It attempts to use `spacy` with specific German models (see `_initialize_spacy_model`). 
+- If `spacy` or the models are missing, it gracefully downgrades entirely to regex-based candidate extraction (`_extract_candidates_regex`) and internal heuristics for compounding (`get_compound_patterns`).
+- **Workaround:** If you experience poor extraction quality, ensure the `spacy` model is installed via `python -m spacy download de_core_news_sm`.
+
+## Maintenance and Deployment Guidelines
+
+The architecture relies on several memory and performance management patterns:
+- **Lazy Loading:** Heavy resources like terminology maps and NLP models are initialized only when accessed, significantly reducing startup overhead.
+- **Caching:** The `MorphologicalAnalyzer` uses LRU caching to avoid redundant text analysis, preventing intensive computations on frequently occurring terms.
+- **Chunking:** Large philosophical texts are parsed into manageable segments (`_chunk_text`) to bound memory usage during processing.
+
+## Performance Benchmarks and Tuning
+
+The `ConfidenceScorer` controls scoring heuristics using thoughtfully designed, tunable constants. To profile and adjust performance:
+- **`DEFAULT_BASELINE_FREQ`**: Adjusts the base penalty for common words.
+- **`COMPOUND_FREQ_FACTOR`**: Modifies the probability impact of compounding length.
+- **`LENGTH_PENALTY_MIN`**: Sets the minimum word length before length penalties apply.
+
+**Tuning:** Use the Incremental Tuning Checklist below. Adjust these constants iteratively, measuring precision and recall on a validation set to find the optimal threshold for your target domain.
+
+## References / File Links
+
+For easy navigation, refer to the following core components:
+- [`NeologismDetector`](./services/neologism_detector.py)
+- [`MorphologicalAnalyzer`](./services/morphological_analyzer.py)
+- [`PhilosophicalContextAnalyzer`](./services/philosophical_context_analyzer.py)
+- [`ConfidenceScorer`](./services/confidence_scorer.py)
+- [`models/neologism_models.py`](./models/neologism_models.py)
+- [`tests/test_neologism_detector.py`](./tests/test_neologism_detector.py)
 
 ## Conclusion
-The Neologism Detector is a prime example of high-quality, domain-specific Python engineering. Rather than an overhaul, you should only consider **incremental domain tuning** (e.g., adding to the `german_morphological_patterns` or extending the `klages_terminology.json`) if it is underperforming on specific philosophical texts. Structurally, it is extremely sound.
+The Neologism Detector is a prime example of high-quality, domain-specific Python engineering. Rather than an overhaul, it should only require **incremental domain tuning** if it is underperforming on specific philosophical texts. Structurally, it is extremely sound.
+
+### Incremental Domain Tuning Checklist
+
+To safely and effectively tune the detector for new texts, maintainers should follow this exact procedure:
+
+1. **Monitor Metrics**: Track precision, recall, and F1 on a held-out labeled set, along with the false positive rate and OOV (Out-Of-Vocabulary) rate.
+2. **When to Trigger Tuning**: Initiate a tuning pass if you observe an F1 drop >5 percentage points compared to the baseline or if the false positive rate exceeds 10 percentage points.
+3. **Evaluation Procedure**: 
+   - Create a small, annotated validation set from the target philosophical texts.
+   - Run the Neologism Detector before and after any changes.
+   - Compare tracking metrics and specific error cases.
+4. **Concrete Tuning Examples & Acceptance**:
+   - Add specific lemmas or morphological patterns to `german_morphological_patterns`.
+   - Add or modify entries in `klages_terminology.json` (e.g., add known neologisms or domain-specific compound rules).
+   - **Acceptance Threshold**: Only finalize tuning if F1 improvement is ≥2% and there is no increase in false positives >2%.

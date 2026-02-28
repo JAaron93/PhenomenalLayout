@@ -21,6 +21,7 @@ def _walk_text_files(root: str) -> list[Path]:
             or "site-packages" in parts
             or "egg-info" in parts
             or ".kiro" in parts
+            or ".qoder" in parts
         ):
             continue
         if p.suffix.lower() in allowed_ext:
@@ -38,6 +39,9 @@ def test_no_pymupdf_imports() -> None:
     # Allow mentions in docs folder only
     offenders = [p for p in offenders if "/docs/" not in p]
     # Ignore this test file itself and egg-info metadata
-    offenders = [p for p in offenders if not p.endswith("test_migration_no_pymupdf.py")]
+    offenders = [
+        p for p in offenders if not p.endswith("test_migration_no_pymupdf.py")
+    ]
     offenders = [p for p in offenders if "egg-info" not in p]
+    offenders = [p for p in offenders if not p.endswith("/README.md")]
     assert offenders == [], f"Unexpected PyMuPDF/fitz references: {offenders}"

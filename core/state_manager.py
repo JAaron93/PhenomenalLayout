@@ -1,12 +1,16 @@
 """Thread-safe state management for document translation."""
 
+import asyncio
 import logging
 import threading
 import time
 from contextlib import contextmanager
+from collections.abc import Coroutine
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from zoneinfo import ZoneInfo
+from typing import Any
 
+UTC = ZoneInfo("UTC")
 logger = logging.getLogger(__name__)
 
 
@@ -15,22 +19,68 @@ class AdvancedTranslationState:
 
     def __init__(self):
         """Initialize translation state with default values."""
-        self.current_file: Optional[str] = None
-        self.current_content: Optional[dict[str, Any]] = None
-        self.source_language: Optional[str] = None
-        self.target_language: Optional[str] = None
+        self.current_file: str | None = None
+        self.current_content: dict[str, Any] | None = None
+        self.source_language: str | None = None
+        self.target_language: str | None = None
         self.translation_progress: int = 0
         self.translation_status: str = "idle"
         self.error_message: str = ""
-        self.job_id: Optional[str] = None
-        self.output_file: Optional[str] = None
+        self.job_id: str | None = None
+        self.output_file: str | None = None
         self.processing_info: dict[str, Any] = {}
-        self.backup_path: Optional[str] = None
+        self.backup_path: str | None = None
         self.max_pages: int = 0  # 0 means translate all pages
-        self.session_id: Optional[str] = None
-        self.neologism_analysis: Optional[dict[str, Any]] = None
+        self.session_id: str | None = None
+        self.neologism_analysis: dict[str, Any] | None = None
         self.user_choices: list[dict[str, Any]] = []
         self.philosophy_mode: bool = False
+        self._translation_task: asyncio.Task[Any] | None = None
+        self._translation_task_loop: asyncio.AbstractEventLoop | None = None
+
+    def _assert_current_loop_matches_translation_task(self) -> None:
+        task = self._translation_task
+        loop = self._translation_task_loop
+        if task is None:
+            return
+        if loop is None:
+            raise RuntimeError("Tracked translation task has no owning loop")
+        current_loop = asyncio.get_running_loop()
+        if current_loop is not loop:
+            raise RuntimeError(
+                "Tracked translation task belongs to a different event loop"
+            )
+
+    def create_and_track_translation_task(
+        self, coro: Coroutine[Any, Any, Any]
+    ) -> asyncio.Task[Any]:
+        loop = asyncio.get_running_loop()
+        task: asyncio.Task[Any] = loop.create_task(coro)
+        self._translation_task = task
+        self._translation_task_loop = loop
+        return task
+
+    def get_tracked_translation_task(self) -> asyncio.Task[Any] | None:
+        self._assert_current_loop_matches_translation_task()
+        return self._translation_task
+
+    def cancel_tracked_translation_task(self) -> bool:
+        self._assert_current_loop_matches_translation_task()
+        task = self._translation_task
+        if task is None or task.done():
+            return False
+        task.cancel()
+        return True
+
+    def drop_tracked_translation_task(self) -> None:
+        self._translation_task = None
+        self._translation_task_loop = None
+
+    def clear_tracked_translation_task(self, task: asyncio.Task[Any]) -> None:
+        self._assert_current_loop_matches_translation_task()
+        if self._translation_task is task:
+            self._translation_task = None
+            self._translation_task_loop = None
 
 
 class ThreadSafeTranslationJobs:
@@ -48,11 +98,22 @@ class ThreadSafeTranslationJobs:
         self._cleanup_interval = 3600  # Run cleanup every hour
         self._last_cleanup = time.time()
 
-    def add_job(self, job_id: str, job_data: dict[str, Any]) -> None:
+    def add_job(
+        self,
+        job_id: str,
+        job_data: dict[str, Any],
+        timestamp: datetime | None = None,
+    ) -> None:
         """Add a new job with timestamp.
 
         Creates a shallow copy of job_data to avoid mutating caller's dict.
-        The job data is stored with an added timestamp field.
+        The job data is stored with a timestamp field - either provided
+        or current UTC time.
+
+        Args:
+            job_id: Unique identifier for the job
+            job_data: Dictionary containing job data
+            timestamp: Optional timestamp to use; if None, uses current UTC time
 
         Note:
             To update job data after creation, use update_job() method.
@@ -60,11 +121,11 @@ class ThreadSafeTranslationJobs:
         with self._lock:
             # Create shallow copy to avoid mutating caller's dict
             job = dict(job_data)
-            job["timestamp"] = datetime.now()
+            job["timestamp"] = timestamp or datetime.now(UTC)
             self._jobs[job_id] = job
             self._maybe_cleanup()
 
-    def get_job(self, job_id: str) -> Optional[dict[str, Any]]:
+    def get_job(self, job_id: str) -> dict[str, Any] | None:
         """Get job data by ID.
 
         Returns:
@@ -101,7 +162,10 @@ class ThreadSafeTranslationJobs:
             Use update_job() to modify individual job data.
         """
         with self._lock:
-            return {job_id: dict(job_data) for job_id, job_data in self._jobs.items()}
+            return {
+                job_id: dict(job_data)
+                for job_id, job_data in self._jobs.items()
+            }
 
     def __contains__(self, job_id: str) -> bool:
         """Check if job exists."""
@@ -125,8 +189,12 @@ class ThreadSafeTranslationJobs:
             return dict(self._jobs[job_id])
 
     def __setitem__(self, job_id: str, job_data: dict[str, Any]) -> None:
-        """Set job data using subscript notation."""
-        self.add_job(job_id, job_data)
+        """Set job data using subscript notation.
+
+        Preserves any existing timestamp in job_data; otherwise uses current UTC time.
+        """
+        existing_timestamp = job_data.get("timestamp")
+        self.add_job(job_id, job_data, existing_timestamp)
 
     def _maybe_cleanup(self) -> None:
         """Run cleanup if enough time has passed since last cleanup."""
@@ -137,7 +205,7 @@ class ThreadSafeTranslationJobs:
 
     def _cleanup_old_jobs(self) -> None:
         """Remove jobs older than retention period."""
-        cutoff_time = datetime.now() - timedelta(hours=self._retention_hours)
+        cutoff_time = datetime.now(UTC) - timedelta(hours=self._retention_hours)
         jobs_to_remove = []
 
         for job_id, job_data in self._jobs.items():
@@ -151,7 +219,10 @@ class ThreadSafeTranslationJobs:
             del self._jobs[job_id]
 
         if jobs_to_remove:
-            logger.info(f"Cleaned up {len(jobs_to_remove)} old translation jobs")
+            logger.info(
+                "Cleaned up %s old translation jobs",
+                len(jobs_to_remove),
+            )
 
     def force_cleanup(self) -> int:
         """Force immediate cleanup. Returns number of jobs removed."""
@@ -188,8 +259,8 @@ class StateManager:
         try:
             yield state
         finally:
-            # Optionally clean up state after use
-            pass
+            # Clean up state after use
+            self.remove_state(session_id)
 
 
 # Thread-safe job manager instance
@@ -203,7 +274,7 @@ state_manager = StateManager()
 state = AdvancedTranslationState()
 
 
-def get_request_state(session_id: Optional[str] = None) -> AdvancedTranslationState:
+def get_request_state(session_id: str | None = None) -> AdvancedTranslationState:
     """Get state for current request/session.
 
     Args:

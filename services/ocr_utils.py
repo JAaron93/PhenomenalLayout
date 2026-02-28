@@ -57,7 +57,7 @@ def parse_ocr_result(result: dict[str, Any]) -> list[list[TextBlock]]:
                     bbox_values[2] = 100.0
                 if bbox_values[3] <= 0:
                     bbox_values[3] = 20.0
-            except (TypeError, ValueError, IndexError):
+            except (TypeError, ValueError):
                 bbox_values = [0.0, 0.0, 100.0, 20.0]
             
             try:

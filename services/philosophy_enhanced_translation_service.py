@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
+import copy
+import functools
 import json
 import logging
+import math
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any, Optional, TypeVar
 
 from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
 from models.neologism_models import DetectedNeologism, NeologismAnalysis
@@ -20,6 +24,45 @@ from .neologism_detector import NeologismDetector
 from .translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
+
+
+@functools.cache
+def _get_shared_executor() -> concurrent.futures.ThreadPoolExecutor:
+    """Get a shared ThreadPoolExecutor for running coroutines synchronously.
+
+    Returns:
+        A cached ThreadPoolExecutor instance that can be reused across calls.
+    """
+    return concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+
+def _run_coro_sync(coro: Coroutine[Any, Any, _T]) -> _T:
+    """Run a coroutine synchronously, handling both cases with and without a
+    running loop.
+
+    Note: When running the coroutine on a different thread, this creates a
+    fresh event loop and will not propagate contextvars/task-local state.
+    Callers must ensure that this behavior is acceptable for their use case.
+
+    Args:
+        coro: The coroutine to run synchronously
+
+    Returns:
+        The result of the coroutine
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop, can use asyncio.run directly
+        return asyncio.run(coro)
+
+    # There's a running loop, run the coroutine in a separate thread
+    # using the shared executor to avoid creating a new one each time
+    shared_executor = _get_shared_executor()
+    fut = shared_executor.submit(asyncio.run, coro)
+    return fut.result()
 
 
 @dataclass
@@ -368,9 +411,14 @@ class PhilosophyEnhancedTranslationService:
         Returns:
             NeologismPreservationResult with translation results and neologism analysis
         """
-        return asyncio.run(
+        return _run_coro_sync(
             self.translate_text_with_neologism_handling_async(
-                text, source_lang, target_lang, provider, session_id, progress_callback
+                text,
+                source_lang,
+                target_lang,
+                provider,
+                session_id,
+                progress_callback,
             )
         )
 
@@ -384,11 +432,18 @@ class PhilosophyEnhancedTranslationService:
         progress_callback: Optional[
             Callable[[PhilosophyTranslationProgress], None]
         ] = None,
-    ) -> list[NeologismPreservationResult]:
+    ) -> list[
+        NeologismPreservationResult
+    ]:
         """Synchronous batch translation."""
-        return asyncio.run(
+        return _run_coro_sync(
             self._translate_batch_with_neologism_handling_async(
-                texts, source_lang, target_lang, provider, session_id, progress_callback
+                texts,
+                source_lang,
+                target_lang,
+                provider,
+                session_id,
+                progress_callback,
             )
         )
 

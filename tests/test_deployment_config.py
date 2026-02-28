@@ -36,14 +36,19 @@ def test_minimum_dependency_pins_present() -> None:
     req = req_path.read_text(encoding="utf-8")
     import re
 
-    def assert_min_pin(package: str) -> None:
-        pattern = re.compile(rf"(?im)^\s*{re.escape(package)}\s*>=\s*[\d.]+")
+    def assert_version_pin(package: str) -> None:
+        pattern = re.compile(
+            rf"(?im)^\s*{re.escape(package)}\s*(?:>=|==)\s*[\d.]+"
+        )
         assert pattern.search(
             req
-        ), f"{package} must be pinned with a minimum version (e.g., '{package}>=X.Y.Z')"
+        ), (
+            f"{package} must be pinned with a minimum or exact version "
+            f"(e.g., '{package}>=X.Y.Z' or '{package}==X.Y.Z')"
+        )
 
     for pkg in ("pdf2image", "Pillow", "reportlab"):
-        assert_min_pin(pkg)
+        assert_version_pin(pkg)
 
 
 def test_poppler_and_fonts_documented() -> None:
