@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import concurrent.futures
 import copy
 import functools
@@ -31,12 +32,18 @@ _T = TypeVar("_T")
 @functools.cache
 def _get_shared_executor(max_workers: int = 1) -> concurrent.futures.ThreadPoolExecutor:
     """Get a shared ThreadPoolExecutor with configurable max workers.
-    
+
+    Note: Different max_workers values create separate cached executors.
+    Use consistent max_workers for true singleton behavior.
+
     Args:
         max_workers: Maximum number of worker threads (default: 1)
+
+    Returns:
+        ThreadPoolExecutor: Shared executor instance
     """
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-    atexit.register(_shutdown_shared_executor, executor)
+    atexit.register(_shutdown_executor, executor)
     return executor
 
 
@@ -1066,10 +1073,7 @@ class PhilosophyEnhancedTranslationService:
     # Convenience functions for easy integration
 
 
-from services.philosophy_enhanced_translation_service import (
-    _get_shared_executor,
-    _shutdown_shared_executor,
-)
+
 def create_philosophy_enhanced_translation_service(
     terminology_path: str | None = None,
     db_path: str = "database/user_choices.db",
@@ -1090,9 +1094,29 @@ async def translate_with_philosophy_awareness(
     provider: str = "auto",
     session_id: str | None = None,
     terminology_path: str | None = None,
+    service: PhilosophyEnhancedTranslationService | None = None,
 ) -> dict[str, Any]:
-    """Quick function to translate text with philosophy awareness."""
-    service = create_philosophy_enhanced_translation_service(terminology_path)
+    """Quick function to translate text with philosophy awareness.
+
+    Args:
+        text: Text to translate
+        source_lang: Source language code
+        target_lang: Target language code
+        provider: Translation provider to use
+        session_id: Optional session identifier
+        terminology_path: Optional path to terminology file
+            (used only when service is None)
+        service: Optional pre-created service instance for reuse
+
+    Returns:
+        Translation result as dictionary
+    """
+    # Use provided service or create new one
+    if service is None:
+        service = create_philosophy_enhanced_translation_service(
+            terminology_path
+        )
+
     result = await service.translate_text_with_neologism_handling_async(
         text, source_lang, target_lang, provider, session_id
     )

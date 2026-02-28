@@ -603,21 +603,67 @@ async def test_async_complete_integration():
     # Check if PDF processing is available
     try:
         from services.enhanced_document_processor import EnhancedDocumentProcessor
-        enhanced_processor = EnhancedDocumentProcessor()
-        pdf_support = hasattr(enhanced_processor, 'process_pdf_document')
+        EnhancedDocumentProcessor()
     except ImportError:
-        pytest.skip("PDF processing not available - requires enhanced document processor")
+        pytest.skip(
+            "PDF processing not available - "
+            "requires enhanced document processor"
+        )
     
     # Check if we can create test files
     test_file_path = os.path.join(tempfile.gettempdir(), "test_input.txt")
-    if not os.path.exists(test_file_path):
+    try:
         with open(test_file_path, 'w') as f:
             f.write(
-                "Dasein is fundamental to Heideggerian philosophy. Angst reveals groundlessness."
+                "Dasein is fundamental to Heideggerian philosophy. "
+                "Angst reveals groundlessness."
             )
-        test_file_path = test_file_path
-    else:
+
+    except OSError:
         pytest.skip("Cannot create test files in current environment")
+
+    try:
+        # Instantiate EnhancedDocumentProcessor
+        enhanced_processor = EnhancedDocumentProcessor()
+        
+        # Note: EnhancedDocumentProcessor only supports PDF files,
+        # but we have a text file. Test processor instantiation and
+        # basic functionality.
+        try:
+            # Try to process the file (will fail for .txt but tests
+            # error handling)
+            enhanced_processor.extract_content(test_file_path)
+            pytest.fail("Expected ValueError for unsupported .txt format")
+        except ValueError as e:
+            # Expected behavior - processor only supports PDF
+            assert "Only PDF files are supported" in str(e)
+            logger.info(
+                "✓ EnhancedDocumentProcessor correctly rejects "
+                "unsupported format"
+            )
+        
+        # Test processor metadata and basic functionality
+        assert hasattr(enhanced_processor, 'dpi')
+        assert hasattr(enhanced_processor, 'preserve_images')
+        assert enhanced_processor.dpi > 0
+        logger.info("✓ EnhancedDocumentProcessor instantiated correctly")
+
+        # Verify test file content exists for reference
+        with open(test_file_path) as f:
+            content = f.read()
+            assert "Dasein" in content
+            assert "Heideggerian" in content
+            assert len(content.strip()) > 0
+
+        logger.info("✓ Test file content verified")
+        logger.info("✓ Async integration test completed successfully")
+        
+    except Exception as e:
+        pytest.fail(f"Test execution failed: {e}")
+    finally:
+        # Cleanup test file
+        if os.path.exists(test_file_path):
+            os.unlink(test_file_path)
 
 
 if __name__ == "__main__":

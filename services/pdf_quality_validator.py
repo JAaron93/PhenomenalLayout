@@ -240,17 +240,13 @@ class PDFQualityValidator:
                             {"lang": tess_lang},
                             {"lang": tess_lang, "config": ""},
                             {"lang": tess_lang, "config": "", "timeout": remaining},
-                            {},
+                            {"lang": tess_lang},
                         ]
-                        last_type_error: TypeError | None = None
                         for kwargs in attempts:
                             try:
                                 return pytesseract.image_to_string(img, **kwargs)
-                            except TypeError as exc:
-                                last_type_error = exc
+                            except TypeError:
                                 continue
-                        if last_type_error is not None:
-                            return ""
                         return ""
                     except (RuntimeError, ValueError):
                         # Some tesseract wrappers raise ValueError on timeouts
@@ -285,7 +281,7 @@ class PDFQualityValidator:
                             {"first_page": first, "last_page": last},
                         ]
                         images = None
-                        last_type_error: TypeError | None = None
+                        convert_type_error: TypeError | None = None
                         for kwargs in convert_attempts:
                             try:
                                 images = pdf2image.convert_from_path(
@@ -293,11 +289,11 @@ class PDFQualityValidator:
                                 )
                                 break
                             except TypeError as exc:
-                                last_type_error = exc
+                                convert_type_error = exc
                                 continue
                         if images is None:
-                            if last_type_error is not None:
-                                raise last_type_error
+                            if convert_type_error is not None:
+                                raise convert_type_error
                             raise TypeError(
                                 "pdf2image.convert_from_path failed for all argument variants"
                             )

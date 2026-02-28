@@ -4,7 +4,6 @@ Orchestrates Lingo.dev translation services with Dolphin OCR for pixel-perfect
 formatting integrity during document translation.
 """
 
-import asyncio
 import contextlib
 import logging
 import os
@@ -80,8 +79,12 @@ async def lifespan(_app: FastAPI):
         state.cancel_tracked_translation_task()
         task = state.get_tracked_translation_task()
         if task is not None:
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await task
+            except Exception:
+                logger.exception(
+                    "Exception during tracked translation task shutdown"
+                )
     state.drop_tracked_translation_task()
 
     try:

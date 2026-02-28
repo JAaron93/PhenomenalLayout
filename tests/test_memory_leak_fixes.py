@@ -63,13 +63,16 @@ async def test_start_translation_single_flight_cancels_previous(monkeypatch: pyt
 
         assert len(started) == 2
 
-        # Cleanup
-        state.cancel_tracked_translation_task()
-        with pytest.raises(asyncio.CancelledError):
-            await second_task
-        state.drop_tracked_translation_task()
-
     finally:
+        # Cleanup task if it exists
+        if state.get_tracked_translation_task() is not None:
+            state.cancel_tracked_translation_task()
+            try:
+                await state.get_tracked_translation_task()
+            except asyncio.CancelledError:
+                pass
+            state.drop_tracked_translation_task()
+
         # Restore original global state
         state.current_file = old_file
         state.current_content = old_content
