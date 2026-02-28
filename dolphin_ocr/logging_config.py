@@ -20,6 +20,14 @@ DEFAULT_LOG_FILE = str(_DEFAULT_LOG_PATH)
 DEFAULT_LOGGER_NAME = "dolphin_ocr"
 
 
+def _handler_matches_path(handler: logging.Handler, resolved_path: Path) -> bool:
+    """Return True if *handler* is a FileHandler pointing at *resolved_path*."""
+    if not isinstance(handler, logging.FileHandler):
+        return False
+    base = getattr(handler, "baseFilename", None)
+    return base is not None and Path(base).resolve() == resolved_path
+
+
 def setup_logging(
     *,
     level: str = DEFAULT_LOG_LEVEL,
@@ -54,20 +62,14 @@ def setup_logging(
     if log_file:
         desired = Path(log_file).resolve()
         for h in list(logger.handlers):
-            if isinstance(h, logging.FileHandler):
-                current = getattr(h, "baseFilename", None)
-                if current and Path(current).resolve() != desired:
-                    logger.removeHandler(h)
-                    try:
-                        h.close()
-                    except Exception:
-                        pass
+            if isinstance(h, logging.FileHandler) and not _handler_matches_path(h, desired):
+                logger.removeHandler(h)
+                try:
+                    h.close()
+                except Exception:
+                    pass
 
-        if not any(
-            isinstance(h, logging.FileHandler)
-            and Path(getattr(h, "baseFilename", ".")).resolve() == desired
-            for h in logger.handlers
-        ):
+        if not any(_handler_matches_path(h, desired) for h in logger.handlers):
             file_handler = logging.FileHandler(str(desired))
             file_handler.setFormatter(fmt)
             logger.addHandler(file_handler)

@@ -44,11 +44,20 @@ class AdvancedTranslationState:
         if task is None:
             return
         if loop is None:
-            raise RuntimeError("Tracked translation task has no owning loop")
-        current_loop = asyncio.get_running_loop()
+            raise RuntimeError(
+                f"Tracked translation task {task!r} has no owning loop"
+            )
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError as exc:
+            raise RuntimeError(
+                "No running event loop in current context; "
+                f"tracked translation task {task!r} belongs to loop {loop!r}"
+            ) from exc
         if current_loop is not loop:
             raise RuntimeError(
-                "Tracked translation task belongs to a different event loop"
+                "Tracked translation task belongs to a different event loop; "
+                f"task={task!r} loop={loop!r} current_loop={current_loop!r}"
             )
 
     def create_and_track_translation_task(
@@ -72,7 +81,16 @@ class AdvancedTranslationState:
         task.cancel()
         return True
 
-    def drop_tracked_translation_task(self) -> None:
+    def drop_tracked_translation_task(self, *, cancel: bool = False) -> None:
+        """Drop tracked task references.
+
+        By default, this does not cancel any running task. Pass cancel=True to
+        cancel the tracked task (if active) before dropping it.
+        """
+        task = self._translation_task
+        if cancel and task is not None and not task.done():
+            self._assert_current_loop_matches_translation_task()
+            task.cancel()
         self._translation_task = None
         self._translation_task_loop = None
 

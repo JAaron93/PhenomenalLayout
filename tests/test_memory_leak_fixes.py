@@ -23,43 +23,57 @@ async def test_start_translation_single_flight_cancels_previous(monkeypatch: pyt
             cancel_observed.set()
             raise
 
-    monkeypatch.setattr(
-        translation_handler,
-        "perform_advanced_translation",
-        fake_perform,
-    )
+    # Capture original global state
+    old_file = state.current_file
+    old_content = state.current_content
+    old_lang = state.source_language
 
-    state.current_file = "dummy.pdf"
-    state.current_content = {
-        "type": "pdf_advanced",
-        "text_by_page": {"1": ["x"]},
-    }
-    state.source_language = "en"
+    try:
+        monkeypatch.setattr(
+            translation_handler,
+            "perform_advanced_translation",
+            fake_perform,
+        )
 
-    res1 = await translation_handler.start_translation("de", 0, False)
-    assert res1[2] is False
-    first_task = state.get_tracked_translation_task()
-    assert first_task is not None
+        state.current_file = "dummy.pdf"
+        state.current_content = {
+            "type": "pdf_advanced",
+            "text_by_page": {"1": ["x"]},
+        }
+        state.source_language = "en"
 
-    await asyncio.wait_for(started_event.wait(), timeout=2.0)
+        res1 = await translation_handler.start_translation("de", 0, False)
+        _, is_running = res1[2]
+        assert not is_running
+        first_task = state.get_tracked_translation_task()
+        assert first_task is not None
 
-    res2 = await translation_handler.start_translation("fr", 0, False)
-    assert res2[2] is False
-    second_task = state.get_tracked_translation_task()
-    assert second_task is not None
-    assert second_task is not first_task
+        await asyncio.wait_for(started_event.wait(), timeout=2.0)
 
-    await asyncio.sleep(0)
+        res2 = await translation_handler.start_translation("fr", 0, False)
+        _, is_running2 = res2[2]
+        assert not is_running2
+        second_task = state.get_tracked_translation_task()
+        assert second_task is not None
+        assert second_task is not first_task
 
-    await asyncio.wait_for(cancel_observed.wait(), timeout=2.0)
+        await asyncio.sleep(0)
 
-    assert len(started) == 2
+        await asyncio.wait_for(cancel_observed.wait(), timeout=2.0)
 
-    # Cleanup
-    state.cancel_tracked_translation_task()
-    with pytest.raises(asyncio.CancelledError):
-        await second_task
-    state.drop_tracked_translation_task()
+        assert len(started) == 2
+
+        # Cleanup
+        state.cancel_tracked_translation_task()
+        with pytest.raises(asyncio.CancelledError):
+            await second_task
+        state.drop_tracked_translation_task()
+
+    finally:
+        # Restore original global state
+        state.current_file = old_file
+        state.current_content = old_content
+        state.source_language = old_lang
 
 
 def test_lingo_translator_close_closes_session() -> None:

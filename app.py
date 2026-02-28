@@ -4,6 +4,7 @@ Orchestrates Lingo.dev translation services with Dolphin OCR for pixel-perfect
 formatting integrity during document translation.
 """
 
+import asyncio
 import contextlib
 import logging
 import os
@@ -66,11 +67,7 @@ if _created_early:
 async def lifespan(_app: FastAPI):
     """Manage application startup and shutdown lifecycle."""
     # Startup logic
-    created = []
-    for directory in _REQUIRED_DIRECTORIES:
-        if not os.path.isdir(directory):
-            os.makedirs(directory, exist_ok=True)
-            created.append(directory)
+    created = _ensure_required_dirs()
     if created:
         for d in created:
             logger.info("Created directory: %s", d)
@@ -83,7 +80,7 @@ async def lifespan(_app: FastAPI):
         state.cancel_tracked_translation_task()
         task = state.get_tracked_translation_task()
         if task is not None:
-            with contextlib.suppress(BaseException):
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
     state.drop_tracked_translation_task()
 

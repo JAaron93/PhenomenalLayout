@@ -230,7 +230,7 @@ class TestDynamicLayoutEngine:
                 sample_times = measure_performance_sample()
                 percentile_index = min(
                     len(sample_times) - 1,
-                    int(len(sample_times) * int(PERFORMANCE_PERCENTILE) / 100)
+                    int(len(sample_times) * PERFORMANCE_PERCENTILE / 100)
                 )
                 percentile_time = sorted(sample_times)[percentile_index]
 

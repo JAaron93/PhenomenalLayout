@@ -235,37 +235,23 @@ class PDFQualityValidator:
                             0.1,
                             overall_timeout - (time.time() - start_ts),
                         )
-                        try:
-                            return pytesseract.image_to_string(
-                                img,
-                                lang=tess_lang,
-                                timeout=remaining,
-                            )
-                        except TypeError:
+                        attempts = [
+                            {"lang": tess_lang, "timeout": remaining},
+                            {"lang": tess_lang},
+                            {"lang": tess_lang, "config": ""},
+                            {"lang": tess_lang, "config": "", "timeout": remaining},
+                            {},
+                        ]
+                        last_type_error: TypeError | None = None
+                        for kwargs in attempts:
                             try:
-                                return pytesseract.image_to_string(
-                                    img,
-                                    tess_lang,
-                                    timeout=remaining,
-                                )
-                            except TypeError:
-                                try:
-                                    return pytesseract.image_to_string(
-                                        img,
-                                        lang=tess_lang,
-                                    )
-                                except TypeError:
-                                    try:
-                                        return pytesseract.image_to_string(
-                                            img,
-                                            tess_lang,
-                                            remaining,
-                                        )
-                                    except TypeError:
-                                        return pytesseract.image_to_string(
-                                            img,
-                                            tess_lang,
-                                        )
+                                return pytesseract.image_to_string(img, **kwargs)
+                            except TypeError as exc:
+                                last_type_error = exc
+                                continue
+                        if last_type_error is not None:
+                            return ""
+                        return ""
                     except (RuntimeError, ValueError):
                         # Some tesseract wrappers raise ValueError on timeouts
                         return ""
@@ -284,47 +270,37 @@ class PDFQualityValidator:
                     first = page_range.start + 1
                     last = page_range.stop
                     try:
-                        try:
-                            images = pdf2image.convert_from_path(
-                                pdf_path,
-                                dpi=target_dpi,
-                                first_page=first,
-                                last_page=last,
-                                poppler_path=poppler_path,
-                            )
-                        except TypeError:
+                        convert_attempts = [
+                            {
+                                "dpi": target_dpi,
+                                "first_page": first,
+                                "last_page": last,
+                                "poppler_path": poppler_path,
+                            },
+                            {
+                                "dpi": target_dpi,
+                                "first_page": first,
+                                "last_page": last,
+                            },
+                            {"first_page": first, "last_page": last},
+                        ]
+                        images = None
+                        last_type_error: TypeError | None = None
+                        for kwargs in convert_attempts:
                             try:
                                 images = pdf2image.convert_from_path(
-                                    pdf_path,
-                                    dpi=target_dpi,
-                                    first_page=first,
-                                    last_page=last,
+                                    pdf_path, **kwargs
                                 )
-                            except TypeError:
-                                try:
-                                    images = pdf2image.convert_from_path(
-                                        pdf_path,
-                                        target_dpi,
-                                        first_page=first,
-                                        last_page=last,
-                                    )
-                                except TypeError:
-                                    # Some wrappers expose first/last as positional-only args.
-                                    try:
-                                        images = pdf2image.convert_from_path(
-                                            pdf_path,
-                                            target_dpi,
-                                            first,
-                                            last,
-                                            poppler_path,
-                                        )
-                                    except TypeError:
-                                        images = pdf2image.convert_from_path(
-                                            pdf_path,
-                                            target_dpi,
-                                            first,
-                                            last,
-                                        )
+                                break
+                            except TypeError as exc:
+                                last_type_error = exc
+                                continue
+                        if images is None:
+                            if last_type_error is not None:
+                                raise last_type_error
+                            raise TypeError(
+                                "pdf2image.convert_from_path failed for all argument variants"
+                            )
                     except (OSError, ValueError, RuntimeError) as e:
                         # Handle poppler absence gracefully
                         et = type(e).__name__

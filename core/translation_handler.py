@@ -581,6 +581,8 @@ async def perform_advanced_translation() -> None:
     except asyncio.CancelledError:
         current_task = asyncio.current_task()
         tracked_task = None
+        # get_tracked_translation_task() may raise RuntimeError if tracked task
+        # was removed between checks/cleared on another thread
         try:
             tracked_task = state.get_tracked_translation_task()
         except RuntimeError:

@@ -29,18 +29,26 @@ _T = TypeVar("_T")
 
 
 @functools.cache
-def _get_shared_executor() -> concurrent.futures.ThreadPoolExecutor:
-    """Get a shared ThreadPoolExecutor for running coroutines synchronously.
-
-    Returns:
-        A cached ThreadPoolExecutor instance that can be reused across calls.
+def _get_shared_executor(max_workers: int = 1) -> concurrent.futures.ThreadPoolExecutor:
+    """Get a shared ThreadPoolExecutor with configurable max workers.
+    
+    Args:
+        max_workers: Maximum number of worker threads (default: 1)
     """
-    return concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+    atexit.register(_shutdown_shared_executor, executor)
+    return executor
+
+
+def _shutdown_executor(executor: concurrent.futures.ThreadPoolExecutor) -> None:
+    """Shutdown the shared executor."""
+    executor.shutdown(wait=True)
 
 
 def _run_coro_sync(coro: Coroutine[Any, Any, _T]) -> _T:
     """Run a coroutine synchronously, handling both cases with and without a
     running loop.
+    
 
     Note: When running the coroutine on a different thread, this creates a
     fresh event loop and will not propagate contextvars/task-local state.
@@ -1058,6 +1066,10 @@ class PhilosophyEnhancedTranslationService:
     # Convenience functions for easy integration
 
 
+from services.philosophy_enhanced_translation_service import (
+    _get_shared_executor,
+    _shutdown_shared_executor,
+)
 def create_philosophy_enhanced_translation_service(
     terminology_path: str | None = None,
     db_path: str = "database/user_choices.db",

@@ -206,7 +206,7 @@ class AsyncDocumentProcessor:
                     await result
             except Exception as e:
                 # Progress callbacks must never crash the pipeline
-                logger.debug(
+                logger.warning(
                     "Progress callback error for stage %s with payload %s: %s",
                     stage,
                     {k: type(v).__name__ for k, v in payload.items()},

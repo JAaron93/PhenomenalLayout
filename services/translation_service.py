@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import copy
-import inspect
 import logging
 import math
 import os
@@ -50,6 +49,14 @@ class BaseTranslator(ABC):
         """Translate a batch of text strings."""
         pass
 
+    def close(self) -> None:
+        """Release any synchronous resources (no-op by default)."""
+        return None
+
+    async def aclose(self) -> None:
+        """Release any asynchronous resources (no-op by default)."""
+        return None
+
 
 class LingoTranslator(BaseTranslator):
     """Lingo.dev translation implementation."""
@@ -87,6 +94,10 @@ class LingoTranslator(BaseTranslator):
             self.session.close()
         except Exception:
             logger.exception("Failed to close LingoTranslator session")
+
+    async def aclose(self) -> None:
+        """Async cleanup wrapper for close()."""
+        self.close()
 
     async def translate_text(
         self, text: str, source_lang: str, target_lang: str
@@ -202,7 +213,9 @@ class MCPLingoTranslator(BaseTranslator):
     def close(self) -> None:
         """Best-effort synchronous cleanup.
 
-        MCP shutdown is inherently async; this method triggers `aclose()`.
+        Note:
+            MCP shutdown is inherently async; this method triggers `aclose()`.
+            For deterministic cleanup, prefer awaiting `aclose()` directly.
         """
         logger.warning(
             "MCPLingoTranslator.close() is best-effort; "
@@ -219,12 +232,7 @@ class MCPLingoTranslator(BaseTranslator):
                 )
             return
 
-        try:
-            loop.create_task(self.aclose())
-        except Exception:
-            logger.exception(
-                "Failed to schedule MCPLingoTranslator.aclose() from close()"
-            )
+        loop.create_task(self.aclose())
 
 
 def _parse_positive_float_env(name: str, default: float) -> float:
@@ -324,32 +332,18 @@ class TranslationService:
     def close(self) -> None:
         """Best-effort synchronous cleanup of provider resources."""
         for name, provider in list(self.providers.items()):
-            close_fn = getattr(provider, "close", None)
-            if callable(close_fn):
-                try:
-                    close_fn()
-                except Exception:
-                    logger.exception("Failed to close provider %s", name)
+            try:
+                provider.close()
+            except Exception:
+                logger.exception("Failed to close provider %s", name)
 
     async def aclose(self) -> None:
         """Best-effort async cleanup of provider resources."""
         for name, provider in list(self.providers.items()):
-            aclose_fn = getattr(provider, "aclose", None)
-            if callable(aclose_fn):
-                try:
-                    result = aclose_fn()
-                    if inspect.isawaitable(result):
-                        await result
-                    continue
-                except Exception:
-                    logger.exception("Failed to aclose provider %s", name)
-
-            close_fn = getattr(provider, "close", None)
-            if callable(close_fn):
-                try:
-                    close_fn()
-                except Exception:
-                    logger.exception("Failed to close provider %s", name)
+            try:
+                await provider.aclose()
+            except Exception:
+                logger.exception("Failed to aclose provider %s", name)
 
     async def translate_batch(
         self,

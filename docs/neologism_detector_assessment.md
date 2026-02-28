@@ -52,12 +52,12 @@ The `ConfidenceScorer` controls scoring heuristics using thoughtfully designed, 
 ## References / File Links
 
 For easy navigation, refer to the following core components:
-- [`NeologismDetector`](./services/neologism_detector.py)
-- [`MorphologicalAnalyzer`](./services/morphological_analyzer.py)
-- [`PhilosophicalContextAnalyzer`](./services/philosophical_context_analyzer.py)
-- [`ConfidenceScorer`](./services/confidence_scorer.py)
-- [`models/neologism_models.py`](./models/neologism_models.py)
-- [`tests/test_neologism_detector.py`](./tests/test_neologism_detector.py)
+- [`NeologismDetector`](../services/neologism_detector.py)
+- [`MorphologicalAnalyzer`](../services/morphological_analyzer.py)
+- [`PhilosophicalContextAnalyzer`](../services/philosophical_context_analyzer.py)
+- [`ConfidenceScorer`](../services/confidence_scorer.py)
+- [`models/neologism_models.py`](../models/neologism_models.py)
+- [`tests/test_neologism_detector.py`](../tests/test_neologism_detector.py)
 
 ## Conclusion
 The Neologism Detector is a prime example of high-quality, domain-specific Python engineering. Rather than an overhaul, it should only require **incremental domain tuning** if it is underperforming on specific philosophical texts. Structurally, it is extremely sound.
