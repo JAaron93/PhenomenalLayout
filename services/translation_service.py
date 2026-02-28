@@ -311,12 +311,20 @@ class TranslationService:
                     call_timeout: float = _parse_positive_float_env(
                         "LINGO_MCP_CALL_TIMEOUT", 60.0
                     )
+                    session_cleanup_timeout: float = _parse_positive_float_env(
+                        "LINGO_MCP_SESSION_CLEANUP_TIMEOUT", 10.0
+                    )
+                    stdio_cleanup_timeout: float = _parse_positive_float_env(
+                        "LINGO_MCP_STDIO_CLEANUP_TIMEOUT", 10.0
+                    )
 
                     cfg: McpLingoConfig = McpLingoConfig(
                         api_key=lingo_key,
                         tool_name=tool_name,
                         startup_timeout_s=startup_timeout,
                         call_timeout_s=call_timeout,
+                        session_cleanup_timeout_s=session_cleanup_timeout,
+                        stdio_cleanup_timeout_s=stdio_cleanup_timeout,
                     )
                     # Pass through PATH and env
                     cfg.env = os.environ.copy()

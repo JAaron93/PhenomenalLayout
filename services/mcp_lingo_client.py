@@ -72,6 +72,7 @@ DEFAULT_TOOL_CANDIDATES: tuple[str, ...] = (
 
 @dataclass
 class McpLingoConfig:
+    """Configuration for the Lingo.dev MCP client."""
     api_key: str
     command: str = "npx"
     # npx -y lingo.dev mcp <api-key>
@@ -82,6 +83,13 @@ class McpLingoConfig:
     # Timeout for startup and calls
     startup_timeout_s: float = float(os.environ.get("LINGO_MCP_STARTUP_TIMEOUT", 20))
     call_timeout_s: float = float(os.environ.get("LINGO_MCP_CALL_TIMEOUT", 60))
+    # Timeout for cleanup operations
+    session_cleanup_timeout_s: float = float(
+        os.environ.get("LINGO_MCP_SESSION_CLEANUP_TIMEOUT", 10)
+    )
+    stdio_cleanup_timeout_s: float = float(
+        os.environ.get("LINGO_MCP_STDIO_CLEANUP_TIMEOUT", 10)
+    )
 
 
 class McpLingoClient:
@@ -150,7 +158,7 @@ class McpLingoClient:
                 logger.debug("Closing MCP session")
                 await asyncio.wait_for(
                     self._session_ctx.__aexit__(None, None, None),
-                    timeout=10.0
+                    timeout=self._config.session_cleanup_timeout_s
                 )
                 logger.debug("MCP session closed successfully")
             except TimeoutError:
@@ -168,7 +176,7 @@ class McpLingoClient:
                 logger.debug("Closing stdio transport")
                 await asyncio.wait_for(
                     self._stdio_ctx.__aexit__(None, None, None),
-                    timeout=10.0
+                    timeout=self._config.stdio_cleanup_timeout_s
                 )
                 logger.debug("Stdio transport closed successfully")
             except TimeoutError:

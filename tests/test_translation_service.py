@@ -60,6 +60,8 @@ def restore_env(monkeypatch):
         "LINGO_MCP_TOOL_NAME",
         "LINGO_MCP_STARTUP_TIMEOUT",
         "LINGO_MCP_CALL_TIMEOUT",
+        "LINGO_MCP_SESSION_CLEANUP_TIMEOUT",
+        "LINGO_MCP_STDIO_CLEANUP_TIMEOUT",
     ]:
         if key in os.environ:
             monkeypatch.delenv(key, raising=False)

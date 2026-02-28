@@ -77,10 +77,28 @@ async def lifespan(_app: FastAPI):
     if os.getenv("ENABLE_MEMORY_MONITORING", "").lower() == "true":
         try:
             from utils.memory_monitor import start_memory_monitoring
-            check_interval = float(os.getenv("MEMORY_CHECK_INTERVAL", "60"))
-            alert_threshold = float(os.getenv("MEMORY_ALERT_THRESHOLD_MB", "100"))
+            
+            # Parse and validate environment variables with fallbacks
+            try:
+                check_interval = float(os.getenv("MEMORY_CHECK_INTERVAL", "60"))
+                if check_interval <= 0:
+                    logger.warning("Invalid MEMORY_CHECK_INTERVAL: %s, using default 60", check_interval)
+                    check_interval = 60.0
+            except (ValueError, TypeError) as e:
+                logger.warning("Invalid MEMORY_CHECK_INTERVAL format, using default 60: %s", e)
+                check_interval = 60.0
+            
+            try:
+                alert_threshold = float(os.getenv("MEMORY_ALERT_THRESHOLD_MB", "100"))
+                if alert_threshold < 0:
+                    logger.warning("Invalid MEMORY_ALERT_THRESHOLD_MB: %s, using default 100", alert_threshold)
+                    alert_threshold = 100.0
+            except (ValueError, TypeError) as e:
+                logger.warning("Invalid MEMORY_ALERT_THRESHOLD_MB format, using default 100: %s", e)
+                alert_threshold = 100.0
+            
             start_memory_monitoring(check_interval, alert_threshold)
-            logger.info("Memory monitoring enabled")
+            logger.info("Memory monitoring enabled (interval: %.1fs, threshold: %.1f MB)", check_interval, alert_threshold)
         except Exception as e:
             logger.warning("Failed to start memory monitoring: %s", e)
 
