@@ -141,8 +141,10 @@ class MemoryMonitor:
             except MemoryMonitoringError as e:
                 logger.error("Failed to get current memory stats: %s", e)
                 raise MemoryMonitoringError(f"Cannot retrieve memory statistics: {e}") from e
-                
-            growth = current_memory - (self._baseline_memory or current_memory)
+
+            growth = 0.0
+            if self._baseline_memory is not None and self._baseline_memory > 0:
+                growth = current_memory - self._baseline_memory
 
             return {
                 "current_memory_mb": current_memory,
@@ -159,13 +161,8 @@ class MemoryMonitor:
             }
 
     def _monitor_loop(self) -> None:
-        """Main monitoring loop."""
-        while True:
-            # Check monitoring flag outside lock to allow proper exit
-            with self._lock:
-                if not self._monitoring:
-                    break
-            
+        """Main monitoring loop with improved shutdown handling."""
+        while self._monitoring:  # Direct flag check instead of while True
             try:
                 stats = self.get_current_stats()
                 current_memory = stats["current_memory_mb"]
@@ -191,17 +188,16 @@ class MemoryMonitor:
 
             except MemoryMonitoringError as e:
                 logger.error("Memory monitoring error: %s", e)
-                # Continue monitoring but with reduced functionality
-                time.sleep(self.check_interval)
+                # Check shutdown flag before continuing
+                if not self._monitoring:
+                    break
+                # Sleep for shorter interval after error to allow shutdown
+                time.sleep(min(1.0, self.check_interval))
                 continue
 
             # Use interruptible sleep with shorter intervals for better shutdown response
             sleep_end = time.time() + self.check_interval
-            while time.time() < sleep_end:
-                # Check monitoring flag frequently during sleep
-                with self._lock:
-                    if not self._monitoring:
-                        break
+            while time.time() < sleep_end and self._monitoring:
                 # Sleep in small chunks (1 second) for responsive shutdown
                 time.sleep(min(1.0, sleep_end - time.time()))
 
@@ -251,7 +247,7 @@ class MemoryMonitor:
 
     @property
     def baseline_memory_mb(self) -> float | None:
-        """Get the baseline memory usage in MB.
+        """Get baseline memory usage in MB.
         
         Returns:
             Baseline memory in MB, or None if not established
@@ -261,7 +257,7 @@ class MemoryMonitor:
 
     @property
     def peak_memory_mb(self) -> float:
-        """Get the peak memory usage recorded in MB.
+        """Get peak memory usage recorded in MB.
         
         Returns:
             Peak memory usage in MB
@@ -273,13 +269,22 @@ class MemoryMonitor:
         """Clean up resources and stop monitoring.
         
         This method should be called during application shutdown to ensure
-        proper cleanup of the monitoring thread and resources.
+        proper cleanup of monitoring thread and resources.
         """
         if self._monitoring:
             logger.info("Cleaning up memory monitor...")
-            self.stop_monitoring()
+            self.stop_monitoring()  # This handles thread joining
+            
+            # Wait additional time for thread to fully terminate
+            if self._monitor_thread and self._monitor_thread.is_alive():
+                logger.info("Waiting for monitoring thread to fully terminate...")
+                self._monitor_thread.join(timeout=5.0)
+                if self._monitor_thread.is_alive():
+                    logger.warning(
+                        "Monitoring thread still alive after additional timeout"
+                    )
         
-        # Clear callbacks to prevent memory leaks
+        # Clear callbacks and resources
         with self._lock:
             self._callbacks.clear()
 
@@ -290,31 +295,6 @@ class MemoryMonitor:
         except Exception:
             # Ignore errors during cleanup in destructor
             pass
-
-
-def force_garbage_collection() -> dict[str, Any]:
-    """Force garbage collection and return collection stats."""
-    before_stats = {
-        "counts": gc.get_count() if hasattr(gc, 'get_count') else (0, 0, 0),
-        "stats": gc.get_stats() if hasattr(gc, 'get_stats') else None,
-    }
-
-    # Run garbage collection
-    collected = gc.collect()
-
-    after_stats = {
-        "counts": gc.get_count() if hasattr(gc, 'get_count') else (0, 0, 0),
-        "stats": gc.get_stats() if hasattr(gc, 'get_stats') else None,
-    }
-
-    return {
-        "collected_objects": collected,
-        "before_counts": before_stats["counts"],
-        "after_counts": after_stats["counts"],
-        "before_stats": before_stats["stats"],
-        "after_stats": after_stats["stats"],
-        "timestamp": datetime.now().isoformat(),
-    }
 
 
 # Global memory monitor instance
@@ -377,26 +357,36 @@ def cleanup_memory_monitor() -> None:
 atexit.register(cleanup_memory_monitor)
 
 
+def force_garbage_collection() -> dict[str, Any]:
+    """Force garbage collection and return collection stats."""
+    before_stats = {
+        "counts": gc.get_count() if hasattr(gc, 'get_count') else (0, 0, 0),
+        "stats": gc.get_stats() if hasattr(gc, 'get_stats') else None,
+    }
+
+    # Run garbage collection
+    collected = gc.collect()
+
+    after_stats = {
+        "counts": gc.get_count() if hasattr(gc, 'get_count') else (0, 0, 0),
+        "stats": gc.get_stats() if hasattr(gc, 'get_stats') else None,
+    }
+
+    return {
+        "collected_objects": collected,
+        "before_counts": before_stats["counts"],
+        "after_counts": after_stats["counts"],
+        "before_stats": before_stats["stats"],
+        "after_stats": after_stats["stats"],
+        "timestamp": datetime.now(),
+    }
+
+
 def get_memory_stats() -> dict[str, Any]:
     """Get current memory statistics.
     
     Returns:
         Dictionary containing memory statistics
-        
-    Raises:
-        MemoryMonitoringError: If unable to get memory statistics
     """
     monitor = get_memory_monitor()
     return monitor.get_current_stats()
-
-
-def log_memory_usage(label: str = "") -> None:
-    """Log current memory usage with optional label."""
-    stats = get_memory_stats()
-    logger.info(
-        "Memory usage%s: %.1f MB (growth: %.1f MB, %.1f%%)",
-        f" [{label}]" if label else "",
-        stats["current_memory_mb"],
-        stats["growth_mb"],
-        stats["growth_percent"]
-    )

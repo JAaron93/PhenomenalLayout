@@ -1,7 +1,7 @@
 """Memory monitoring API routes."""
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Request, Response
 
@@ -12,6 +12,8 @@ from utils.memory_monitor import (
     get_memory_monitor,
     get_memory_stats,
     MemoryMonitoringError,
+    start_memory_monitoring,
+    stop_memory_monitoring,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ async def get_memory_statistics(
     request: Request,
     response: Response,
     current_user: dict = get_read_only_user
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get current memory usage statistics."""
     # Check rate limit
     check_rate_limit(request, "read")
@@ -64,7 +66,7 @@ async def force_garbage_collection_endpoint(
     request: Request,
     response: Response,
     current_user: dict = get_admin_user
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Force garbage collection and return results."""
     # Check rate limit
     check_rate_limit(request, "admin")
@@ -91,20 +93,18 @@ async def force_garbage_collection_endpoint(
 
 
 @router.post("/monitoring/start")
-async def start_memory_monitoring(
+async def start_memory_monitoring_endpoint(
     check_interval: float = 60.0,
     alert_threshold_mb: float = 100.0,
     request: Request = None,
     response: Response = None,
     current_user: dict = get_admin_user
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Start memory monitoring with specified parameters."""
     # Check rate limit
     check_rate_limit(request, "admin")
     
     try:
-        from utils.memory_monitor import start_memory_monitoring
-        
         start_memory_monitoring(check_interval, alert_threshold_mb)
         
         # Add rate limit headers
@@ -129,18 +129,16 @@ async def start_memory_monitoring(
 
 
 @router.post("/monitoring/stop")
-async def stop_memory_monitoring(
+async def stop_memory_monitoring_endpoint(
     request: Request,
     response: Response,
     current_user: dict = get_admin_user
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Stop memory monitoring."""
     # Check rate limit
     check_rate_limit(request, "admin")
     
     try:
-        from utils.memory_monitor import stop_memory_monitoring
-        
         stop_memory_monitoring()
         
         # Add rate limit headers
@@ -165,7 +163,7 @@ async def get_monitoring_status(
     request: Request,
     response: Response,
     current_user: dict = get_read_only_user
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get current memory monitoring status."""
     # Check rate limit
     check_rate_limit(request, "read")
