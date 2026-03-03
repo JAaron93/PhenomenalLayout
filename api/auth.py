@@ -1,26 +1,40 @@
 """Authentication utilities for API endpoints."""
 
 import os
+import secrets
 import time
-from datetime import datetime, timedelta
+import functools
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Union
 
 import jwt
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 
 logger = __import__("logging").getLogger(__name__)
 
-# Environment variables
-JWT_SECRET = os.getenv("MEMORY_API_JWT_SECRET", "default-secret-change-in-production")
-API_KEY = os.getenv("MEMORY_API_KEY", "admin-api-key-change-in-production")
+# Environment variables - no defaults for production security
+JWT_SECRET = os.getenv("MEMORY_API_JWT_SECRET")
+API_KEY = os.getenv("MEMORY_API_KEY") 
 ENABLE_AUTH = os.getenv("MEMORY_API_ENABLE_AUTH", "true").lower() == "true"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
-# Security schemes
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-bearer_scheme = HTTPBearer(auto_error=False)
+# Security validation for production
+if os.getenv("ENVIRONMENT", "").lower() == "production":
+    if not JWT_SECRET:
+        raise ValueError("MEMORY_API_JWT_SECRET environment variable is required in production")
+    if not API_KEY:
+        raise ValueError("MEMORY_API_KEY environment variable is required in production")
+
+# Security schemes - dynamically created based on auth enabled
+def get_api_key_header():
+    """Get API key header scheme based on current auth status."""
+    return APIKeyHeader(name="X-API-Key", auto_error=False) if ENABLE_AUTH else None
+
+def get_bearer_scheme():
+    """Get bearer scheme based on current auth status.""" 
+    return HTTPBearer(auto_error=False) if ENABLE_AUTH else None
 
 
 class AuthError(Exception):
@@ -44,12 +58,12 @@ def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY) -> str:
     Returns:
         JWT token string
     """
-    expiration = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    expiration = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     payload = {
         "user_id": user_id,
         "role": role,
         "exp": expiration,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "type": "access"
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -77,15 +91,23 @@ def verify_jwt_token(token: str) -> dict:
 
 
 def verify_api_key(api_key: str) -> bool:
-    """Verify an API key.
+    """Verify API key against configured key.
     
     Args:
-        api_key: API key string
+        api_key: API key to verify
         
     Returns:
-        True if API key is valid
+        bool: True if key matches, False otherwise
     """
-    return api_key == API_KEY
+    # Use constant-time comparison to prevent timing attacks
+    import secrets
+    
+    try:
+        # Compare using secrets.compare_digest for timing attack protection
+        return secrets.compare_digest(api_key.encode(), API_KEY.encode())
+    except (TypeError, AttributeError):
+        # Handle encoding errors gracefully
+        return False
 
 
 async def get_current_user(
@@ -106,26 +128,45 @@ async def get_current_user(
     Raises:
         HTTPException: If authentication fails
     """
-    # Skip authentication if disabled
-    if not ENABLE_AUTH:
-        return {"user_id": "anonymous", "role": UserRole.ADMIN}
+    # Get dynamic security schemes
+    bearer_scheme = get_bearer_scheme()
     
-    # Try API key authentication first (admin access)
+    # Check API key first
     if api_key and verify_api_key(api_key):
-        return {"user_id": "api_key_user", "role": UserRole.ADMIN}
+        return {
+            "user_id": "admin",
+            "role": UserRole.ADMIN,
+            "authenticated": True,
+            "method": "api_key"
+        }
     
-    # Try JWT authentication
-    if credentials and credentials.scheme.lower() == "bearer":
+    # Check JWT token using dynamic scheme
+    if bearer_scheme and hasattr(credentials, 'credentials'):
         try:
             payload = verify_jwt_token(credentials.credentials)
             return {
-                "user_id": payload.get("user_id"),
-                "role": payload.get("role", UserRole.READ_ONLY)
+                "user_id": payload.get("user_id", "unknown"),
+                "role": payload.get("role", UserRole.READ_ONLY),
+                "authenticated": True,
+                "method": "jwt"
             }
         except AuthError as e:
-            logger.warning(f"JWT authentication failed: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     
-    # No valid authentication found
+    # Authentication disabled - return anonymous user
+    if not ENABLE_AUTH:
+        return {
+            "user_id": "anonymous",
+            "role": UserRole.ADMIN,
+            "authenticated": False,
+            "method": "disabled"
+        }
+    
+    # No valid authentication provided
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required",
@@ -148,6 +189,14 @@ async def get_current_user_optional(
     Returns:
         User information dictionary or None if not authenticated
     """
+    if not ENABLE_AUTH:
+        # Authentication disabled - return anonymous admin user
+        return {
+            "user_id": "anonymous",
+            "role": UserRole.ADMIN,
+            "authenticated": False
+        }
+    
     try:
         return await get_current_user(request, api_key, credentials)
     except HTTPException:
@@ -164,6 +213,7 @@ def require_role(required_role: str):
         Decorator function
     """
     def decorator(func):
+        @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             # Get user from kwargs (injected by dependencies)
             current_user = kwargs.get("current_user")
@@ -213,22 +263,48 @@ def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
 
 # Authentication dependencies for FastAPI
 async def get_current_user_dependency(
-    request: Request,
-    api_key: Optional[str] = api_key_header,
-    credentials: Optional[HTTPAuthorizationCredentials] = bearer_scheme
+    request: Request
 ) -> dict:
     """FastAPI dependency for getting current user."""
+    # Manually extract credentials based on current auth status
+    api_key = None
+    credentials = None
+    
+    if ENABLE_AUTH:
+        # Extract API key
+        api_key_header = get_api_key_header()
+        if api_key_header:
+            api_key = await api_key_header(request)
+        
+        # Extract Bearer token
+        bearer_scheme = get_bearer_scheme()
+        if bearer_scheme:
+            credentials = await bearer_scheme(request)
+    
     user = await get_current_user(request, api_key, credentials)
     log_auth_event("access", user.get("user_id", "unknown"), f"Role: {user.get('role')}")
     return user
 
 
 async def get_current_user_optional_dependency(
-    request: Request,
-    api_key: Optional[str] = api_key_header,
-    credentials: Optional[HTTPAuthorizationCredentials] = bearer_scheme
+    request: Request
 ) -> Optional[dict]:
     """FastAPI dependency for getting current user (optional)."""
+    # Manually extract credentials based on current auth status
+    api_key = None
+    credentials = None
+    
+    if ENABLE_AUTH:
+        # Extract API key
+        api_key_header = get_api_key_header()
+        if api_key_header:
+            api_key = await api_key_header(request)
+        
+        # Extract Bearer token
+        bearer_scheme = get_bearer_scheme()
+        if bearer_scheme:
+            credentials = await bearer_scheme(request)
+    
     user = await get_current_user_optional(request, api_key, credentials)
     if user:
         log_auth_event("access", user.get("user_id", "unknown"), f"Role: {user.get('role')}")
@@ -236,7 +312,7 @@ async def get_current_user_optional_dependency(
 
 
 # Role-based access dependencies
-async def get_read_only_user(current_user: dict = get_current_user_dependency) -> dict:
+async def get_read_only_user(current_user: dict = Depends(get_current_user_dependency)) -> dict:
     """Dependency for read-only access."""
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
         raise HTTPException(
@@ -246,7 +322,7 @@ async def get_read_only_user(current_user: dict = get_current_user_dependency) -
     return current_user
 
 
-async def get_admin_user(current_user: dict = get_current_user_dependency) -> dict:
+async def get_admin_user(current_user: dict = Depends(get_current_user_dependency)) -> dict:
     """Dependency for admin access."""
     if current_user.get("role") != UserRole.ADMIN:
         raise HTTPException(

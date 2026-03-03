@@ -3,10 +3,18 @@
 import os
 import time
 import threading
+import ipaddress
+import functools
 from collections import defaultdict, deque
-from typing import Dict, Deque, Optional
+from typing import Dict, Deque, Optional, List
 
 from fastapi import HTTPException, Request, Response, status
+
+# Configuration for trusted proxies and forwarded headers
+TRUST_FORWARDER_HEADERS = os.getenv("TRUST_FORWARDER_HEADERS", "false").lower() == "true"
+TRUSTED_PROXIES = [
+    ip.strip() for ip in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",")
+] if TRUST_FORWARDER_HEADERS else []
 
 
 class TokenBucket:
@@ -71,12 +79,8 @@ class RateLimiter:
     def __init__(self):
         """Initialize rate limiter."""
         self._buckets: Dict[str, TokenBucket] = {}
-        self._cleanup_thread = threading.Thread(
-            target=self._cleanup_old_buckets,
-            daemon=True,
-            name="RateLimiterCleanup"
-        )
-        self._cleanup_thread.start()
+        self._cleanup_thread: threading.Thread | None = None
+        self._stop_event = threading.Event()  # For shutdown signaling
         self._lock = threading.Lock()
     
     def get_bucket(self, client_id: str, max_tokens: float, refill_rate: float) -> TokenBucket:
@@ -90,10 +94,12 @@ class RateLimiter:
         Returns:
             Token bucket for client
         """
+        # Use composite key to separate buckets per rate limit type
+        bucket_key = f"{client_id}:{max_tokens}:{refill_rate}"
         with self._lock:
-            if client_id not in self._buckets:
-                self._buckets[client_id] = TokenBucket(max_tokens, refill_rate)
-            return self._buckets[client_id]
+            if bucket_key not in self._buckets:
+                self._buckets[bucket_key] = TokenBucket(max_tokens, refill_rate)
+            return self._buckets[bucket_key]
     
     def is_allowed(
         self,
@@ -120,10 +126,25 @@ class RateLimiter:
             retry_after = bucket.time_until_available(tokens)
             return False, retry_after
     
+    def start_cleanup(self) -> None:
+        """Start the cleanup thread if not already running."""
+        if self._cleanup_thread is None or not self._cleanup_thread.is_alive():
+            self._stop_event.clear()  # Clear any previous stop signal
+            self._cleanup_thread = threading.Thread(
+                target=self._cleanup_old_buckets,
+                daemon=True,
+                name="RateLimiterCleanup"
+            )
+            self._cleanup_thread.start()
+    
     def _cleanup_old_buckets(self) -> None:
         """Clean up old inactive buckets."""
-        while True:
-            time.sleep(300)  # Clean up every 5 minutes
+        while not self._stop_event.is_set():  # Check shutdown flag
+            # Use wait() instead of sleep() for early wake capability
+            if self._stop_event.wait(timeout=300):  # 5 minutes
+                break  # Event was set, exit loop
+                
+            # Cleanup logic remains the same
             with self._lock:
                 now = time.time()
                 expired_keys = []
@@ -134,10 +155,20 @@ class RateLimiter:
                 
                 for key in expired_keys:
                     del self._buckets[key]
+    
+    def stop(self) -> None:
+        """Stop the cleanup thread gracefully."""
+        if self._cleanup_thread and self._cleanup_thread.is_alive():
+            self._stop_event.set()  # Signal shutdown
+            self._cleanup_thread.join(timeout=10.0)  # Wait for graceful shutdown
+            if self._cleanup_thread.is_alive():
+                # Thread didn't shut down gracefully, but it's daemon so will exit on process exit
+                pass
 
 
 # Global rate limiter instance
 _rate_limiter = RateLimiter()
+_rate_limiter.start_cleanup()
 
 
 # Rate limit configurations (requests per minute)
@@ -156,22 +187,57 @@ RATE_LIMITS_PER_SECOND = {
 
 
 def get_client_ip(request: Request) -> str:
-    """Get client IP address from request.
+    """Get client IP address from request with security validation.
     
     Args:
         request: FastAPI request
         
     Returns:
-        Client IP address
+        Client IP address (validated and trusted)
     """
-    # Check for forwarded headers
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+    def validate_ip(ip_str: str) -> Optional[str]:
+        """Validate IP address format."""
+        try:
+            ip = ipaddress.ip_address(ip_str.strip())
+            return str(ip)
+        except ValueError:
+            return None
     
-    real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip.strip()
+    def is_trusted_proxy(client_ip: str) -> bool:
+        """Check if client IP is in trusted proxies list."""
+        if not TRUST_FORWARDER_HEADERS:
+            return False
+        
+        try:
+            client_addr = ipaddress.ip_address(client_ip)
+            for trusted_ip in TRUSTED_PROXIES:
+                try:
+                    trusted_addr = ipaddress.ip_address(trusted_ip.strip())
+                    if client_addr == trusted_addr:
+                        return True
+                except ValueError:
+                    continue
+        except ValueError:
+            pass
+        return False
+    
+    # Only use forwarded headers if configured and request comes from trusted proxy
+    if TRUST_FORWARDER_HEADERS and is_trusted_proxy(request.client.host if request.client else "unknown"):
+        # Check X-Forwarded-For header
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            # Take the first IP (original client)
+            first_ip = forwarded_for.split(",")[0].strip()
+            validated_ip = validate_ip(first_ip)
+            if validated_ip:
+                return validated_ip
+        
+        # Check X-Real-IP header
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            validated_ip = validate_ip(real_ip)
+            if validated_ip:
+                return validated_ip
     
     # Fall back to client host
     return request.client.host if request.client else "unknown"
@@ -308,6 +374,7 @@ def rate_limit(limit_type: str, tokens: float = 1.0):
         Decorator function
     """
     def decorator(func):
+        @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             # Extract request from kwargs
             request = kwargs.get("request")

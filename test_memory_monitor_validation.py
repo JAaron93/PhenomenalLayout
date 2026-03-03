@@ -2,7 +2,7 @@
 """Test parameter validation for MemoryMonitor class."""
 
 import pytest
-from utils.memory_monitor import MemoryMonitor, start_memory_monitoring
+from utils.memory_monitor import MemoryMonitor, start_memory_monitoring, stop_memory_monitoring
 
 
 class TestMemoryMonitorValidation:
@@ -70,36 +70,48 @@ class TestMemoryMonitorValidation:
 
     def test_start_memory_monitoring_valid_parameters(self):
         """Test start_memory_monitoring with valid parameters."""
-        # This should work without errors
-        start_memory_monitoring(check_interval=30.0, alert_threshold_mb=50.0)
+        try:
+            # This should work without errors
+            start_memory_monitoring(check_interval=30.0, alert_threshold_mb=50.0)
 
-        # Boundary values
-        start_memory_monitoring(check_interval=0.1, alert_threshold_mb=0.0)
-        start_memory_monitoring(check_interval=3600.0, alert_threshold_mb=10240.0)
+            # Boundary values
+            start_memory_monitoring(check_interval=0.1, alert_threshold_mb=0.0)
+            start_memory_monitoring(check_interval=3600.0, alert_threshold_mb=10240.0)
+        finally:
+            # Ensure cleanup to prevent thread pollution
+            stop_memory_monitoring()
 
     def test_start_memory_monitoring_invalid_check_interval(self):
         """Test start_memory_monitoring with invalid check_interval values."""
-        # Zero check_interval
-        with pytest.raises(ValueError, match="check_interval must be > 0"):
-            start_memory_monitoring(check_interval=0.0)
+        try:
+            # Zero check_interval
+            with pytest.raises(ValueError, match="check_interval must be > 0"):
+                start_memory_monitoring(check_interval=0.0)
 
-        # Negative check_interval
-        with pytest.raises(ValueError, match="check_interval must be > 0"):
-            start_memory_monitoring(check_interval=-1.0)
+            # Negative check_interval
+            with pytest.raises(ValueError, match="check_interval must be > 0"):
+                start_memory_monitoring(check_interval=-1.0)
 
-        # Too large check_interval
-        with pytest.raises(ValueError, match="check_interval must be <= 3600"):
-            start_memory_monitoring(check_interval=3600.1)
+            # Too large check_interval
+            with pytest.raises(ValueError, match="check_interval must be <= 3600"):
+                start_memory_monitoring(check_interval=3600.1)
+        finally:
+            # Ensure cleanup in case any monitoring started
+            stop_memory_monitoring()
 
     def test_start_memory_monitoring_invalid_alert_threshold(self):
         """Test start_memory_monitoring with invalid alert_threshold_mb values."""
-        # Negative alert_threshold_mb
-        with pytest.raises(ValueError, match="alert_threshold_mb must be >= 0"):
-            start_memory_monitoring(alert_threshold_mb=-1.0)
+        try:
+            # Negative alert_threshold_mb
+            with pytest.raises(ValueError, match="alert_threshold_mb must be >= 0"):
+                start_memory_monitoring(alert_threshold_mb=-1.0)
 
-        # Too large alert_threshold_mb
-        with pytest.raises(ValueError, match="alert_threshold_mb must be <= 10240"):
-            start_memory_monitoring(alert_threshold_mb=10240.1)
+            # Too large alert_threshold_mb
+            with pytest.raises(ValueError, match="alert_threshold_mb must be <= 10240"):
+                start_memory_monitoring(alert_threshold_mb=10240.1)
+        finally:
+            # Ensure cleanup in case any monitoring started
+            stop_memory_monitoring()
 
     def test_error_messages_are_descriptive(self):
         """Test that error messages include the invalid values."""
@@ -117,18 +129,18 @@ class TestMemoryMonitorValidation:
 
     def test_parameter_types(self):
         """Test parameter type handling."""
-        # String values should raise TypeError before our validation
-        with pytest.raises(TypeError):
+        # String values should raise TypeError with explicit message
+        with pytest.raises(TypeError, match="check_interval must be a number"):
             MemoryMonitor(check_interval="invalid")
 
-        with pytest.raises(TypeError):
+        with pytest.raises(TypeError, match="alert_threshold_mb must be a number"):
             MemoryMonitor(alert_threshold_mb="invalid")
 
-        # None values should raise TypeError
-        with pytest.raises(TypeError):
+        # None values should raise TypeError with explicit message
+        with pytest.raises(TypeError, match="check_interval must be a number"):
             MemoryMonitor(check_interval=None)
 
-        with pytest.raises(TypeError):
+        with pytest.raises(TypeError, match="alert_threshold_mb must be a number"):
             MemoryMonitor(alert_threshold_mb=None)
 
 

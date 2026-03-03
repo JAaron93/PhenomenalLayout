@@ -3,19 +3,42 @@
 
 import sys
 import time
-import threading
-sys.path.insert(0, '/Users/pretermodernist/PhenomenalLayout')
+from pathlib import Path
 
-def test_non_daemon_thread_creation():
+import pytest
+
+# Add project root to Python path
+project_root = Path(__file__).resolve().parent if '__file__' in globals() else Path('.').resolve()
+sys.path.insert(0, str(project_root))
+
+# Import test dependencies at module level
+from utils.memory_monitor import MemoryMonitor, cleanup_memory_monitor
+
+@pytest.fixture
+def monitor():
+    """Pytest fixture providing a MemoryMonitor instance.
+    
+    Creates a monitor with short interval for fast tests.
+    Automatically stops monitoring after test completion.
+    """
+    monitor = MemoryMonitor(check_interval=0.1)
+    yield monitor
+    monitor.stop_monitoring()
+
+@pytest.fixture
+def monitor_with_long_interval():
+    """Pytest fixture providing a MemoryMonitor with long interval.
+    
+    Used for responsive shutdown tests.
+    Automatically stops monitoring after test completion.
+    """
+    monitor = MemoryMonitor(check_interval=10.0)
+    yield monitor
+    monitor.stop_monitoring()
+
+def test_non_daemon_thread_creation(monitor):
     """Test that monitoring thread is created as non-daemon."""
     print("Testing non-daemon thread creation...")
-    
-    from utils.memory_monitor import MemoryMonitor
-    
-    monitor = MemoryMonitor(check_interval=0.1)
-    
-    # Start monitoring
-    monitor.start_monitoring()
     
     # Check that thread is non-daemon
     assert monitor._monitor_thread is not None, "Thread should be created"
@@ -31,13 +54,9 @@ def test_non_daemon_thread_creation():
     
     print("✓ Thread stopped successfully")
 
-def test_improved_shutdown_handling():
+def test_improved_shutdown_handling(monitor):
     """Test improved shutdown handling with better timeout."""
     print("\nTesting improved shutdown handling...")
-    
-    from utils.memory_monitor import MemoryMonitor
-    
-    monitor = MemoryMonitor(check_interval=0.1)
     
     # Start monitoring
     monitor.start_monitoring()
@@ -48,40 +67,34 @@ def test_improved_shutdown_handling():
     monitor.stop_monitoring()
     shutdown_time = time.time() - start_time
     
-    assert shutdown_time < 12.0, f"Shutdown should complete within 12 seconds, took {shutdown_time}"
+    assert shutdown_time < 11.0, f"Shutdown should complete within timeout (10s + buffer), took {shutdown_time}"
     assert monitor._monitor_thread is None, "Thread reference should be cleared"
     
     print("✓ Improved shutdown handling working correctly")
 
-def test_interruptible_sleep():
+def test_interruptible_sleep(monitor_with_long_interval):
     """Test that monitor loop uses interruptible sleep."""
     print("\nTesting interruptible sleep...")
     
-    from utils.memory_monitor import MemoryMonitor
-    
-    monitor = MemoryMonitor(check_interval=5.0)  # Long interval
-    monitor.start_monitoring()
-    
     # Thread should be alive
-    assert monitor._monitor_thread.is_alive()
+    assert monitor_with_long_interval._monitor_thread.is_alive()
+    
+    # Let thread start
+    time.sleep(0.1)
     
     # Stop should be quick due to interruptible sleep
     start_time = time.time()
-    monitor.stop_monitoring()
+    monitor_with_long_interval.stop_monitoring()
     stop_time = time.time() - start_time
     
-    # Should stop much faster than the 5 second interval
+    # Should stop much faster than 5 second interval
     assert stop_time < 2.0, f"Should stop quickly due to interruptible sleep, took {stop_time}"
     
     print("✓ Interruptible sleep working correctly")
 
-def test_cleanup_method():
+def test_cleanup_method(monitor):
     """Test cleanup method functionality."""
     print("\nTesting cleanup method...")
-    
-    from utils.memory_monitor import MemoryMonitor
-    
-    monitor = MemoryMonitor(check_interval=0.1)
     
     # Add a callback
     def test_callback(stats):
@@ -124,33 +137,10 @@ def test_atexit_handler():
     
     print("✓ Atexit handler registered and working correctly")
 
-def test_thread_responsive_shutdown():
-    """Test that thread responds quickly to shutdown signals."""
-    print("\nTesting responsive thread shutdown...")
-    
-    from utils.memory_monitor import MemoryMonitor
-    
-    monitor = MemoryMonitor(check_interval=10.0)  # Very long interval
-    monitor.start_monitoring()
-    
-    # Let thread start
-    time.sleep(0.1)
-    
-    # Stop should be responsive due to interruptible sleep
-    start_time = time.time()
-    monitor.stop_monitoring()
-    response_time = time.time() - start_time
-    
-    # Should respond quickly, not wait for full 10 second interval
-    assert response_time < 2.0, f"Thread should respond quickly, took {response_time}"
-    
-    print("✓ Thread shutdown is responsive")
 
 def test_destructor_cleanup():
     """Test that destructor calls cleanup."""
     print("\nTesting destructor cleanup...")
-    
-    from utils.memory_monitor import MemoryMonitor
     
     # Create monitor and start it
     monitor = MemoryMonitor(check_interval=0.1)
@@ -160,25 +150,27 @@ def test_destructor_cleanup():
     # Delete object (this should trigger destructor)
     thread_ref = monitor._monitor_thread
     del monitor
+    import gc
+    gc.collect()  # Force garbage collection to trigger destructor
     
     # Give some time for cleanup
-    time.sleep(0.1)
+    time.sleep(0.3)
     
     # Thread should be stopping (destructor called cleanup)
-    if thread_ref and thread_ref.is_alive():
-        # If still alive, it should stop soon
-        time.sleep(0.5)
+    if thread_ref:
+        # Wait for thread to stop with timeout
+        thread_ref.join(timeout=1.0)
+        assert not thread_ref.is_alive(), "Thread should have stopped after destructor cleanup"
     
     print("✓ Destructor cleanup working (no exceptions)")
 
 if __name__ == "__main__":
     try:
-        test_non_daemon_thread_creation()
-        test_improved_shutdown_handling()
-        test_interruptible_sleep()
-        test_cleanup_method()
+        test_non_daemon_thread_creation(monitor())
+        test_improved_shutdown_handling(monitor())
+        test_interruptible_sleep(monitor())
+        test_cleanup_method(monitor())
         test_atexit_handler()
-        test_thread_responsive_shutdown()
         test_destructor_cleanup()
         
         print("\n🎉 Memory monitor daemon thread cleanup fix verified successfully!")

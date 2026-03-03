@@ -3,7 +3,10 @@
 
 import sys
 import os
-sys.path.insert(0, '/Users/pretermodernist/PhenomenalLayout')
+
+# Add project root to Python path
+project_root = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, project_root)
 
 def test_api_uses_public_properties():
     """Test that API uses public properties instead of private attributes."""

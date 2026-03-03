@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """Manual verification of memory monitoring error handling."""
 
+import psutil
 import sys
-sys.path.insert(0, '/Users/pretermodernist/PhenomenalLayout')
-
+from pathlib import Path
 from unittest.mock import patch
-from utils.memory_monitor import MemoryMonitor, MemoryMonitoringError, get_memory_stats
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from utils.memory_monitor import (
+    MemoryMonitor,
+    MemoryMonitoringError,
+    get_memory_stats,
+)
 
 def test_error_handling():
     """Test that memory monitoring errors are properly raised and not masked."""
@@ -25,7 +32,7 @@ def test_error_handling():
     print("✓ Testing psutil.NoSuchProcess handling...")
     try:
         with patch('psutil.Process') as mock_process:
-            mock_process.side_effect = Exception("Simulated NoSuchProcess")
+            mock_process.side_effect = psutil.NoSuchProcess(0)
             
             try:
                 MemoryMonitor._get_memory_usage_mb()
@@ -33,7 +40,7 @@ def test_error_handling():
                 return False
             except MemoryMonitoringError as e:
                 print(f"  ✓ Correctly raised MemoryMonitoringError: {e}")
-                assert "Failed to get memory usage" in str(e)
+                assert "Unable to access process memory" in str(e)
     except Exception as e:
         print(f"  ❌ Unexpected error: {e}")
         return False
@@ -154,7 +161,6 @@ if __name__ == "__main__":
     success = test_error_handling() and test_error_messages()
     
     if success:
-        print("\n🎉 Memory monitoring error handling is working correctly!")
         print("\nKey Improvements:")
         print("- No more error masking with 0.0 return values")
         print("- Specific MemoryMonitoringError exceptions")

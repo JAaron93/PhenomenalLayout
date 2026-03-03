@@ -15,6 +15,10 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from api.routes import api_router, app_router
 from core.state_manager import state
@@ -84,7 +88,7 @@ async def lifespan(_app: FastAPI):
                 if check_interval <= 0:
                     logger.warning("Invalid MEMORY_CHECK_INTERVAL: %s, using default 60", check_interval)
                     check_interval = 60.0
-            except (ValueError, TypeError) as e:
+            except ValueError as e:
                 logger.warning("Invalid MEMORY_CHECK_INTERVAL format, using default 60: %s", e)
                 check_interval = 60.0
             
@@ -93,7 +97,7 @@ async def lifespan(_app: FastAPI):
                 if alert_threshold < 0:
                     logger.warning("Invalid MEMORY_ALERT_THRESHOLD_MB: %s, using default 100", alert_threshold)
                     alert_threshold = 100.0
-            except (ValueError, TypeError) as e:
+            except ValueError as e:
                 logger.warning("Invalid MEMORY_ALERT_THRESHOLD_MB format, using default 100: %s", e)
                 alert_threshold = 100.0
             
@@ -134,45 +138,85 @@ async def lifespan(_app: FastAPI):
         logger.exception("Failed to shutdown translation service")
 
 
-# FastAPI app
-app = FastAPI(
-    title="PhenomenalLayout",
-    description=(
-        "Advanced layout preservation engine for document translation - "
-        "orchestrating Lingo.dev translation services with Dolphin OCR "
-        "for pixel-perfect formatting integrity"
-    ),
-    version="2.0.0",
-    lifespan=lifespan,
-)
+# FastAPI app will be created by factory
+# app = FastAPI(
+#     title="PhenomenalLayout",
+#     description=(
+#         "Advanced layout preservation engine for document translation - "
+#         "orchestrating Lingo.dev translation services with Dolphin OCR "
+#         "for pixel-perfect formatting integrity"
+#     ),
+#     version="2.0.0",
+#     lifespan=lifespan,
+# )
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# Include routers
-app.include_router(app_router)  # Root and philosophy routes without prefix
-app.include_router(api_router, prefix="/api/v1")  # API routes with versioning
-
-# Static files mount
-app.mount("/static", StaticFiles(directory="static"), name="static")
+def create_app():
+    """Create FastAPI app with current environment.
+    
+    Returns:
+        FastAPI: Configured application instance
+    """
+    # Check if authentication is enabled
+    enable_auth = os.getenv("MEMORY_API_ENABLE_AUTH", "true").lower() == "true"
+    
+    if enable_auth:
+        # Authentication enabled - use security schemes
+        app = FastAPI(
+            title="PhenomenalLayout",
+            description=(
+                "Advanced layout preservation engine for document translation - "
+                "orchestrating Lingo.dev translation services with Dolphin OCR "
+                "for pixel-perfect formatting integrity"
+            ),
+            version="2.0.0",
+            lifespan=lifespan,
+        )
+    else:
+        # Authentication disabled - no security schemes
+        app = FastAPI(
+            title="PhenomenalLayout",
+            description=(
+                "Advanced layout preservation engine for document translation - "
+                "orchestrating Lingo.dev translation services with Dolphin OCR "
+                "for pixel-perfect formatting integrity"
+            ),
+            version="2.0.0",
+            lifespan=lifespan,
+        )
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Include routers
+    app.include_router(app_router)  # Root and philosophy routes without prefix
+    app.include_router(api_router, prefix="/api/v1")  # API routes with versioning
+    
+    # Static files mount
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+    
+    return app
 
 
 def main() -> None:
     """Main application entry point."""
     logger.info("Starting PhenomenalLayout - Advanced Layout Preservation Engine")
-
+    
+    # Create app using factory for current environment
+    app = create_app()
+    
     # Create Gradio interface
     gradio_app = create_gradio_interface()
-
+    
     # Mount Gradio app to FastAPI
     app_with_gradio = gr.mount_gradio_app(app, gradio_app, path="/ui")
-
+    
     # Start server with Uvicorn
     # Note: Default to localhost; override via HOST and PORT env vars
     host = os.getenv("HOST", "127.0.0.1")

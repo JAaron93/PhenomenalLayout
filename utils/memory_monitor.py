@@ -19,6 +19,34 @@ class MemoryMonitoringError(Exception):
     pass
 
 
+def validate_memory_params(check_interval: float, alert_threshold_mb: float) -> None:
+    """Validate memory monitoring parameters.
+    
+    Args:
+        check_interval: Monitoring interval in seconds
+        alert_threshold_mb: Memory growth threshold in MB
+        
+    Raises:
+        ValueError: If any parameter is invalid
+    """
+    if check_interval <= 0:
+        raise ValueError(
+            f"check_interval must be > 0, got {check_interval}"
+        )
+    if check_interval > 3600:
+        raise ValueError(
+            f"check_interval must be <= 3600 seconds (1 hour), got {check_interval}"
+        )
+    if alert_threshold_mb < 0:
+        raise ValueError(
+            f"alert_threshold_mb must be >= 0, got {alert_threshold_mb}"
+        )
+    if alert_threshold_mb > 10240:
+        raise ValueError(
+            f"alert_threshold_mb must be <= 10240 MB (10 GB), got {alert_threshold_mb}"
+        )
+
+
 class MemoryMonitor:
     """Monitor memory usage and detect potential memory leaks."""
 
@@ -27,20 +55,24 @@ class MemoryMonitor:
 
         Args:
             check_interval: Seconds between memory checks (must be > 0, recommended 0.1-3600)
-            alert_threshold_mb: Memory growth threshold in MB for alerts (must be >= 0, recommended 0-10240)
+            alert_threshold_mb: Memory growth threshold in MB (must be >= 0, recommended 0-10240)
             
         Raises:
             ValueError: If check_interval <= 0 or alert_threshold_mb < 0
+            TypeError: If check_interval or alert_threshold_mb are not numbers
         """
+        # Explicit type validation first
+        if not isinstance(check_interval, (int, float)):
+            raise TypeError(
+                f"check_interval must be a number, got {type(check_interval).__name__}"
+            )
+        if not isinstance(alert_threshold_mb, (int, float)):
+            raise TypeError(
+                f"alert_threshold_mb must be a number, got {type(alert_threshold_mb).__name__}"
+            )
+        
         # Validate parameters
-        if check_interval <= 0:
-            raise ValueError(f"check_interval must be > 0, got {check_interval}")
-        if check_interval > 3600:
-            raise ValueError(f"check_interval must be <= 3600 seconds (1 hour), got {check_interval}")
-        if alert_threshold_mb < 0:
-            raise ValueError(f"alert_threshold_mb must be >= 0, got {alert_threshold_mb}")
-        if alert_threshold_mb > 10240:
-            raise ValueError(f"alert_threshold_mb must be <= 10240 MB (10 GB), got {alert_threshold_mb}")
+        validate_memory_params(check_interval, alert_threshold_mb)
             
         self.check_interval = check_interval
         self.alert_threshold_mb = alert_threshold_mb
@@ -50,6 +82,9 @@ class MemoryMonitor:
         self._peak_memory: float = 0.0
         self._callbacks: list[Callable[[dict[str, Any]], None]] = []
         self._lock = threading.RLock()  # Reentrant lock for thread safety
+        self._last_log_time: float = 0.0  # Track when periodic logging last occurred
+        self._log_interval_seconds: int = 300  # Log every 5 minutes (300 seconds)
+        self._baseline_event = threading.Event()  # Event for baseline establishment
 
     def start_monitoring(self) -> None:
         """Start memory monitoring in background thread."""
@@ -67,6 +102,7 @@ class MemoryMonitor:
                 raise MemoryMonitoringError(f"Cannot start memory monitoring: {e}") from e
 
             self._monitoring = True
+            self._baseline_event.clear()  # Reset event for new monitoring session
 
             self._monitor_thread = threading.Thread(
                 target=self._monitor_loop,
@@ -78,6 +114,9 @@ class MemoryMonitor:
                 "Memory monitoring started (baseline: %.1f MB, interval: %.1fs)",
                 self._baseline_memory, self.check_interval
             )
+            
+            # Signal that baseline has been established
+            self._baseline_event.set()
 
     def stop_monitoring(self) -> None:
         """Stop memory monitoring with proper thread cleanup."""
@@ -125,6 +164,17 @@ class MemoryMonitor:
         """Add callback for memory alerts."""
         with self._lock:
             self._callbacks.append(callback)
+
+    def wait_for_baseline(self, timeout: float = 1.0) -> bool:
+        """Wait for baseline to be established.
+        
+        Args:
+            timeout: Maximum time to wait in seconds
+            
+        Returns:
+            True if baseline was established, False if timeout occurred
+        """
+        return self._baseline_event.wait(timeout=timeout)
 
     def get_current_stats(self) -> dict[str, Any]:
         """Get current memory statistics.
@@ -178,13 +228,15 @@ class MemoryMonitor:
                         self._send_alert(stats)
 
                 # Periodic logging
-                if int(time.time()) % 300 == 0:  # Every 5 minutes
+                current_time = time.time()
+                if current_time - self._last_log_time >= self._log_interval_seconds:
                     logger.info(
                         "Memory stats: %.1f MB current, %.1f MB growth, "
                         "%d processes, %d threads",
                         current_memory, stats["growth_mb"],
                         stats["process_count"], stats["thread_count"]
                     )
+                    self._last_log_time = current_time
 
             except MemoryMonitoringError as e:
                 logger.error("Memory monitoring error: %s", e)
@@ -271,18 +323,17 @@ class MemoryMonitor:
         This method should be called during application shutdown to ensure
         proper cleanup of monitoring thread and resources.
         """
-        if self._monitoring:
-            logger.info("Cleaning up memory monitor...")
-            self.stop_monitoring()  # This handles thread joining
-            
-            # Wait additional time for thread to fully terminate
-            if self._monitor_thread and self._monitor_thread.is_alive():
-                logger.info("Waiting for monitoring thread to fully terminate...")
-                self._monitor_thread.join(timeout=5.0)
-                if self._monitor_thread.is_alive():
-                    logger.warning(
-                        "Monitoring thread still alive after additional timeout"
-                    )
+        logger.info("Cleaning up memory monitor...")
+        self.stop_monitoring()  # This handles thread joining and stopped case
+        
+        # Wait additional time for thread to fully terminate
+        if self._monitor_thread and self._monitor_thread.is_alive():
+            logger.info("Waiting for monitoring thread to fully terminate...")
+            self._monitor_thread.join(timeout=5.0)
+            if self._monitor_thread.is_alive():
+                logger.warning(
+                    "Monitoring thread still alive after additional timeout"
+                )
         
         # Clear callbacks and resources
         with self._lock:
@@ -312,7 +363,7 @@ def get_memory_monitor() -> MemoryMonitor:
 
 
 def start_memory_monitoring(check_interval: float = 60.0, alert_threshold_mb: float = 100.0) -> None:
-    """Start global memory monitoring.
+    """Start global memory monitoring with thread safety.
     
     Args:
         check_interval: Seconds between memory checks (must be > 0, recommended 0.1-3600)
@@ -321,36 +372,38 @@ def start_memory_monitoring(check_interval: float = 60.0, alert_threshold_mb: fl
     Raises:
         ValueError: If check_interval <= 0 or alert_threshold_mb < 0
     """
-    # Validate parameters
-    if check_interval <= 0:
-        raise ValueError(f"check_interval must be > 0, got {check_interval}")
-    if check_interval > 3600:
-        raise ValueError(f"check_interval must be <= 3600 seconds (1 hour), got {check_interval}")
-    if alert_threshold_mb < 0:
-        raise ValueError(f"alert_threshold_mb must be >= 0, got {alert_threshold_mb}")
-    if alert_threshold_mb > 10240:
-        raise ValueError(f"alert_threshold_mb must be <= 10240 MB (10 GB), got {alert_threshold_mb}")
+    # Validate parameters before mutating monitor attributes
+    validate_memory_params(check_interval, alert_threshold_mb)
     
     monitor = get_memory_monitor()
+    # Atomic configuration and start with instance-level synchronization
     with monitor._lock:
         monitor.check_interval = check_interval
         monitor.alert_threshold_mb = alert_threshold_mb
-    monitor.start_monitoring()
+        monitor.start_monitoring()
 
 
 def stop_memory_monitoring() -> None:
-    """Stop global memory monitoring."""
+    """Stop global memory monitoring with thread safety."""
     monitor = get_memory_monitor()
-    monitor.stop_monitoring()
+    with monitor._lock:
+        monitor.stop_monitoring()
 
 
 def cleanup_memory_monitor() -> None:
-    """Clean up global memory monitor during application shutdown."""
-    try:
-        monitor = get_memory_monitor()
-        monitor.cleanup()
-    except Exception as e:
-        logger.error("Error during memory monitor cleanup: %s", e)
+    """Clean up global memory monitor during application shutdown with thread safety."""
+    global _memory_monitor
+    with _memory_monitor_lock:
+        if _memory_monitor is not None:
+            try:
+                # Acquire instance lock for safe cleanup
+                with _memory_monitor._lock:
+                    _memory_monitor.cleanup()
+            except Exception as e:
+                logger.error("Error during memory monitor cleanup: %s", e)
+            finally:
+                # Clear global reference to prevent further access
+                _memory_monitor = None
 
 
 # Register cleanup function to be called at application shutdown
@@ -383,10 +436,11 @@ def force_garbage_collection() -> dict[str, Any]:
 
 
 def get_memory_stats() -> dict[str, Any]:
-    """Get current memory statistics.
+    """Get current memory statistics with thread safety.
     
     Returns:
         Dictionary containing memory statistics
     """
     monitor = get_memory_monitor()
-    return monitor.get_current_stats()
+    with monitor._lock:
+        return monitor.get_current_stats()

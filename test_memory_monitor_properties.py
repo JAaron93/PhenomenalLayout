@@ -8,6 +8,18 @@ from unittest.mock import patch
 from utils.memory_monitor import MemoryMonitor, MemoryMonitoringError
 
 
+@pytest.fixture
+def memory_monitor():
+    """Pytest fixture that provides a MemoryMonitor with guaranteed cleanup."""
+    monitor = MemoryMonitor(check_interval=0.05)
+    try:
+        yield monitor
+    finally:
+        # Ensure monitor is stopped even if test fails
+        if monitor.is_monitoring:
+            monitor.stop_monitoring()
+
+
 class TestMemoryMonitorProperties:
     """Test MemoryMonitor public properties for encapsulation and thread safety."""
 
@@ -73,9 +85,8 @@ class TestMemoryMonitorProperties:
         
         monitor.stop_monitoring()
 
-    def test_properties_thread_safety(self):
+    def test_properties_thread_safety(self, memory_monitor):
         """Test that properties are thread-safe."""
-        monitor = MemoryMonitor(check_interval=0.05)
         results = {"errors": [], "values": []}
         
         def reader_thread():
@@ -83,9 +94,9 @@ class TestMemoryMonitorProperties:
             try:
                 for _ in range(50):
                     # Read all properties
-                    is_monitoring = monitor.is_monitoring
-                    baseline = monitor.baseline_memory_mb
-                    peak = monitor.peak_memory_mb
+                    is_monitoring = memory_monitor.is_monitoring
+                    baseline = memory_monitor.baseline_memory_mb
+                    peak = memory_monitor.peak_memory_mb
                     
                     # Validate types
                     assert isinstance(is_monitoring, bool)
@@ -105,9 +116,9 @@ class TestMemoryMonitorProperties:
             """Thread that starts/stops monitoring concurrently."""
             try:
                 for _ in range(10):
-                    monitor.start_monitoring()
+                    memory_monitor.start_monitoring()
                     time.sleep(0.01)
-                    monitor.stop_monitoring()
+                    memory_monitor.stop_monitoring()
                     time.sleep(0.01)
             except Exception as e:
                 results["errors"].append(str(e))

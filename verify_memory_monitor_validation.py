@@ -2,7 +2,9 @@
 """Manual verification of MemoryMonitor parameter validation."""
 
 import sys
-sys.path.insert(0, '/Users/pretermodernist/PhenomenalLayout')
+import os
+# Add parent directory to path for local development
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.memory_monitor import MemoryMonitor, start_memory_monitoring
 
@@ -41,6 +43,16 @@ def test_validation():
         print(f"  ❌ Wrong exception type: {e}")
         return False
     
+    try:
+        MemoryMonitor(check_interval=3601.0)
+        print("  ❌ Should have failed with check_interval=3601.0")
+        return False
+    except ValueError as e:
+        print(f"  ✓ Correctly rejected check_interval=3601.0: {e}")
+    except Exception as e:
+        print(f"  ❌ Wrong exception type: {e}")
+        return False
+    
     # Test invalid alert_threshold_mb
     print("✓ Testing invalid alert_threshold_mb...")
     try:
@@ -53,6 +65,16 @@ def test_validation():
         print(f"  ❌ Wrong exception type: {e}")
         return False
     
+    try:
+        MemoryMonitor(alert_threshold_mb=10241.0)
+        print("  ❌ Should have failed with alert_threshold_mb=10241.0")
+        return False
+    except ValueError as e:
+        print(f"  ✓ Correctly rejected alert_threshold_mb=10241.0: {e}")
+    except Exception as e:
+        print(f"  ❌ Wrong exception type: {e}")
+        return False
+    
     # Test start_memory_monitoring validation
     print("✓ Testing start_memory_monitoring validation...")
     try:
@@ -61,6 +83,16 @@ def test_validation():
         return False
     except ValueError as e:
         print(f"  ✓ Correctly rejected start_memory_monitoring check_interval=0.0: {e}")
+    except Exception as e:
+        print(f"  ❌ Wrong exception type: {e}")
+        return False
+    
+    try:
+        start_memory_monitoring(check_interval=3601.0)
+        print("  ❌ Should have failed with start_memory_monitoring check_interval=3601.0")
+        return False
+    except ValueError as e:
+        print(f"  ✓ Correctly rejected start_memory_monitoring check_interval=3601.0: {e}")
     except Exception as e:
         print(f"  ❌ Wrong exception type: {e}")
         return False

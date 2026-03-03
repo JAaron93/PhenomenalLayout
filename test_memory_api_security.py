@@ -5,15 +5,32 @@ import os
 import sys
 import time
 import asyncio
+from pathlib import Path
 from unittest.mock import patch
+import pytest
+import importlib
 
 # Add the project root to Python path
-sys.path.insert(0, '/Users/pretermodernist/PhenomenalLayout')
+project_root = Path(__file__).resolve().parents[0] if '__file__' in globals() else Path('.').resolve()
+sys.path.insert(0, str(project_root))
 
 from api.auth import create_jwt_token, verify_jwt_token, verify_api_key, UserRole
 from api.rate_limit import TokenBucket, RateLimiter, get_client_ip
 from fastapi import Request, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+
+
+@pytest.fixture
+def mock_api_key(monkeypatch):
+    """Pytest fixture that sets up test API key and reloads auth module."""
+    test_key = "test-api-key-12345"
+    monkeypatch.setenv("MEMORY_API_KEY", test_key)
+    
+    # Reload the auth module to pick up new environment variable
+    import api.auth
+    importlib.reload(api.auth)
+    
+    yield test_key
 
 
 def test_jwt_authentication():
@@ -38,27 +55,18 @@ def test_jwt_authentication():
     print("✓ JWT authentication test passed")
 
 
-def test_api_key_authentication():
+def test_api_key_authentication(mock_api_key):
     """Test API key authentication."""
     print("Testing API key authentication...")
     
-    # Set test API key
-    test_key = "test-api-key-12345"
+    # Import verify_api_key from the reloaded auth module
+    from api.auth import verify_api_key
     
-    with patch.dict(os.environ, {"MEMORY_API_KEY": test_key}):
-        # Reload the module to pick up new environment variable
-        import importlib
-        import api.auth
-        importlib.reload(api.auth)
-        
-        # Import after reloading
-        verify_key = api.auth.verify_api_key
-        
-        # Test valid key
-        assert verify_key(test_key) is True, "Valid API key should pass"
-        
-        # Test invalid key
-        assert verify_key("invalid-key") is False, "Invalid API key should fail"
+    # Test valid key
+    assert verify_api_key(mock_api_key) is True, "Valid API key should pass"
+    
+    # Test invalid key
+    assert verify_api_key("invalid-key") is False, "Invalid API key should fail"
     
     print("✓ API key authentication test passed")
 
@@ -138,12 +146,12 @@ def test_client_ip_extraction():
         "method": "GET",
         "path": "/test", 
         "headers": [],
-        "client": ("192.168.1.300", 8000),
+        "client": ("192.168.1.30", 8000),
     }
     request = Request(scope)
     
     ip = get_client_ip(request)
-    assert ip == "192.168.1.300", "Should fallback to client.host"
+    assert ip == "192.168.1.30", "Should fallback to client.host"
     
     print("✓ Client IP extraction test passed")
 
@@ -248,7 +256,26 @@ if __name__ == "__main__":
     
     try:
         test_jwt_authentication()
-        test_api_key_authentication()
+        
+        # Test API key authentication with mock fixture
+        import pytest
+        from api.auth import verify_api_key
+        
+        # Manually set up the fixture environment for standalone test
+        test_key = "test-api-key-12345"
+        import os
+        os.environ["MEMORY_API_KEY"] = test_key
+        
+        # Reload auth module to pick up environment variable
+        import api.auth
+        importlib.reload(api.auth)
+        
+        # Run the test logic directly
+        print("Testing API key authentication...")
+        assert api.auth.verify_api_key(test_key) is True, "Valid API key should pass"
+        assert api.auth.verify_api_key("invalid-key") is False, "Invalid API key should fail"
+        print("✓ API key authentication test passed")
+        
         test_rate_limiting()
         test_client_ip_extraction()
         test_memory_routes_security()

@@ -3,9 +3,11 @@
 
 import os
 import sys
+from pathlib import Path
 
 # Add the project root to Python path
-sys.path.insert(0, '/Users/pretermodernist/PhenomenalLayout')
+project_root = Path(__file__).resolve().parent if '__file__' in globals() else Path('.').resolve()
+sys.path.insert(0, str(project_root))
 
 def test_security_configuration():
     """Verify security components are properly configured."""
@@ -125,25 +127,33 @@ def test_endpoint_security_levels():
     """Verify endpoints have appropriate security levels."""
     print("Testing endpoint security levels...")
     
-    with open('/Users/pretermodernist/PhenomenalLayout/api/memory_routes.py', 'r') as f:
-        content = f.read()
+    from api.memory_routes import router
     
     # Read-only endpoints should use get_read_only_user
-    assert "@router.get(\"/stats\")" in content
-    assert "get_read_only_user" in content.split("@router.get(\"/stats\")")[1].split("@router.post")[0]
+    read_only_paths = ["/stats", "/monitoring/status"]
+    admin_paths = ["/gc", "/monitoring/start", "/monitoring/stop"]
     
-    assert "@router.get(\"/monitoring/status\")" in content
-    assert "get_read_only_user" in content.split("@router.get(\"/monitoring/status\")")[1].split("@router.post")[0]
+    # Check each route's dependencies
+    for route in router.routes:
+        if hasattr(route, 'path') and hasattr(route, 'dependant'):
+            # Get dependency names from route.dependant.dependencies
+            dependency_names = []
+            if hasattr(route.dependant, 'dependencies') and route.dependant.dependencies:
+                for dep in route.dependant.dependencies:
+                    if hasattr(dep, 'call') and hasattr(dep.call, '__name__'):
+                        dependency_names.append(dep.call.__name__)
+            
+            # Check read-only endpoints
+            if route.path in read_only_paths:
+                assert "get_read_only_user" in dependency_names, f"Read-only endpoint {route.path} should use get_read_only_user"
+                print(f"  ✓ {route.path} uses get_read_only_user")
+            
+            # Check admin endpoints
+            elif route.path in admin_paths:
+                assert "get_admin_user" in dependency_names, f"Admin endpoint {route.path} should use get_admin_user"
+                print(f"  ✓ {route.path} uses get_admin_user")
     
-    # Admin endpoints should use get_admin_user
-    assert "@router.post(\"/gc\")" in content
-    assert "get_admin_user" in content.split("@router.post(\"/gc\")")[1].split("@router.post")[0]
-    
-    assert "@router.post(\"/monitoring/start\")" in content
-    assert "get_admin_user" in content.split("@router.post(\"/monitoring/start\")")[1].split("@router.post")[0]
-    
-    assert "@router.post(\"/monitoring/stop\")" in content
-    assert "get_admin_user" in content.split("@router.post(\"/monitoring/stop\")")[1].split("@router.post")[0]
+    print("✓ Endpoint security levels test passed")
     
     print("✓ Endpoint security levels test passed")
 

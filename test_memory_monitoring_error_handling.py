@@ -113,21 +113,23 @@ class TestMemoryMonitoringErrorHandling:
                     120.0  # Success
                 ]
                 
-                # Simulate one iteration of monitoring loop
+                # First call should handle the error
                 try:
-                    # This should handle the first error and continue
                     stats = monitor.get_current_stats()
-                    # Should succeed on second call
-                    assert stats["current_memory_mb"] == 120.0
+                    assert False, "First call should raise MemoryMonitoringError"
                 except MemoryMonitoringError:
                     # First call should raise, but monitoring continues
                     pass
+                
+                # Second call should succeed and test recovery
+                stats = monitor.get_current_stats()
+                assert stats["current_memory_mb"] == 120.0, "Should recover and return valid stats"
 
     def test_get_memory_stats_function_propagates_error(self):
         """Test get_memory_stats function propagates MemoryMonitoringError."""
         with patch('utils.memory_monitor.get_memory_monitor') as mock_get_monitor:
-            mock_monitor.return_value = MagicMock()
-            mock_monitor.return_value.get_current_stats.side_effect = MemoryMonitoringError("Test failure")
+            mock_get_monitor.return_value = MagicMock()
+            mock_get_monitor.return_value.get_current_stats.side_effect = MemoryMonitoringError("Test failure")
             
             with pytest.raises(MemoryMonitoringError) as exc_info:
                 get_memory_stats()
@@ -147,24 +149,22 @@ class TestMemoryMonitoringErrorHandling:
         assert monitoring_error.__cause__ is original_error
         assert "Wrapped" in str(monitoring_error)
 
-    def test_error_messages_are_descriptive(self):
+    @pytest.mark.parametrize("exception, expected_message", [
+        (psutil.NoSuchProcess(123), "Unable to access process memory"),
+        (psutil.AccessDenied(123), "Unable to access process memory"),
+        (psutil.ZombieProcess(123), "Unable to access process memory"),
+        (RuntimeError("Custom error"), "Failed to get memory usage"),
+    ])
+    def test_error_messages_are_descriptive(self, exception, expected_message):
         """Test that error messages are descriptive and helpful."""
-        test_cases = [
-            (psutil.NoSuchProcess(123), "Unable to access process memory"),
-            (psutil.AccessDenied(123), "Unable to access process memory"),
-            (psutil.ZombieProcess(123), "Unable to access process memory"),
-            (RuntimeError("Custom error"), "Failed to get memory usage"),
-        ]
-        
-        for exception, expected_message in test_cases:
-            with patch('psutil.Process') as mock_process:
-                mock_process.side_effect = exception
-                
-                with pytest.raises(MemoryMonitoringError) as exc_info:
-                    MemoryMonitor._get_memory_usage_mb()
-                
-                assert expected_message in str(exc_info.value)
-                assert str(exception) in str(exc_info.value.__cause__)
+        with patch('psutil.Process') as mock_process:
+            mock_process.side_effect = exception
+            
+            with pytest.raises(MemoryMonitoringError) as exc_info:
+                MemoryMonitor._get_memory_usage_mb()
+            
+            assert expected_message in str(exc_info.value)
+            assert str(exception) in str(exc_info.value.__cause__)
 
 
 class TestAPIErrorHandling:
@@ -172,7 +172,6 @@ class TestAPIErrorHandling:
 
     def test_api_memory_monitoring_error_response(self):
         """Test API returns proper HTTP status for memory monitoring errors."""
-        from fastapi import Request, Response
         from fastapi.testclient import TestClient
         from app import app
         
@@ -191,7 +190,6 @@ class TestAPIErrorHandling:
 
     def test_api_general_error_response(self):
         """Test API returns proper HTTP status for general errors."""
-        from fastapi import Request, Response
         from fastapi.testclient import TestClient
         from app import app
         

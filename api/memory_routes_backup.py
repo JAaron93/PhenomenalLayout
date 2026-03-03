@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from api.auth import get_admin_user, get_current_user_optional_dependency, UserRole
+from api.auth import get_admin_user, get_read_only_user, get_current_user_optional_dependency, UserRole
 from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
 from utils.memory_monitor import (
     force_garbage_collection,
@@ -33,36 +33,26 @@ async def get_memory_statistics(
     
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
-        from api.auth import ENABLE_AUTH
-        if not ENABLE_AUTH:
-            try:
-                stats = get_memory_stats()
-                
-                # Add rate limit headers
-                client_ip = get_client_ip(request)
-                add_rate_limit_headers(response, "read", client_ip)
-                
-                return {
-                    "success": True,
-                    "data": stats,
-                    "message": "Memory statistics retrieved successfully"
-                }
-            except MemoryMonitoringError as e:
-                logger.error("Memory monitoring error: %s", e)
-                response.status_code = 503
-                return {
-                    "success": False,
-                    "error": str(e),
-                    "message": "Memory monitoring service unavailable"
-                }
-        else:
-            # Auth is enabled but no user provided - return 401
-            from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        try:
+            stats = get_memory_stats()
+            
+            # Add rate limit headers
+            client_ip = get_client_ip(request)
+            add_rate_limit_headers(response, "read", client_ip)
+            
+            return {
+                "success": True,
+                "data": stats,
+                "message": "Memory statistics retrieved successfully"
+            }
+        except MemoryMonitoringError as e:
+            logger.error("Memory monitoring error: %s", e)
+            response.status_code = 503
+            return {
+                "success": False,
+                "error": str(e),
+                "message": "Memory monitoring service unavailable"
+            }
     
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
@@ -221,7 +211,7 @@ async def get_monitoring_status(
             return {
                 "success": True,
                 "data": {
-                    "monitoring": monitor.is_monitoring,
+                    "monitoring": monitor.is_monitoring(),
                     "check_interval": monitor.check_interval,
                     "alert_threshold_mb": monitor.alert_threshold_mb,
                     "baseline_memory_mb": monitor._baseline_memory,
@@ -256,11 +246,15 @@ async def get_monitoring_status(
         return {
             "success": True,
             "data": {
-                "monitoring": monitor.is_monitoring,
+                "monitoring": monitor.is_monitoring(),
                 "check_interval": monitor.check_interval,
                 "alert_threshold_mb": monitor.alert_threshold_mb,
-                "baseline_memory_mb": monitor._baseline_memory,
-                "peak_memory_mb": monitor._peak_memory
+                "is_monitoring": monitor.is_monitoring,
+                "check_interval": monitor.check_interval,
+                "alert_threshold_mb": monitor.alert_threshold_mb,
+                "baseline_memory_mb": monitor.baseline_memory_mb,
+                "peak_memory_mb": monitor.peak_memory_mb,
+                "current_stats": monitor.get_current_stats()
             },
             "message": "Monitoring status retrieved successfully"
         }

@@ -5,11 +5,113 @@ import os
 import pytest
 import threading
 import time
+from dataclasses import dataclass
 from unittest.mock import MagicMock
 
 from services.translation_service import TranslationService, LingoTranslator
 from services.mcp_lingo_client import McpLingoClient, McpLingoConfig
 from utils.memory_monitor import MemoryMonitor, force_garbage_collection
+
+
+@dataclass
+class MemoryTestConfig:
+    """Configuration for memory test thresholds."""
+    alert_threshold_mb: float
+    callback_threshold_mb: float
+    load_threshold_mb: float
+    max_growth_mb: float
+    growth_percentage: float
+    use_relative_thresholds: bool
+    
+    @classmethod
+    def from_environment(cls) -> "MemoryTestConfig":
+        """Create configuration from environment variables with defaults."""
+        return cls(
+            alert_threshold_mb=float(
+                os.getenv("MEMORY_TEST_ALERT_THRESHOLD_MB", "1.0")
+            ),
+            callback_threshold_mb=float(
+                os.getenv("MEMORY_TEST_CALLBACK_THRESHOLD_MB", "0.001")
+            ),
+            load_threshold_mb=float(
+                os.getenv("MEMORY_TEST_LOAD_THRESHOLD_MB", "50.0")
+            ),
+            max_growth_mb=float(
+                os.getenv("MEMORY_TEST_MAX_GROWTH_MB", "20.0")
+            ),
+            growth_percentage=float(
+                os.getenv("MEMORY_TEST_GROWTH_PERCENTAGE", "10.0")
+            ),
+            use_relative_thresholds=
+                os.getenv("MEMORY_TEST_USE_RELATIVE_THRESHOLDS", "false").lower() == "true"
+        )
+    
+    def get_adaptive_threshold(self, baseline_mb: float) -> float:
+        """Get adaptive threshold based on baseline memory."""
+        if self.use_relative_thresholds:
+            return baseline_mb * (self.growth_percentage / 100.0)
+        return self.alert_threshold_mb
+    
+    def get_adaptive_max_growth(self, baseline_mb: float) -> float:
+        """Get adaptive max growth based on baseline memory."""
+        if self.use_relative_thresholds:
+            return baseline_mb * (self.growth_percentage / 100.0)
+        return self.max_growth_mb
+
+
+class MockMemoryMonitor(MemoryMonitor):
+    """Mock MemoryMonitor for deterministic testing."""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._monitor_event = threading.Event()
+        self._should_monitor = threading.Event()
+        self._callback_alert_event = threading.Event()
+        self._monitor_count = 0
+    
+    def trigger_monitoring_cycle(self):
+        """Trigger a single monitoring cycle for testing."""
+        self._monitor_event.set()
+    
+    def wait_for_callback(self, timeout: float = 1.0) -> bool:
+        """Wait for a callback to be triggered."""
+        return self._callback_alert_event.wait(timeout=timeout)
+    
+    def _monitor_loop(self) -> None:
+        """Mock monitoring loop that uses events for controlled execution."""
+        while self._monitoring:
+            # Wait for trigger or shutdown
+            if self._monitor_event.wait(timeout=0.1):
+                self._monitor_event.clear()  # Reset for next trigger
+                
+                if not self._monitoring:
+                    break
+                    
+                try:
+                    stats = self.get_current_stats()
+                    current_memory = stats["current_memory_mb"]
+                    
+                    # Update peak memory with lock protection
+                    with self._lock:
+                        if current_memory > self._peak_memory:
+                            self._peak_memory = current_memory
+                        
+                        # Check for memory growth alert
+                        if (stats["growth_mb"] > self.alert_threshold_mb and
+                            self._baseline_memory is not None):
+                            self._send_alert(stats)
+                            self._callback_alert_event.set()  # Signal callback
+                    
+                    # Periodic logging (simplified)
+                    current_time = time.time()
+                    if current_time - self._last_log_time >= self._log_interval_seconds:
+                        self._last_log_time = current_time
+                    
+                    self._monitor_count += 1
+                    
+                except Exception as e:
+                    if not self._monitoring:
+                        break
 
 
 class TestTranslationServiceMemoryLeaks:
@@ -164,11 +266,27 @@ class TestMcpClientMemoryLeaks:
 
 
 class TestMemoryMonitor:
-    """Test memory monitoring functionality."""
-
+    """Test memory monitor functionality with configurable thresholds."""
+    
+    @pytest.fixture(autouse=True)
+    def setup_test_config(self):
+        """Setup test configuration for all tests."""
+        self.config = MemoryTestConfig.from_environment()
+    
     def test_memory_monitor_basic_functionality(self):
         """Test basic memory monitor functionality."""
-        monitor = MemoryMonitor(check_interval=0.1, alert_threshold_mb=1.0)
+        # Get baseline for adaptive threshold calculation
+        temp_monitor = MemoryMonitor(check_interval=0.1)
+        baseline_stats = temp_monitor.get_current_stats()
+        baseline_memory = baseline_stats["current_memory_mb"]
+        temp_monitor.cleanup()
+        
+        # Use adaptive threshold
+        adaptive_threshold = self.config.get_adaptive_threshold(baseline_memory)
+        monitor = MemoryMonitor(
+            check_interval=0.1, 
+            alert_threshold_mb=adaptive_threshold
+        )
 
         # Test initial stats
         stats = monitor.get_current_stats()
@@ -178,9 +296,13 @@ class TestMemoryMonitor:
         assert "process_count" in stats
         assert "thread_count" in stats
 
-        # Test baseline setting
+        # Test baseline setting with event-based synchronization
         monitor.start_monitoring()
-        time.sleep(0.2)  # Let it run briefly
+        
+        # Wait for baseline to be established (deterministic)
+        baseline_established = monitor.wait_for_baseline(timeout=1.0)
+        assert baseline_established, "Baseline should be established within 1 second"
+        
         monitor.stop_monitoring()
 
         # Verify monitoring ran
@@ -189,26 +311,42 @@ class TestMemoryMonitor:
 
     def test_memory_monitor_callbacks(self):
         """Test memory monitor callback functionality."""
-        monitor = MemoryMonitor(check_interval=0.1, alert_threshold_mb=0.001)  # Very low threshold
+        # Get baseline for adaptive threshold calculation
+        temp_monitor = MemoryMonitor(check_interval=0.1)
+        baseline_stats = temp_monitor.get_current_stats()
+        baseline_memory = baseline_stats["current_memory_mb"]
+        temp_monitor.cleanup()
         
-        callback_called = False
+        # Use adaptive callback threshold
+        adaptive_threshold = self.config.get_adaptive_threshold(baseline_memory)
+        monitor = MockMemoryMonitor(
+            check_interval=0.1, 
+            alert_threshold_mb=max(adaptive_threshold, self.config.callback_threshold_mb)
+        )
+        
+        callback_called = threading.Event()
         callback_stats = None
 
         def test_callback(stats):
-            nonlocal callback_called, callback_stats
-            callback_called = True
+            nonlocal callback_stats
             callback_stats = stats
+            callback_called.set()
 
         monitor.add_callback(test_callback)
         monitor.start_monitoring()
         
-        # Wait for potential alert
-        time.sleep(0.3)
+        # Trigger a monitoring cycle with simulated memory growth
+        monitor.trigger_monitoring_cycle()
+        
+        # Wait for callback to be triggered (deterministic)
+        callback_triggered = callback_called.wait(timeout=1.0)
         
         monitor.stop_monitoring()
 
-        # Note: Callback may not be called if memory growth is below threshold
-        # This is expected behavior
+        # Verify callback was called (may not be called if no memory growth)
+        if callback_triggered:
+            assert callback_stats is not None
+            assert "current_memory_mb" in callback_stats
 
     def test_force_garbage_collection(self):
         """Test garbage collection forcing."""
@@ -279,12 +417,23 @@ class TestResourceLeakDetection:
         assert collected >= 0
 
     @pytest.mark.skipif(
-        not os.getenv("ENABLE_MEMORY_LEAK_TESTS", "").lower() == "true",
+        os.getenv("ENABLE_MEMORY_LEAK_TESTS", "").lower() != "true",
         reason="Memory leak tests require explicit enablement"
     )
     def test_memory_growth_under_load(self):
         """Test memory growth under simulated load."""
-        monitor = MemoryMonitor(check_interval=0.5, alert_threshold_mb=50.0)
+        # Get baseline for adaptive threshold calculation
+        temp_monitor = MemoryMonitor(check_interval=0.1)
+        baseline_stats = temp_monitor.get_current_stats()
+        baseline_memory = baseline_stats["current_memory_mb"]
+        temp_monitor.cleanup()
+        
+        # Use adaptive load threshold
+        adaptive_threshold = self.config.get_adaptive_threshold(baseline_memory)
+        monitor = MockMemoryMonitor(
+            check_interval=0.5, 
+            alert_threshold_mb=max(adaptive_threshold, self.config.load_threshold_mb)
+        )
         
         # Get baseline
         initial_stats = monitor.get_current_stats()
@@ -298,14 +447,15 @@ class TestResourceLeakDetection:
             for chunk in range(10):
                 chunk_data = [0] * 100000  # ~400KB per chunk
                 data_chunks.append(chunk_data)
-                time.sleep(0.1)  # Let monitor run
+                # Trigger monitoring cycle instead of sleeping
+                monitor.trigger_monitoring_cycle()
             
             # Clear data
             data_chunks.clear()
             gc.collect()
             
-            # Let monitor run a bit more
-            time.sleep(0.5)
+            # Trigger final monitoring cycle
+            monitor.trigger_monitoring_cycle()
             
         finally:
             monitor.stop_monitoring()
@@ -313,9 +463,14 @@ class TestResourceLeakDetection:
         final_stats = monitor.get_current_stats()
         final_memory = final_stats["current_memory_mb"]
         
-        # Memory should not have grown excessively
+        # Memory should not have grown excessively - use adaptive threshold
         growth = final_memory - initial_memory
-        assert growth < 20.0, f"Memory grew by {growth:.1f} MB, expected < 20 MB"
+        max_allowed_growth = self.config.get_adaptive_max_growth(initial_memory)
+        
+        assert growth < max_allowed_growth, (
+            f"Memory grew by {growth:.1f} MB, expected < {max_allowed_growth:.1f} MB "
+            f"(baseline: {initial_memory:.1f} MB, relative: {self.config.growth_percentage:.1f}%)"
+        )
 
 
 if __name__ == "__main__":
