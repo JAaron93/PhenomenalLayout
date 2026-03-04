@@ -160,13 +160,22 @@ if __name__ == "__main__":
             monitor1.stop_monitoring()
         
         monitor2 = MemoryMonitor(check_interval=0.1)
-        test_improved_shutdown_handling(monitor2)
+        try:
+            test_improved_shutdown_handling(monitor2)
+        finally:
+            monitor2.stop_monitoring()
         
         monitor3 = MemoryMonitor(check_interval=10.0)
-        test_interruptible_sleep(monitor3)
+        try:
+            test_interruptible_sleep(monitor3)
+        finally:
+            monitor3.stop_monitoring()
         
         monitor4 = MemoryMonitor(check_interval=0.1)
-        test_cleanup_method(monitor4)
+        try:
+            test_cleanup_method(monitor4)
+        finally:
+            monitor4.cleanup()
         
         test_atexit_handler()
         print("\n🎉 Memory monitor daemon thread cleanup fix verified successfully!")

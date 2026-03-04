@@ -74,6 +74,14 @@ class MemoryMonitor:
     def configure(self, check_interval: float, alert_threshold_mb: float) -> None:
         """Configure memory monitoring parameters.
 
+        This method is thread-safe and can be called while monitoring is
+        active. Both check_interval and alert_threshold_mb are updated
+        atomically under self._lock to ensure consistent access with
+        _monitor_loop. The _monitor_loop method reads both parameters under
+        the same lock, guaranteeing that concurrent configure calls will not
+        result in torn reads or inconsistent state between the two
+        configuration values.
+
         Args:
             check_interval: Seconds between memory checks
             alert_threshold_mb: Memory growth threshold in MB for alerts
@@ -206,13 +214,16 @@ class MemoryMonitor:
                 stats = self.get_current_stats()
                 current_memory = stats["current_memory_mb"]
                 
-                # Update peak memory with lock protection
+                # Read monitoring parameters under lock for thread safety
                 with self._lock:
+                    check_interval = self.check_interval
+                    alert_threshold_mb = self.alert_threshold_mb
+                    
                     if current_memory > self._peak_memory:
                         self._peak_memory = current_memory
                     
                     # Check for memory growth alert
-                    if (stats["growth_mb"] > self.alert_threshold_mb and
+                    if (stats["growth_mb"] > alert_threshold_mb and
                         self._baseline_memory is not None):
                         self._send_alert(stats)
 
@@ -232,12 +243,15 @@ class MemoryMonitor:
                 # Check shutdown flag before continuing
                 if not self._monitoring:
                     break
+                # Read check_interval under lock before sleeping
+                with self._lock:
+                    check_interval = self.check_interval
                 # Sleep for shorter interval after error to allow shutdown
-                time.sleep(min(1.0, self.check_interval))
+                time.sleep(min(1.0, check_interval))
                 continue
 
             # Use interruptible sleep with shorter intervals for better shutdown response
-            sleep_end = time.time() + self.check_interval
+            sleep_end = time.time() + check_interval
             while time.time() < sleep_end and self._monitoring:
                 # Sleep in small chunks (1 second) for responsive shutdown
                 time.sleep(min(1.0, sleep_end - time.time()))

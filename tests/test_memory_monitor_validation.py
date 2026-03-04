@@ -55,16 +55,17 @@ class TestMemoryMonitorValidation:
 
     def test_valid_params(self):
         """Test that valid parameters do not raise errors."""
-        # Class init
-        try:
-            monitor = MemoryMonitor(check_interval=0.5, alert_threshold_mb=500.0)
-            assert monitor.check_interval == 0.5
-            assert monitor.alert_threshold_mb == 500.0
-        finally:
-            pass # No cleanup needed for just init
+        # Class init - directly assert instance attributes, no cleanup needed
+        monitor = MemoryMonitor(check_interval=0.5, alert_threshold_mb=500.0)
+        assert monitor.check_interval == 0.5
+        assert monitor.alert_threshold_mb == 500.0
 
-        # Global function
+        # Global function - assert monitoring started and properly cleanup
         try:
             start_memory_monitoring(check_interval=1.0, alert_threshold_mb=200.0)
+            # Verify that monitoring actually started
+            from utils.memory_monitor import get_memory_monitor
+            monitor = get_memory_monitor()
+            assert monitor.is_monitoring, "Monitoring should be active"
         finally:
             stop_memory_monitoring()

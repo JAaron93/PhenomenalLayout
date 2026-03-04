@@ -51,15 +51,13 @@ class TestMemoryMonitorProperties:
         """Test baseline_memory_mb property returns value after start."""
         # Should be None before start
         assert memory_monitor.baseline_memory_mb is None
-        
+
         # Should have value after start
         memory_monitor.start_monitoring()
         baseline = memory_monitor.baseline_memory_mb
         assert baseline is not None, "Should have baseline after start"
         assert baseline > 0, "Baseline should be positive"
         assert isinstance(baseline, float), "Should return float"
-        
-        memory_monitor.stop_monitoring()
 
     def test_peak_memory_property_initial_state(self):
         """Test peak_memory_mb property returns 0.0 initially."""
@@ -70,14 +68,12 @@ class TestMemoryMonitorProperties:
         """Test peak_memory_mb property returns value after start."""
         # Should be 0.0 before start
         assert memory_monitor.peak_memory_mb == 0.0
-        
+
         # Should have value after start
         memory_monitor.start_monitoring()
         peak = memory_monitor.peak_memory_mb
         assert peak > 0, "Peak should be positive after start"
         assert isinstance(peak, float), "Should return float"
-        
-        memory_monitor.stop_monitoring()
 
     def test_properties_thread_safety(self, memory_monitor):
         """Test that properties are thread-safe."""

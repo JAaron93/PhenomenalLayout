@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Direct test of GC endpoint."""
 
+import sys
 from datetime import datetime
 from fastapi.testclient import TestClient
 from app import create_app
@@ -70,8 +71,11 @@ def test_gc_direct():
     
     # Validate timestamp format by attempting to parse it
     try:
-        # Handle 'Z' suffix for UTC if present (for robustness)
-        ts_str = timestamp_value.replace('Z', '+00:00') if timestamp_value.endswith('Z') else timestamp_value
+        # Python 3.11+ has native 'Z' support; 3.10 and below need workaround
+        if sys.version_info < (3, 11) and timestamp_value.endswith('Z'):
+            ts_str = timestamp_value[:-1] + '+00:00'
+        else:
+            ts_str = timestamp_value
         datetime.fromisoformat(ts_str)
     except (ValueError, TypeError) as e:
         raise AssertionError(

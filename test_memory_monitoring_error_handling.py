@@ -6,7 +6,7 @@ import pytest
 import psutil
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from utils.memory_monitor import MemoryMonitor, MemoryMonitoringError, get_memory_stats
+from utils.memory_monitor import MemoryMonitor, MemoryMonitoringError, get_memory_stats, log_memory_usage
 from app import create_app
 
 
@@ -215,8 +215,6 @@ class TestLogMemoryUsage:
 
     def test_log_memory_usage_memory_monitoring_error(self):
         """Test log_memory_usage handles MemoryMonitoringError gracefully."""
-        from utils.memory_monitor import log_memory_usage
-        
         with patch('utils.memory_monitor.get_memory_stats') as mock_stats:
             mock_stats.side_effect = MemoryMonitoringError("Test failure")
             
@@ -227,14 +225,12 @@ class TestLogMemoryUsage:
                 # Should log a warning
                 mock_logger.warning.assert_called_once()
                 args = mock_logger.warning.call_args[0]
-                assert "Failed to log memory usage%s: %s" == args[0]
-                assert " [test-label]" == args[1]
-                assert "Test failure" == args[2]
+                assert args[0] == "Failed to log memory usage%s: %s"
+                assert args[1] == " [test-label]"
+                assert args[2] == "Test failure"
 
     def test_log_memory_usage_general_exception(self):
         """Test log_memory_usage handles general exceptions gracefully."""
-        from utils.memory_monitor import log_memory_usage
-        
         with patch('utils.memory_monitor.get_memory_stats') as mock_stats:
             mock_stats.side_effect = RuntimeError("Crazy error")
             
@@ -243,11 +239,9 @@ class TestLogMemoryUsage:
                 log_memory_usage()
                 
                 # Should log an error
-                mock_logger.error.assert_called_once()
-                args = mock_logger.error.call_args[0]
-                assert "Unexpected error logging memory usage%s: %s" == args[0]
-                assert "" == args[1]
-                assert "Crazy error" == args[2]
+                mock_logger.error.assert_called_once_with(
+                    "Unexpected error logging memory usage%s: %s", "", "Crazy error"
+                )
 
 
 if __name__ == "__main__":

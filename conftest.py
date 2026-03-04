@@ -24,18 +24,22 @@ def pytest_configure(config: pytest.Config) -> None:
         config.option.quiet = max(getattr(config.option, "quiet", 0), 1)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def test_client():
-    """Pytest fixture providing a test client with test environment."""
+    """Pytest fixture providing a test client with test environment.
+    
+    Uses module scope to prevent cached state leakage across tests that
+    could occur when reloading modules with function-scoped fixtures.
+    """
     test_env = {
         "MEMORY_API_ENABLE_AUTH": "true",
         "MEMORY_API_JWT_SECRET": "test-secret-key",
         "MEMORY_API_KEY": "test-admin-key",
         "MEMORY_API_READ_RATE_LIMIT": "100",
-        "MEMORY_API_WRITE_RATE_LIMIT": "100", 
+        "MEMORY_API_WRITE_RATE_LIMIT": "100",
         "MEMORY_API_ADMIN_RATE_LIMIT": "100"
     }
-    
+
     with patch.dict('os.environ', test_env):
         # Reload modules to pick up environment
         import importlib
@@ -47,7 +51,7 @@ def test_client():
         importlib.reload(api.memory_routes)
         importlib.reload(api.rate_limit)
         importlib.reload(app_module)
-        
+
         # Create test client with patched environment
         client = TestClient(app_module.create_app())
         yield client

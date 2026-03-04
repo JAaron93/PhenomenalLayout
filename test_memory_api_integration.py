@@ -29,8 +29,7 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
         headers={"Authorization": f"Bearer {admin_token}"}
     )
     assert response.status_code == 200, f"Stats endpoint should work with admin token: {response.text}"
-    
-        
+
     # Test POST /memory/monitoring/start with admin token
     response = test_client.post(
         "/api/v1/memory/monitoring/start",
@@ -90,14 +89,7 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
         headers={"Authorization": f"Bearer {read_token}"}
     )
     assert response.status_code == 403, f"Stop monitoring should fail with read token: {response.text}"
-    
-    # Test POST /memory/monitoring/stop with admin token (should succeed)
-    response = test_client.post(
-        "/api/v1/memory/monitoring/stop",
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
-    assert response.status_code == 200, f"Stop monitoring should work with admin token: {response.text}"
-    
+
     # Test GET /memory/monitoring/status with read token
     response = test_client.get(
         "/api/v1/memory/monitoring/status",
@@ -118,14 +110,7 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
         headers={"Authorization": f"Bearer {read_token}"}
     )
     assert response.status_code == 403, f"Start monitoring should fail with read token: {response.text}"
-    
-    # Test POST /memory/monitoring/start with admin token (should succeed)
-    response = test_client.post(
-        "/api/v1/memory/monitoring/start",
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
-    assert response.status_code == 200, f"Start monitoring should work with admin token: {response.text}"
-    
+
     print("\n✓ All authentication tests passed!")
 
 

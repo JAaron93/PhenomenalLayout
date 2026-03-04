@@ -65,16 +65,13 @@ async def get_monitoring_status(
     # Check rate limit
     check_rate_limit(request, "read")
 
-    # If auth is disabled, current_user will be None, allow access
-    if current_user is None:
-        return build_monitoring_response(request, response)
+    # If auth is enabled, verify user has appropriate role
+    if current_user is not None:
+        if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions for read-only access"
+            )
 
-    # Auth is enabled, check user role
-    if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for read-only access"
-        )
-
-    # User is authenticated and authorized, build response
+    # Build and return the monitoring response
     return build_monitoring_response(request, response)

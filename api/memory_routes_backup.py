@@ -174,6 +174,9 @@ async def get_memory_statistics(
             return _fetch_memory_stats_with_headers(request, response)
         else:
             response.status_code = 401
+            # Add rate limit headers on auth error
+            client_ip = get_client_ip(request)
+            add_rate_limit_headers(response, "read", client_ip)
             return {
                 "success": False,
                 "error": "Unauthorized",
@@ -199,12 +202,14 @@ async def force_garbage_collection_endpoint(
     """Force garbage collection and return results."""
     # Check rate limit
     check_rate_limit(request, "admin")
-    
+
+    # Get client IP for rate limit headers (for both success and error paths)
+    client_ip = get_client_ip(request)
+
     try:
         result = force_garbage_collection()
-        
+
         # Add rate limit headers
-        client_ip = get_client_ip(request)
         add_rate_limit_headers(response, "admin", client_ip)
         
         return {
@@ -326,6 +331,9 @@ async def get_monitoring_status(
             return _fetch_monitor_status_with_headers(request, response)
         else:
             response.status_code = 401
+            # Add rate limit headers on auth error
+            client_ip = get_client_ip(request)
+            add_rate_limit_headers(response, "read", client_ip)
             return {
                 "success": False,
                 "error": "Unauthorized",

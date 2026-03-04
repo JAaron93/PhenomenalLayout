@@ -88,6 +88,7 @@ def test_timeout_configuration():
     else:
         print("  ❌ MCP provider not found in service.providers")
 
+    # Consolidated single if/else for clarity
     if verification_succeeded:
         print("✓ TranslationService integration working")
     else:
@@ -120,9 +121,9 @@ def test_cleanup_timeout_configuration():
     assert config.session_cleanup_timeout_s == 15.0
     assert config.stdio_cleanup_timeout_s == 20.0
 
-    # Check that the client has the config
-    assert client._config.session_cleanup_timeout_s == 15.0
-    assert client._config.stdio_cleanup_timeout_s == 20.0
+    # Check that the client has the config (using public accessor)
+    assert client.config.session_cleanup_timeout_s == 15.0
+    assert client.config.stdio_cleanup_timeout_s == 20.0
 
     print("✓ Cleanup timeouts are properly configured and accessible")
     return True
