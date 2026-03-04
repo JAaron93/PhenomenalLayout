@@ -217,6 +217,23 @@ ruff check .
 mypy .
 ```
 
+### Debug and Development Tools
+
+For local development and debugging, several utility scripts are available in the `scripts/` directory:
+
+- **Environment Debugging**: Verify configuration and test authentication
+  ```bash
+  python scripts/debug_test_env.py
+  ```
+
+- **Dependency Management**: Sync and update project dependencies
+  ```bash
+  ./scripts/sync-deps.sh
+  ./scripts/update-deps.sh
+  ```
+
+See `scripts/README.md` for complete documentation of available development tools.
+
 **Note**: Pre-commit hooks auto-format code (Black, trailing whitespace) and may abort your first commit attempt. Simply re-stage files and commit again.
 
 For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).

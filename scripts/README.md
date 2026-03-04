@@ -43,6 +43,34 @@ pytest tests/test_core.py
 pytest tests/test_core.py::TestFoo::test_bar
 ```
 
+### `debug_test_env.py`
+Debug script to verify environment configuration and test authentication endpoints locally.
+
+**Purpose:** Local development tool for verifying:
+- Environment variable configuration (JWT secrets, API keys, auth settings)
+- JWT token generation and validation
+- Memory API endpoint authentication and functionality
+- Integration testing with FastAPI test client
+
+**Usage:**
+```bash
+# Basic environment check and endpoint testing
+python scripts/debug_test_env.py
+
+# With environment variables
+MEMORY_API_JWT_SECRET=your_secret MEMORY_API_KEY=your_key python scripts/debug_test_env.py
+```
+
+**Features:**
+- Validates required environment variables are set
+- Tests JWT token creation with admin role
+- Verifies GC endpoint authentication (requires admin access)
+- Tests monitoring status endpoint (optional authentication)
+- Comprehensive error handling and response validation
+- Detailed logging for debugging authentication issues
+
+**Note:** This script is for local development only and should not be deployed to production.
+
 ### `run_tests_with_env.py`
 Test runner that sets up environment variables before running tests.
 

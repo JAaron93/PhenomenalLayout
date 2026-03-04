@@ -39,6 +39,17 @@ python -m pip install -U pip
 python -m pip install -r requirements-dev.txt
 ```
 
+### Debug Scripts
+
+For local development and debugging, several utility scripts are available in the `scripts/` directory:
+
+- **`debug_test_env.py`**: Verify environment configuration and test authentication endpoints locally
+  ```bash
+  python scripts/debug_test_env.py
+  ```
+
+See `scripts/README.md` for complete documentation of available debug and test tools.
+
 ### Manual Quality Checks
 
 Run the test suite:
