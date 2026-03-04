@@ -4,7 +4,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from api.auth import (
     get_admin_user, 
@@ -139,16 +139,13 @@ async def get_memory_statistics(
         if not is_auth_enabled():
             return fetch_memory_stats_and_handle_errors(request, response)
         else:
-            response.status_code = 401
-            return {
-                "success": False,
-                "error": "Unauthorized",
-                "message": "Authentication required"
-            }
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
     
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions for read-only access"
@@ -278,16 +275,13 @@ async def get_monitoring_status(
         if not is_auth_enabled():
             return get_monitoring_status_and_handle_errors(request, response)
         else:
-            response.status_code = 401
-            return {
-                "success": False,
-                "error": "Unauthorized",
-                "message": "Authentication required"
-            }
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
 
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions for read-only access"

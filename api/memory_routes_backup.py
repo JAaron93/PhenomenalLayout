@@ -78,6 +78,62 @@ def _fetch_memory_stats_with_headers(
         }
 
 
+def _fetch_monitor_status_with_headers(
+    request: Request,
+    response: Response
+) -> dict[str, Any]:
+    """
+    Helper to fetch monitor status and add rate-limit headers.
+
+    Handles all error cases and ensures rate-limit headers are added
+    on all code paths (success and error).
+    """
+    client_ip = get_client_ip(request)
+
+    try:
+        monitor = get_memory_monitor()
+
+        # Add rate limit headers on success
+        add_rate_limit_headers(response, "read", client_ip)
+
+        return {
+            "success": True,
+            "data": {
+                "is_monitoring": monitor.is_monitoring,
+                "check_interval": monitor.check_interval,
+                "alert_threshold_mb": monitor.alert_threshold_mb,
+                "baseline_memory_mb": monitor.baseline_memory_mb,
+                "peak_memory_mb": monitor.peak_memory_mb,
+                "current_stats": monitor.get_current_stats()
+            },
+            "message": "Monitoring status retrieved successfully"
+        }
+    except MemoryMonitoringError as e:
+        logger.error("Memory monitoring error: %s", e)
+        response.status_code = 503
+
+        # Add rate limit headers on error
+        add_rate_limit_headers(response, "read", client_ip)
+
+        return {
+            "success": False,
+            "error": "Service unavailable",
+            "message": "Memory monitoring unavailable"
+        }
+    except Exception as e:
+        logger.exception("Unexpected error getting monitoring status")
+        response.status_code = 500
+
+        # Add rate limit headers on error
+        add_rate_limit_headers(response, "read", client_ip)
+
+        return {
+            "success": False,
+            "error": "Internal server error",
+            "message": "Internal server error"
+        }
+
+
 @router.get("/stats")
 async def get_memory_statistics(
     request: Request,
@@ -151,13 +207,13 @@ async def start_memory_monitoring_endpoint(
         60.0,
         gt=0,
         lt=86400,
-        description="Check interval in seconds (1 second to 1 day)"
+        description="Check interval in seconds (greater than 0, up to 1 day)"
     ),
     alert_threshold_mb: float = Query(
         100.0,
         gt=0,
         lt=131072,
-        description="Alert threshold in MB (1 MB to 128 GB)"
+        description="Alert threshold in MB (greater than 0, up to 128 GB)"
     )
 ) -> dict[str, Any]:
     """Start memory monitoring with specified parameters."""
@@ -233,41 +289,7 @@ async def get_monitoring_status(
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
         if not ENABLE_AUTH:
-            try:
-                monitor = get_memory_monitor()
-                
-                # Add rate limit headers
-                client_ip = get_client_ip(request)
-                add_rate_limit_headers(response, "read", client_ip)
-                
-                return {
-                    "success": True,
-                    "data": {
-                        "is_monitoring": monitor.is_monitoring,
-                        "check_interval": monitor.check_interval,
-                        "alert_threshold_mb": monitor.alert_threshold_mb,
-                        "baseline_memory_mb": monitor.baseline_memory_mb,
-                        "peak_memory_mb": monitor.peak_memory_mb,
-                        "current_stats": monitor.get_current_stats()
-                    },
-                    "message": "Monitoring status retrieved successfully"
-                }
-            except MemoryMonitoringError as e:
-                logger.error("Memory monitoring error: %s", e)
-                response.status_code = 503
-                return {
-                    "success": False,
-                    "error": "Service unavailable",
-                    "message": "Memory monitoring unavailable"
-                }
-            except Exception as e:
-                logger.exception("Unexpected error getting monitoring status")
-                response.status_code = 500
-                return {
-                    "success": False,
-                    "error": "Internal server error",
-                    "message": "Internal server error"
-                }
+            return _fetch_monitor_status_with_headers(request, response)
         else:
             response.status_code = 401
             return {
@@ -283,39 +305,5 @@ async def get_monitoring_status(
             detail="Insufficient permissions for read-only access"
         )
     
-    try:
-        monitor = get_memory_monitor()
-        
-        # Add rate limit headers
-        client_ip = get_client_ip(request)
-        add_rate_limit_headers(response, "read", client_ip)
-        
-        return {
-            "success": True,
-            "data": {
-                "is_monitoring": monitor.is_monitoring,
-                "check_interval": monitor.check_interval,
-                "alert_threshold_mb": monitor.alert_threshold_mb,
-                "baseline_memory_mb": monitor.baseline_memory_mb,
-                "peak_memory_mb": monitor.peak_memory_mb,
-                "current_stats": monitor.get_current_stats()
-            },
-            "message": "Monitoring status retrieved successfully"
-        }
-    except MemoryMonitoringError as e:
-        logger.error("Memory monitoring error: %s", e)
-        response.status_code = 503
-        return {
-            "success": False,
-            "error": "Service unavailable",
-            "message": "Memory monitoring unavailable"
-        }
-    except Exception as e:
-        logger.exception("Unexpected error getting monitoring status")
-        response.status_code = 500
-        return {
-            "success": False,
-            "error": "Internal server error",
-            "message": "Internal server error"
-        }
+    return _fetch_monitor_status_with_headers(request, response)
 

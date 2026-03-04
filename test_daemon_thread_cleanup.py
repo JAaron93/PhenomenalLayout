@@ -35,6 +35,8 @@ def monitor_with_long_interval():
     monitor = MemoryMonitor(check_interval=10.0)
     yield monitor
     monitor.stop_monitoring()
+
+    
 def test_non_daemon_thread_creation(monitor):
     """Test that monitoring thread is created as non-daemon."""
     print("Testing non-daemon thread creation...")
@@ -157,9 +159,23 @@ if __name__ == "__main__":
         finally:
             monitor1.stop_monitoring()
         
-        test_improved_shutdown_handling(MemoryMonitor(check_interval=0.1))
-        test_interruptible_sleep(MemoryMonitor(check_interval=10.0))
-        test_cleanup_method(MemoryMonitor(check_interval=0.1))
+        monitor2 = MemoryMonitor(check_interval=0.1)
+        try:
+            test_improved_shutdown_handling(monitor2)
+        finally:
+            monitor2.stop_monitoring()
+        
+        monitor3 = MemoryMonitor(check_interval=10.0)
+        try:
+            test_interruptible_sleep(monitor3)
+        finally:
+            monitor3.stop_monitoring()
+        
+        monitor4 = MemoryMonitor(check_interval=0.1)
+        try:
+            test_cleanup_method(monitor4)
+        finally:
+            monitor4.cleanup()
         
         test_atexit_handler()
         print("\n🎉 Memory monitor daemon thread cleanup fix verified successfully!")

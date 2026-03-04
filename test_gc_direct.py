@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Direct test of GC endpoint."""
 
+from datetime import datetime
 from fastapi.testclient import TestClient
 from app import create_app
 from api.auth import create_jwt_token, UserRole, AuthConfig
@@ -62,9 +63,22 @@ def test_gc_direct():
 
     # Validate timestamp
     assert "timestamp" in data, "Expected 'timestamp' in data"
-    assert isinstance(data.get("timestamp"), str), (
-        f"Expected timestamp to be str, got {type(data.get('timestamp'))}"
+    timestamp_value = data.get("timestamp")
+    assert isinstance(timestamp_value, str), (
+        f"Expected timestamp to be str, got {type(timestamp_value)}"
     )
+    
+    # Validate timestamp format by attempting to parse it
+    try:
+        parsed_timestamp = datetime.fromisoformat(timestamp_value)
+        assert parsed_timestamp is not None, (
+            "Timestamp parsing returned None"
+        )
+    except (ValueError, TypeError) as e:
+        raise AssertionError(
+            f"Failed to parse timestamp '{timestamp_value}' "
+            f"as ISO format: {e}"
+        )
     
     # Also test monitoring status to make sure it works
     response2 = client.get(

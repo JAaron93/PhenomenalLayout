@@ -12,6 +12,14 @@ INVALID_VALUE_PARAMS = [
     (60, 10241),    # threshold too high
 ]
 
+# Shared invalid parameter sets for type error testing
+INVALID_TYPE_PARAMS = [
+    ("60", 100),    # interval not a number
+    (60, "100"),    # threshold not a number
+    (None, 100),    # interval None
+    (60, []),       # threshold list
+]
+
 class TestMemoryMonitorValidation:
     """Test suite for memory monitor parameter validation."""
 
@@ -21,12 +29,7 @@ class TestMemoryMonitorValidation:
         with pytest.raises(ValueError):
             MemoryMonitor(check_interval=interval, alert_threshold_mb=threshold)
 
-    @pytest.mark.parametrize("interval, threshold", [
-        ("60", 100),    # interval not a number
-        (60, "100"),    # threshold not a number
-        (None, 100),    # interval None
-        (60, []),       # threshold list
-    ])
+    @pytest.mark.parametrize("interval, threshold", INVALID_TYPE_PARAMS)
     def test_init_type_errors(self, interval, threshold):
         """Test that MemoryMonitor.__init__ raises TypeError for invalid types."""
         with pytest.raises(TypeError):
@@ -41,12 +44,7 @@ class TestMemoryMonitorValidation:
         finally:
             stop_memory_monitoring()
 
-    @pytest.mark.parametrize("interval, threshold", [
-        ("60", 100),    # interval not a number
-        (60, "100"),    # threshold not a number
-        (None, 100),    # interval None
-        (60, []),       # threshold list
-    ])
+    @pytest.mark.parametrize("interval, threshold", INVALID_TYPE_PARAMS)
     def test_start_monitoring_type_errors(self, interval, threshold):
         """Test that start_memory_monitoring raises TypeError for invalid types."""
         try:

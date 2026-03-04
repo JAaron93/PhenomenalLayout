@@ -400,10 +400,14 @@ def cleanup_memory_monitor() -> None:
     """
     global _memory_monitor
     try:
+        # Grab reference and clear global under lock to avoid race conditions
         with _memory_monitor_lock:
-            if _memory_monitor is not None:
-                _memory_monitor.cleanup()
-                _memory_monitor = None
+            monitor_to_cleanup = _memory_monitor
+            _memory_monitor = None
+        
+        # Call cleanup outside the lock to avoid deadlock from thread.join()
+        if monitor_to_cleanup is not None:
+            monitor_to_cleanup.cleanup()
     except Exception as e:
         logger.error("Error during memory monitor cleanup: %s", e)
 

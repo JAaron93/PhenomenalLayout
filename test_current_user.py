@@ -25,6 +25,7 @@ def test_current_user():
         # Rebind functions from reloaded module
         create_jwt_token = api.auth.create_jwt_token
         get_current_user = api.auth.get_current_user
+        UserRole = api.auth.UserRole
         
         # Create admin token
         admin_token = create_jwt_token("admin_user", UserRole.ADMIN)

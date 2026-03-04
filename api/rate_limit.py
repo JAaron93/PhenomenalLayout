@@ -85,6 +85,7 @@ class RateLimiter:
         self._buckets: Dict[str, TokenBucket] = {}
         self._cleanup_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()  # For shutdown signaling
+        self._stop_requested = False  # Guard flag to prevent thread creation during shutdown
         self._lock = threading.Lock()
         self._cleanup_lock = threading.Lock()
     
@@ -134,6 +135,10 @@ class RateLimiter:
     def start_cleanup(self) -> None:
         """Start the cleanup thread if not already running."""
         with self._cleanup_lock:
+            # Check guard flag to prevent starting during shutdown
+            if self._stop_requested:
+                return
+            
             if self._cleanup_thread is None or not self._cleanup_thread.is_alive():
                 self._stop_event.clear()  # Clear any previous stop signal
                 self._cleanup_thread = threading.Thread(
@@ -165,6 +170,8 @@ class RateLimiter:
     def stop(self) -> None:
         """Stop the cleanup thread gracefully."""
         with self._cleanup_lock:
+            # Set guard flag to prevent new thread creation during shutdown
+            self._stop_requested = True
             thread = self._cleanup_thread
             if thread and thread.is_alive():
                 self._stop_event.set()  # Signal shutdown
@@ -184,9 +191,10 @@ class RateLimiter:
                     thread_id
                 )
         
-        # Clear the thread reference only after join completes
+        # Clear the thread reference only if it's still the same thread we joined
         with self._cleanup_lock:
-            self._cleanup_thread = None
+            if self._cleanup_thread is thread:
+                self._cleanup_thread = None
 
 
 

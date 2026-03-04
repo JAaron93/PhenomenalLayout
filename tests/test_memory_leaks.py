@@ -23,10 +23,12 @@ def get_baseline_memory() -> float:
         Baseline memory in MB.
     """
     temp_monitor = MemoryMonitor(check_interval=0.1)
-    baseline_stats = temp_monitor.get_current_stats()
-    baseline_memory = baseline_stats["current_memory_mb"]
-    temp_monitor.cleanup()
-    return baseline_memory
+    try:
+        baseline_stats = temp_monitor.get_current_stats()
+        baseline_memory = baseline_stats["current_memory_mb"]
+        return baseline_memory
+    finally:
+        temp_monitor.cleanup()
 
 
 @dataclass

@@ -59,14 +59,16 @@ def test_auth_direct():
     )
 
     # Validate data structure contains collected_objects
-    if "collected_objects" in data:
-        collected = data["collected_objects"]
-        assert isinstance(collected, int), (
-            f"Expected collected_objects to be int, got {type(collected)}"
-        )
-        assert collected >= 0, (
-            f"Expected collected_objects >= 0, got {collected}"
-        )
+    assert "collected_objects" in data, (
+        "Expected 'collected_objects' key in data"
+    )
+    collected = data["collected_objects"]
+    assert isinstance(collected, int), (
+        f"Expected collected_objects to be int, got {type(collected)}"
+    )
+    assert collected >= 0, (
+        f"Expected collected_objects >= 0, got {collected}"
+    )
 
 if __name__ == "__main__":
     test_auth_direct()

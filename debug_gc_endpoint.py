@@ -30,9 +30,11 @@ def run_test_in_subprocess():
             file=sys.stderr
         )
         if e.stdout:
-            print("STDOUT before timeout:", e.stdout)
+            stdout_text = e.stdout.decode('utf-8', errors='replace') if isinstance(e.stdout, bytes) else e.stdout
+            print("STDOUT before timeout:", stdout_text)
         if e.stderr:
-            print("STDERR before timeout:", e.stderr, file=sys.stderr)
+            stderr_text = e.stderr.decode('utf-8', errors='replace') if isinstance(e.stderr, bytes) else e.stderr
+            print("STDERR before timeout:", stderr_text, file=sys.stderr)
         return 1
 
     print(result.stdout)

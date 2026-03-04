@@ -6,6 +6,7 @@ import time
 import functools
 import random
 from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
 from typing import Optional, Union
 
 import jwt
@@ -15,8 +16,43 @@ from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredenti
 logger = __import__("logging").getLogger(__name__)
 
 # Auth event logging configuration
-_AUTH_ACCESS_SAMPLING_RATE = float(os.getenv("AUTH_ACCESS_SAMPLING_RATE", "0.1"))  # 10% by default
-_AUTH_ACCESS_LOG_LEVEL = os.getenv("AUTH_ACCESS_LOG_LEVEL", "DEBUG").upper()  # DEBUG by default
+def _parse_sampling_rate() -> float:
+    """Parse and validate AUTH_ACCESS_SAMPLING_RATE from environment."""
+    raw = os.getenv("AUTH_ACCESS_SAMPLING_RATE", "0.1")
+    try:
+        rate = float(raw)
+    except ValueError:
+        logger.warning(f"Invalid AUTH_ACCESS_SAMPLING_RATE '{raw}', using default 0.1")
+        return 0.1
+    if not 0.0 <= rate <= 1.0:
+        logger.warning(f"AUTH_ACCESS_SAMPLING_RATE {rate} out of range [0.0, 1.0], clamping")
+        return max(0.0, min(1.0, rate))
+    return rate
+
+
+def _parse_auth_log_level() -> str:
+    """Parse and validate AUTH_ACCESS_LOG_LEVEL from environment.
+    
+    Accepts common log level names: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    Returns 'DEBUG' as safe default for invalid values.
+    """
+    raw = os.getenv("AUTH_ACCESS_LOG_LEVEL", "DEBUG")
+    normalized = raw.strip().upper()
+    
+    valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    
+    if normalized not in valid_levels:
+        logger.warning(
+            f"Invalid AUTH_ACCESS_LOG_LEVEL '{raw}', using default 'DEBUG'. "
+            f"Valid levels: {', '.join(sorted(valid_levels))}"
+        )
+        return "DEBUG"
+    
+    return normalized
+
+
+_AUTH_ACCESS_SAMPLING_RATE = _parse_sampling_rate()
+_AUTH_ACCESS_LOG_LEVEL = _parse_auth_log_level()
 
 
 class AuthConfig:
@@ -123,12 +159,13 @@ class UserRole:
 
 
 # Anonymous user returned when authentication is disabled
-ANONYMOUS_USER = {
+# Wrapped in MappingProxyType to prevent accidental mutation
+ANONYMOUS_USER = MappingProxyType({
     "user_id": "anonymous",
     "role": UserRole.ADMIN,
     "authenticated": False,
     "method": "disabled"
-}
+})
 
 
 def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY, config: Optional[AuthConfig] = None) -> str:
@@ -354,11 +391,17 @@ def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
         if random.random() >= _AUTH_ACCESS_SAMPLING_RATE:
             return  # Skip logging this access event based on sampling rate
         
-        # Log at configured level (DEBUG by default for high-traffic scenarios)
-        if _AUTH_ACCESS_LOG_LEVEL == "INFO":
-            logger.info(message)
-        else:
-            logger.debug(message)
+        # Log at configured level using mapping
+        log_methods = {
+            "DEBUG": logger.debug,
+            "INFO": logger.info,
+            "WARNING": logger.warning,
+            "ERROR": logger.error,
+            "CRITICAL": logger.critical,
+        }
+        
+        log_method = log_methods.get(_AUTH_ACCESS_LOG_LEVEL, logger.debug)
+        log_method(message)
     elif event_type == "login":
         logger.info(message)
     else:

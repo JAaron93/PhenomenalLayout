@@ -101,8 +101,8 @@ class TestMemoryMonitoringErrorHandling:
             
             assert not monitor._monitoring, "Monitoring should be stopped"
 
-    def test_monitoring_loop_memory_error_recovery(self):
-        """Test monitoring loop continues after memory errors."""
+    def test_get_current_stats_recovers_from_memory_error(self):
+        """Test get_current_stats() recovers from memory monitoring errors."""
         monitor = MemoryMonitor(check_interval=0.1)
         monitor._baseline_memory = 100.0
         monitor._peak_memory = 100.0
@@ -117,7 +117,7 @@ class TestMemoryMonitoringErrorHandling:
             
             # First call should handle the error
             with pytest.raises(MemoryMonitoringError) as exc_info:
-                stats = monitor.get_current_stats()
+                monitor.get_current_stats()
             
             # Verify the exception contains expected message
             assert "Test failure" in str(exc_info.value)
