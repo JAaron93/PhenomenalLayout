@@ -50,6 +50,7 @@ class MemoryMonitor:
         self._peak_memory: float = 0.0
         self._callbacks: list[Callable[[dict[str, Any]], None]] = []
         self._lock = threading.RLock()  # Reentrant lock for thread safety
+        self._last_periodic_log: float = 0.0  # Track last periodic log time
 
     def start_monitoring(self) -> None:
         """Start memory monitoring in background thread."""
@@ -179,14 +180,15 @@ class MemoryMonitor:
                         self._baseline_memory is not None):
                         self._send_alert(stats)
 
-                # Periodic logging
-                if int(time.time()) % 300 == 0:  # Every 5 minutes
+                # Periodic logging every 5 minutes (300 seconds)
+                if time.time() - self._last_periodic_log >= 300:
                     logger.info(
                         "Memory stats: %.1f MB current, %.1f MB growth, "
                         "%d processes, %d threads",
                         current_memory, stats["growth_mb"],
                         stats["process_count"], stats["thread_count"]
                     )
+                    self._last_periodic_log = time.time()
 
             except MemoryMonitoringError as e:
                 logger.error("Memory monitoring error: %s", e)
@@ -275,17 +277,18 @@ class MemoryMonitor:
         """
         if self._monitoring:
             logger.info("Cleaning up memory monitor...")
+            # Capture thread reference before stop_monitoring clears it
+            thread_ref = self._monitor_thread
             self.stop_monitoring()  # This handles thread joining
             
             # Wait additional time for thread to fully terminate
-            if self._monitor_thread and self._monitor_thread.is_alive():
+            if thread_ref and thread_ref.is_alive():
                 logger.info("Waiting for monitoring thread to fully terminate...")
-                self._monitor_thread.join(timeout=5.0)
-                if self._monitor_thread.is_alive():
+                thread_ref.join(timeout=5.0)
+                if thread_ref.is_alive():
                     logger.warning(
                         "Monitoring thread still alive after additional timeout"
                     )
-        
         # Clear callbacks and resources
         with self._lock:
             self._callbacks.clear()
