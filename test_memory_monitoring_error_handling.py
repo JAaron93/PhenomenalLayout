@@ -173,12 +173,14 @@ class TestAPIErrorHandling:
     def test_api_memory_monitoring_error_response(self):
         """Test API returns proper HTTP status for memory monitoring errors."""
         from fastapi.testclient import TestClient
-        from app import app
+        from app import create_app
         
         # Mock get_memory_stats to raise MemoryMonitoringError
-        with patch('utils.memory_monitor.get_memory_stats') as mock_stats:
+        with patch('api.memory_routes.get_memory_stats') as mock_stats, \
+             patch('api.memory_routes.ENABLE_AUTH', False):
             mock_stats.side_effect = MemoryMonitoringError("Service unavailable")
             
+            app = create_app()
             client = TestClient(app)
             response = client.get("/api/v1/memory/stats")
             
@@ -191,12 +193,14 @@ class TestAPIErrorHandling:
     def test_api_general_error_response(self):
         """Test API returns proper HTTP status for general errors."""
         from fastapi.testclient import TestClient
-        from app import app
+        from app import create_app
         
         # Mock get_memory_stats to raise general exception
-        with patch('utils.memory_monitor.get_memory_stats') as mock_stats:
+        with patch('api.memory_routes.get_memory_stats') as mock_stats, \
+             patch('api.memory_routes.ENABLE_AUTH', False):
             mock_stats.side_effect = RuntimeError("Unexpected error")
             
+            app = create_app()
             client = TestClient(app)
             response = client.get("/api/v1/memory/stats")
             

@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from api.auth import get_admin_user, get_current_user_optional_dependency, UserRole
+from api.auth import get_admin_user, get_current_user_optional_dependency, UserRole, ENABLE_AUTH
 from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
 from utils.memory_monitor import (
     force_garbage_collection,
@@ -33,7 +33,6 @@ async def get_memory_statistics(
     
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
-        from api.auth import ENABLE_AUTH
         if not ENABLE_AUTH:
             try:
                 stats = get_memory_stats()
@@ -55,14 +54,21 @@ async def get_memory_statistics(
                     "error": str(e),
                     "message": "Memory monitoring service unavailable"
                 }
+            except Exception as e:
+                logger.exception("Unexpected error getting memory statistics")
+                response.status_code = 500
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "message": "Internal server error"
+                }
         else:
-            # Auth is enabled but no user provided - return 401
-            from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            response.status_code = 401
+            return {
+                "success": False,
+                "error": "Unauthorized",
+                "message": "Authentication required"
+            }
     
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
@@ -211,31 +217,39 @@ async def get_monitoring_status(
     
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
-        try:
-            monitor = get_memory_monitor()
-            
-            # Add rate limit headers
-            client_ip = get_client_ip(request)
-            add_rate_limit_headers(response, "read", client_ip)
-            
-            return {
-                "success": True,
-                "data": {
-                    "monitoring": monitor.is_monitoring,
-                    "check_interval": monitor.check_interval,
-                    "alert_threshold_mb": monitor.alert_threshold_mb,
-                    "baseline_memory_mb": monitor._baseline_memory,
-                    "peak_memory_mb": monitor._peak_memory
-                },
-                "message": "Monitoring status retrieved successfully"
-            }
-        except Exception as e:
-            logger.exception("Unexpected error getting monitoring status")
-            response.status_code = 500
+        if not ENABLE_AUTH:
+            try:
+                monitor = get_memory_monitor()
+                
+                # Add rate limit headers
+                client_ip = get_client_ip(request)
+                add_rate_limit_headers(response, "read", client_ip)
+                
+                return {
+                    "success": True,
+                    "data": {
+                        "monitoring": monitor.is_monitoring,
+                        "check_interval": monitor.check_interval,
+                        "alert_threshold_mb": monitor.alert_threshold_mb,
+                        "baseline_memory_mb": monitor.baseline_memory_mb,
+                        "peak_memory_mb": monitor.peak_memory_mb
+                    },
+                    "message": "Monitoring status retrieved successfully"
+                }
+            except Exception as e:
+                logger.exception("Unexpected error getting monitoring status")
+                response.status_code = 500
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "message": "Internal server error"
+                }
+        else:
+            response.status_code = 401
             return {
                 "success": False,
-                "error": str(e),
-                "message": "Internal server error"
+                "error": "Unauthorized",
+                "message": "Authentication required"
             }
     
     # Auth is enabled, check user role
@@ -259,16 +273,16 @@ async def get_monitoring_status(
                 "monitoring": monitor.is_monitoring,
                 "check_interval": monitor.check_interval,
                 "alert_threshold_mb": monitor.alert_threshold_mb,
-                "baseline_memory_mb": monitor._baseline_memory,
-                "peak_memory_mb": monitor._peak_memory
+                "baseline_memory_mb": monitor.baseline_memory_mb,
+                "peak_memory_mb": monitor.peak_memory_mb
             },
             "message": "Monitoring status retrieved successfully"
         }
     except Exception as e:
-        logger.exception("Failed to get monitoring status")
-        response.status_code = 503
+        logger.exception("Unexpected error getting monitoring status")
+        response.status_code = 500
         return {
             "success": False,
             "error": str(e),
-            "message": "Memory monitoring service unavailable"
+            "message": "Internal server error"
         }
