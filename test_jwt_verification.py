@@ -32,8 +32,6 @@ def test_jwt_verification():
         assert "exp" in payload
         assert "iat" in payload
         assert payload["type"] == "access"
-        
-        print("✓ JWT verification test passed with proper assertions")
 
 if __name__ == "__main__":
     test_jwt_verification()

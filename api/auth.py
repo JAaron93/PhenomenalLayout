@@ -13,28 +13,88 @@ from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredenti
 
 logger = __import__("logging").getLogger(__name__)
 
-# Environment variables - no defaults for production security
-JWT_SECRET = os.getenv("MEMORY_API_JWT_SECRET")
-API_KEY = os.getenv("MEMORY_API_KEY") 
-ENABLE_AUTH = os.getenv("MEMORY_API_ENABLE_AUTH", "true").lower() == "true"
+
+class AuthConfig:
+    """Configuration handler for authentication with environment fallback."""
+    
+    def __init__(self, config: Optional[dict] = None):
+        """Initialize auth configuration.
+        
+        Args:
+            config: Optional configuration dict (for testing)
+        """
+        self._config = config or {}
+    
+    def get(self, key: str, default=None):
+        """Get configuration value from injected config or fallback to environment.
+        
+        Args:
+            key: Configuration key to look up
+            default: Default value if not found
+            
+        Returns:
+            Configuration value from injected config or environment variable
+        """
+        if key in self._config:
+            return self._config[key]
+        return os.getenv(key, default)
+    
+    @property
+    def jwt_secret(self) -> Optional[str]:
+        """Get JWT secret from configuration."""
+        return self.get("MEMORY_API_JWT_SECRET")
+    
+    @property
+    def api_key(self) -> Optional[str]:
+        """Get API key from configuration."""
+        return self.get("MEMORY_API_KEY")
+    
+    @property
+    def enable_auth(self) -> bool:
+        """Get auth enabled flag from configuration."""
+        return self.get("MEMORY_API_ENABLE_AUTH", "true").lower() == "true"
+
+
+# Global configuration instance (for production use)
+_default_config = AuthConfig()
+
+# Configuration constants
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
-# Security validation
-if ENABLE_AUTH:
-    if not JWT_SECRET:
+# Security validation using default config
+if _default_config.enable_auth:
+    if not _default_config.jwt_secret:
         raise ValueError("MEMORY_API_JWT_SECRET environment variable is required when ENABLE_AUTH is true")
-    if not API_KEY:
+    if not _default_config.api_key:
         raise ValueError("MEMORY_API_KEY environment variable is required when ENABLE_AUTH is true")
+else:
+    logger.warning(
+        "AUTHENTICATION IS DISABLED. Anonymous users will be granted UserRole.ADMIN access. "
+        "To re-enable authentication, set MEMORY_API_ENABLE_AUTH=true."
+    )
 
-# Security schemes - dynamically created based on auth enabled
+# Security schemes - cached module-level instances based on auth enabled
+_API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False) if _default_config.enable_auth else None
+_BEARER_SCHEME = HTTPBearer(auto_error=False) if _default_config.enable_auth else None
+
+
 def get_api_key_header():
-    """Get API key header scheme based on current auth status."""
-    return APIKeyHeader(name="X-API-Key", auto_error=False) if ENABLE_AUTH else None
+    """Get API key header scheme based on current auth status.
+    
+    Returns the cached module-level instance to avoid allocating
+    new objects on every call.
+    """
+    return _API_KEY_HEADER
+
 
 def get_bearer_scheme():
-    """Get bearer scheme based on current auth status.""" 
-    return HTTPBearer(auto_error=False) if ENABLE_AUTH else None
+    """Get bearer scheme based on current auth status.
+    
+    Returns the cached module-level instance to avoid allocating
+    new objects on every call.
+    """
+    return _BEARER_SCHEME
 
 
 class AuthError(Exception):
@@ -48,16 +108,21 @@ class UserRole:
     ADMIN = "admin"
 
 
-def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY) -> str:
+def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY, config: Optional[AuthConfig] = None) -> str:
     """Create a JWT token for authentication.
     
     Args:
         user_id: User identifier
         role: User role (read_only or admin)
+        config: Optional auth configuration (uses default if not provided)
         
     Returns:
         JWT token string
     """
+    auth_config = config or _default_config
+    if not auth_config.jwt_secret:
+        raise ValueError("JWT secret not configured")
+        
     expiration = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     payload = {
         "user_id": user_id,
@@ -66,14 +131,15 @@ def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY) -> str:
         "iat": datetime.now(timezone.utc),
         "type": "access"
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, auth_config.jwt_secret, algorithm=JWT_ALGORITHM)
 
 
-def verify_jwt_token(token: str) -> dict:
+def verify_jwt_token(token: str, config: Optional[AuthConfig] = None) -> dict:
     """Verify and decode a JWT token.
     
     Args:
         token: JWT token string
+        config: Optional auth configuration (uses default if not provided)
         
     Returns:
         Decoded token payload
@@ -81,30 +147,37 @@ def verify_jwt_token(token: str) -> dict:
     Raises:
         AuthError: If token is invalid or expired
     """
+    auth_config = config or _default_config
+    if not auth_config.jwt_secret:
+        raise ValueError("JWT secret not configured")
+        
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, auth_config.jwt_secret, algorithms=[JWT_ALGORITHM])
         return payload
-    except jwt.ExpiredSignatureError:
-        raise AuthError("Token has expired")
-    except jwt.InvalidTokenError:
-        raise AuthError("Invalid token")
+    except jwt.ExpiredSignatureError as e:
+        raise AuthError("Token has expired") from e
+    except jwt.InvalidTokenError as e:
+        raise AuthError("Invalid token") from e
 
 
-def verify_api_key(api_key: str) -> bool:
+def verify_api_key(api_key: str, config: Optional[AuthConfig] = None) -> bool:
     """Verify API key against configured key.
     
     Args:
         api_key: API key to verify
+        config: Optional auth configuration (uses default if not provided)
         
     Returns:
-        bool: True if key matches, False otherwise
+        True if API key is valid, False otherwise
     """
-    # Use constant-time comparison to prevent timing attacks
-    import secrets
+    auth_config = config or _default_config
+    configured_key = auth_config.api_key
     
+    if not configured_key:
+        return False
+        
     try:
-        # Compare using secrets.compare_digest for timing attack protection
-        return secrets.compare_digest(api_key.encode(), API_KEY.encode())
+        return secrets.compare_digest(api_key, configured_key)
     except (TypeError, AttributeError):
         # Handle encoding errors gracefully
         return False
@@ -129,7 +202,8 @@ async def get_current_user(
         HTTPException: If authentication fails
     """
     # Authentication disabled - return anonymous user
-    if not ENABLE_AUTH:
+    # See module-level warning when ENABLE_AUTH is false
+    if not _default_config.enable_auth:
         return {
             "user_id": "anonymous",
             "role": UserRole.ADMIN,
@@ -189,8 +263,9 @@ async def get_current_user_optional(
     Returns:
         User information dictionary or None if not authenticated
     """
-    if not ENABLE_AUTH:
+    if not _default_config.enable_auth:
         # Authentication disabled - return anonymous admin user
+        # See module-level warning when ENABLE_AUTH is false
         return {
             "user_id": "anonymous",
             "role": UserRole.ADMIN,
@@ -262,16 +337,24 @@ def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
         logger.warning(message)
 
 
-# Authentication dependencies for FastAPI
-async def get_current_user_dependency(
+async def _extract_credentials(
     request: Request
-) -> dict:
-    """FastAPI dependency for getting current user."""
-    # Manually extract credentials based on current auth status
+) -> tuple[Optional[str], Optional[HTTPAuthorizationCredentials]]:
+    """Extract API key and bearer token credentials from request.
+    
+    Helper function to avoid duplicating credential extraction logic.
+    Respects ENABLE_AUTH setting.
+    
+    Args:
+        request: FastAPI request object
+        
+    Returns:
+        Tuple of (api_key, credentials) where both may be None
+    """
     api_key = None
     credentials = None
     
-    if ENABLE_AUTH:
+    if _default_config.enable_auth:
         # Extract API key
         api_key_header = get_api_key_header()
         if api_key_header:
@@ -282,8 +365,21 @@ async def get_current_user_dependency(
         if bearer_scheme:
             credentials = await bearer_scheme(request)
     
+    return api_key, credentials
+
+
+# Authentication dependencies for FastAPI
+async def get_current_user_dependency(
+    request: Request
+) -> dict:
+    """FastAPI dependency for getting current user."""
+    api_key, credentials = await _extract_credentials(request)
     user = await get_current_user(request, api_key, credentials)
-    log_auth_event("access", user.get("user_id", "unknown"), f"Role: {user.get('role')}")
+    log_auth_event(
+        "access",
+        user.get("user_id", "unknown"),
+        f"Role: {user.get('role')}"
+    )
     return user
 
 
@@ -291,24 +387,14 @@ async def get_current_user_optional_dependency(
     request: Request
 ) -> Optional[dict]:
     """FastAPI dependency for getting current user (optional)."""
-    # Manually extract credentials based on current auth status
-    api_key = None
-    credentials = None
-    
-    if ENABLE_AUTH:
-        # Extract API key
-        api_key_header = get_api_key_header()
-        if api_key_header:
-            api_key = await api_key_header(request)
-        
-        # Extract Bearer token
-        bearer_scheme = get_bearer_scheme()
-        if bearer_scheme:
-            credentials = await bearer_scheme(request)
-    
+    api_key, credentials = await _extract_credentials(request)
     user = await get_current_user_optional(request, api_key, credentials)
     if user:
-        log_auth_event("access", user.get("user_id", "unknown"), f"Role: {user.get('role')}")
+        log_auth_event(
+            "access",
+            user.get("user_id", "unknown"),
+            f"Role: {user.get('role')}"
+        )
     return user
 
 

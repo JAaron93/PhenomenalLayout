@@ -1,21 +1,24 @@
 """Rate limiting middleware for API endpoints."""
 
+import logging
 import os
 import time
 import threading
 import ipaddress
 import functools
 from collections import defaultdict, deque
-from typing import Dict, Deque, Optional, List
+from typing import Dict, Deque, Optional
 
 from fastapi import HTTPException, Request, Response, status
+
+logger = logging.getLogger(__name__)
 
 # Configuration for trusted proxies and forwarded headers
 TRUST_FORWARDER_HEADERS = os.getenv("TRUST_FORWARDER_HEADERS", "false").lower() == "true"
 TRUSTED_PROXIES = [
     ip.strip() for ip in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",")
 ] if TRUST_FORWARDER_HEADERS else []
-ENABLE_RATE_LIMITING = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "enabled").lower() == "enabled"
+ENABLE_RATE_LIMITING = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() == "true"
 
 
 class TokenBucket:
@@ -80,7 +83,7 @@ class RateLimiter:
     def __init__(self):
         """Initialize rate limiter."""
         self._buckets: Dict[str, TokenBucket] = {}
-        self._cleanup_thread: threading.Thread | None = None
+        self._cleanup_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()  # For shutdown signaling
         self._lock = threading.Lock()
         self._cleanup_lock = threading.Lock()
@@ -162,18 +165,61 @@ class RateLimiter:
     def stop(self) -> None:
         """Stop the cleanup thread gracefully."""
         with self._cleanup_lock:
-            if self._cleanup_thread and self._cleanup_thread.is_alive():
+            thread = self._cleanup_thread
+            if thread and thread.is_alive():
                 self._stop_event.set()  # Signal shutdown
-                self._cleanup_thread.join(timeout=10.0)  # Wait for graceful shutdown
-                if self._cleanup_thread.is_alive():
-                    # Thread didn't shut down gracefully, but it's daemon so will exit on process exit
-                    pass
-                self._cleanup_thread = None
+            self._cleanup_thread = None
+
+        if thread and thread.is_alive():
+            thread.join(timeout=10.0)  # Wait for graceful shutdown
+            if thread.is_alive():
+                # Thread didn't shut down gracefully, but it's daemon
+                # so will exit on process exit
+                thread_name = getattr(thread, 'name', 'unknown')
+                thread_id = getattr(thread, 'ident', 'unknown')
+                logger.warning(
+                    "Daemon cleanup thread did not shut down within "
+                    "timeout. Thread name: %s, Thread ID: %s",
+                    thread_name,
+                    thread_id
+                )
 
 
-# Global rate limiter instance
-_rate_limiter = RateLimiter()
-_rate_limiter.start_cleanup()
+
+# Global rate limiter instance (lazy initialization)
+_rate_limiter: Optional[RateLimiter] = None
+_rate_limiter_lock = threading.Lock()
+
+
+def get_rate_limiter() -> RateLimiter:
+    """Get or create the global rate limiter instance (lazy initialization).
+    
+    This function ensures the rate limiter is initialized on first use
+    rather than at module import time, avoiding spawning threads during
+    import.
+    
+    Returns:
+        The global RateLimiter instance
+    """
+    global _rate_limiter
+    if _rate_limiter is None:
+        with _rate_limiter_lock:
+            if _rate_limiter is None:
+                _rate_limiter = RateLimiter()
+                _rate_limiter.start_cleanup()
+    return _rate_limiter
+
+
+def init_rate_limiter() -> RateLimiter:
+    """Initialize the global rate limiter instance.
+    
+    This function should be called during application startup to
+    initialize the rate limiter and start its cleanup thread.
+    
+    Returns:
+        The initialized RateLimiter instance
+    """
+    return get_rate_limiter()
 
 
 # Rate limit configurations (requests per minute)
@@ -276,7 +322,8 @@ def check_rate_limit(
     max_tokens = RATE_LIMITS[limit_type]
     refill_rate = RATE_LIMITS_PER_SECOND[limit_type]
     
-    allowed, retry_after = _rate_limiter.is_allowed(
+    rate_limiter = get_rate_limiter()
+    allowed, retry_after = rate_limiter.is_allowed(
         client_ip, max_tokens, refill_rate, tokens
     )
     
@@ -314,7 +361,8 @@ def add_rate_limit_headers(
     refill_rate = RATE_LIMITS_PER_SECOND[limit_type]
     
     # Get current bucket state
-    bucket = _rate_limiter.get_bucket(client_ip, max_tokens, refill_rate)
+    rate_limiter = get_rate_limiter()
+    bucket = rate_limiter.get_bucket(client_ip, max_tokens, refill_rate)
     remaining = max(0, int(bucket.tokens))
     reset_time = int(time.time() + bucket.time_until_available(1.0))
     
@@ -412,9 +460,10 @@ def get_rate_limit_stats() -> dict:
     Returns:
         Rate limiting statistics
     """
-    with _rate_limiter._lock:
+    rate_limiter = get_rate_limiter()
+    with rate_limiter._lock:
         return {
-            "active_buckets": len(_rate_limiter._buckets),
+            "active_buckets": len(rate_limiter._buckets),
             "rate_limits": RATE_LIMITS,
             "rate_limits_per_second": RATE_LIMITS_PER_SECOND
         }
@@ -422,5 +471,6 @@ def get_rate_limit_stats() -> dict:
 
 def reset_rate_limits() -> None:
     """Reset all rate limits (for testing/admin use)."""
-    with _rate_limiter._lock:
-        _rate_limiter._buckets.clear()
+    rate_limiter = get_rate_limiter()
+    with rate_limiter._lock:
+        rate_limiter._buckets.clear()

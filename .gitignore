@@ -48,6 +48,9 @@ htmlcov/
 .dmypy.json
 dmypy.json
 .tox/
+
+# Debug scripts (should be in scripts/ or tests/ directories)
+debug_*.py
 noxfile_config.json
 .nox/
 *.cover

@@ -24,6 +24,8 @@ from fastapi.security import HTTPAuthorizationCredentials
 def mock_api_key(monkeypatch):
     """Pytest fixture that sets up test API key and reloads auth module."""
     test_key = "test-api-key-12345"
+    # Save original value to restore in teardown
+    original_value = os.environ.get("MEMORY_API_KEY")
     monkeypatch.setenv("MEMORY_API_KEY", test_key)
     
     # Reload the auth module to pick up new environment variable
@@ -31,6 +33,15 @@ def mock_api_key(monkeypatch):
     importlib.reload(api.auth)
     
     yield test_key
+    
+    # Teardown: restore original environment and reload module
+    if original_value is None:
+        monkeypatch.delenv("MEMORY_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("MEMORY_API_KEY", original_value)
+    
+    # Reload auth module to pick up restored environment
+    importlib.reload(api.auth)
 
 
 def test_jwt_authentication():
@@ -273,7 +284,7 @@ if __name__ == "__main__":
         print("✓ API key authentication test passed")
         
         # Clean up environment
-        del os.environ["MEMORY_API_KEY"]
+        os.environ.pop("MEMORY_API_KEY", None)
         importlib.reload(api.auth)
         
         test_rate_limiting()

@@ -2,13 +2,14 @@
 """Debug manual dependency injection."""
 
 import asyncio
+import hashlib
 import sys
+
 sys.path.insert(0, '.')
 
 from fastapi.testclient import TestClient
 from app import create_app
 from api.auth import create_jwt_token, UserRole, get_current_user, get_bearer_scheme
-from fastapi import Request
 
 async def test_manual_injection():
     """Test manual dependency injection like FastAPI would do."""
@@ -16,7 +17,8 @@ async def test_manual_injection():
     
     # Create admin token
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
-    print(f"Admin token (truncated): {admin_token[:20]}...")
+    token_hash = hashlib.sha256(admin_token.encode()).hexdigest()
+    print(f"Admin token present: hash={token_hash[:16]}..., length={len(admin_token)}")
     
     # Create a mock request with Authorization header
     class MockRequest:
@@ -37,6 +39,8 @@ async def test_manual_injection():
             print(f"Extracted credentials: {credentials}")
         except Exception as e:
             print(f"Failed to extract credentials: {e}")
+            # Fail fast: re-raise the exception instead of continuing with None
+            raise
     
     try:
         # Call get_current_user with manually injected dependencies
@@ -54,16 +58,20 @@ def main():
     
     # Test 1: Manual dependency injection
     user = asyncio.run(test_manual_injection())
+    # user variable is captured for debugging purposes
     
     # Test 2: Through FastAPI client
     print("\n--- Test 2: Through FastAPI client ---")
     app = create_app()
-    client = TestClient(app)
     
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
-    response = client.post('/api/v1/memory/gc', headers={'Authorization': f'Bearer {admin_token}'})
-    print(f"GC Response - Status: {response.status_code}")
-    print(f"GC Response - Body: {response.text}")
+    with TestClient(app) as client:
+        response = client.post(
+            '/api/v1/memory/gc',
+            headers={'Authorization': f'Bearer {admin_token}'}
+        )
+        print(f"GC Response - Status: {response.status_code}")
+        print(f"GC Response - Body: {response.text}")
 
 if __name__ == "__main__":
     main()

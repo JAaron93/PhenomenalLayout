@@ -134,24 +134,23 @@ class TestMemoryMonitorProperties:
         assert not results["errors"], f"Thread safety errors: {results['errors']}"
         assert len(results["values"]) > 0, "Should have collected values"
 
-    def test_properties_return_same_values_as_private_attributes(self, memory_monitor):
-        """Test properties return same values as private attributes for compatibility."""
-        # Test initial state
-        assert memory_monitor.is_monitoring == memory_monitor._monitoring
-        assert memory_monitor.baseline_memory_mb == memory_monitor._baseline_memory
-        assert memory_monitor.peak_memory_mb == memory_monitor._peak_memory
-        
-        # Test after start
+    def test_properties_return_correct_values_across_lifecycle(self, memory_monitor):
+        """Test public properties report correct values across the monitor lifecycle."""
+        # Initial state: not monitoring, no baseline, peak is 0.0
+        assert memory_monitor.is_monitoring is False
+        assert memory_monitor.baseline_memory_mb is None
+        assert memory_monitor.peak_memory_mb == 0.0
+
+        # After start: monitoring active, baseline set and positive, peak positive
         memory_monitor.start_monitoring()
-        assert memory_monitor.is_monitoring == memory_monitor._monitoring
-        assert memory_monitor.baseline_memory_mb == memory_monitor._baseline_memory
-        assert memory_monitor.peak_memory_mb == memory_monitor._peak_memory
-        
-        # Test after stop
+        assert memory_monitor.is_monitoring is True
+        assert memory_monitor.baseline_memory_mb is not None
+        assert memory_monitor.baseline_memory_mb > 0
+        assert memory_monitor.peak_memory_mb > 0
+
+        # After stop (fixture teardown handles cleanup; stop here to test post-stop state)
         memory_monitor.stop_monitoring()
-        assert memory_monitor.is_monitoring == memory_monitor._monitoring
-        assert memory_monitor.baseline_memory_mb == memory_monitor._baseline_memory
-        assert memory_monitor.peak_memory_mb == memory_monitor._peak_memory
+        assert memory_monitor.is_monitoring is False
 
     def test_properties_with_memory_monitoring_error(self):
         """Test properties handle MemoryMonitoringError gracefully."""

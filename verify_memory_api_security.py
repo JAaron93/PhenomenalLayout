@@ -138,7 +138,7 @@ def test_endpoint_security_levels():
     # Define route classifications
     read_only_paths = ["/stats", "/monitoring/status"]
     admin_paths = ["/gc", "/monitoring/start", "/monitoring/stop"]
-    exempt_paths = set()  # No-auth routes (e.g., health checks)
+    # No public/exempt routes exist in this router (all routes require auth).
     
     # Recognized authentication helpers
     approved_auth_helpers = [
@@ -169,15 +169,11 @@ def test_endpoint_security_levels():
                 assert "get_admin_user" in dependency_names, f"Admin endpoint {route.path} missing get_admin_user"
                 print(f"  ✓ {route.path} verified as admin auth")
             
-            # 3. Global Security Check: Any route not explicitly classified or exempt MUST have auth
-            elif route.path not in exempt_paths:
+            # 3. Global Security Check: Any route not explicitly classified MUST have auth
+            else:
                 has_auth = any(helper in dependency_names for helper in approved_auth_helpers)
                 assert has_auth, f"SECURITY VIOLATION: Route {route.path} is not exempt and lacks a recognized authentication dependency"
                 print(f"  ✓ {route.path} passed global auth check")
-            
-            # 4. Explicitly allow exempt paths
-            else:
-                print(f"  - {route.path} is explicitly exempt from authentication")
     
     print("✓ Endpoint security levels test passed")
 

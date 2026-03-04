@@ -90,8 +90,7 @@ def test_timeout_configuration():
 
     if verification_succeeded:
         print("✓ TranslationService integration working")
-    # Ensure verification fails if MCP provider was not properly configured
-    if not verification_succeeded:
+    else:
         raise AssertionError(
             "TranslationService integration verification failed - "
             "MCP provider missing or incomplete"
@@ -136,8 +135,7 @@ if __name__ == "__main__":
 
         if success:
             print(
-                "\n🎉 MCP Lingo client timeout configuration " +
-                "is working correctly!"
+                "\n🎉 MCP Lingo client timeout configuration is working correctly!"
             )
             print("\nKey Features:")
             print("- Environment variable support for all timeouts")

@@ -24,8 +24,17 @@ async def test_dependency_directly():
     # Create a real FastAPI request object with a proper ASGI scope
     scope = {
         "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.1"},
+        "method": "GET",
+        "path": "/",
+        "scheme": "http",
+        "http_version": "1.1",
+        "query_string": b"",
+        "root_path": "",
         "headers": [(b"authorization", f"Bearer {admin_token}".encode())],
         "state": {},
+        "server": ("127.0.0.1", 8000),
+        "client": ("127.0.0.1", 54321),
     }
     request = Request(scope=scope)
 

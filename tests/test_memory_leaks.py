@@ -47,16 +47,39 @@ class MemoryTestConfig:
         )
     
     def get_adaptive_threshold(self, baseline_mb: float) -> float:
-        """Get adaptive threshold based on baseline memory."""
+        """Get adaptive threshold based on baseline memory.
+        
+        When use_relative_thresholds is True, uses growth_percentage for
+        relative calculation. When False, falls back to alert_threshold_mb.
+        Note: Both this method and get_adaptive_max_growth intentionally
+        use the same growth_percentage for relative calculations; the
+        distinction is in their fixed fallback values (alert_threshold_mb
+        vs max_growth_mb).
+        """
         if self.use_relative_thresholds:
             return baseline_mb * (self.growth_percentage / 100.0)
         return self.alert_threshold_mb
     
     def get_adaptive_max_growth(self, baseline_mb: float) -> float:
-        """Get adaptive max growth based on baseline memory."""
+        """Get adaptive max growth based on baseline memory.
+        
+        When use_relative_thresholds is True, uses growth_percentage for
+        relative calculation. When False, falls back to max_growth_mb.
+        Note: Both this method and get_adaptive_threshold intentionally
+        use the same growth_percentage for relative calculations; the
+        distinction is in their fixed fallback values (alert_threshold_mb
+        vs max_growth_mb).
+        """
         if self.use_relative_thresholds:
             return baseline_mb * (self.growth_percentage / 100.0)
         return self.max_growth_mb
+
+
+@pytest.fixture(autouse=True)
+def memory_test_config(request):
+    """Shared autouse fixture: injects a MemoryTestConfig into any test class instance."""
+    if request.instance is not None:
+        request.instance.config = MemoryTestConfig.from_environment()
 
 
 class MockMemoryMonitor(MemoryMonitor):
@@ -65,7 +88,6 @@ class MockMemoryMonitor(MemoryMonitor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._monitor_event = threading.Event()
-        self._should_monitor = threading.Event()
         self._callback_alert_event = threading.Event()
         self._monitor_count = 0
     
@@ -271,18 +293,23 @@ class TestMcpClientMemoryLeaks:
 class TestMemoryMonitor:
     """Test memory monitor functionality with configurable thresholds."""
     
-    @pytest.fixture(autouse=True)
-    def setup_test_config(self):
-        """Setup test configuration for all tests."""
-        self.config = MemoryTestConfig.from_environment()
-    
-    def test_memory_monitor_basic_functionality(self):
-        """Test basic memory monitor functionality."""
-        # Get baseline for adaptive threshold calculation
+    @staticmethod
+    def _get_baseline_memory() -> float:
+        """Get baseline memory measurement.
+        
+        Returns:
+            Baseline memory in MB.
+        """
         temp_monitor = MemoryMonitor(check_interval=0.1)
         baseline_stats = temp_monitor.get_current_stats()
         baseline_memory = baseline_stats["current_memory_mb"]
         temp_monitor.cleanup()
+        return baseline_memory
+    
+    def test_memory_monitor_basic_functionality(self):
+        """Test basic memory monitor functionality."""
+        # Get baseline for adaptive threshold calculation
+        baseline_memory = self._get_baseline_memory()
         
         # Use adaptive threshold
         adaptive_threshold = self.config.get_adaptive_threshold(baseline_memory)
@@ -315,10 +342,7 @@ class TestMemoryMonitor:
     def test_memory_monitor_callbacks(self):
         """Test memory monitor callback functionality."""
         # Get baseline for adaptive threshold calculation
-        temp_monitor = MemoryMonitor(check_interval=0.1)
-        baseline_stats = temp_monitor.get_current_stats()
-        baseline_memory = baseline_stats["current_memory_mb"]
-        temp_monitor.cleanup()
+        baseline_memory = self._get_baseline_memory()
         
         # Use adaptive callback threshold
         adaptive_threshold = self.config.get_adaptive_threshold(baseline_memory)
@@ -376,10 +400,18 @@ class TestMemoryMonitor:
 class TestResourceLeakDetection:
     """Integration tests for resource leak detection."""
 
-    @pytest.fixture(autouse=True)
-    def setup_test_config(self):
-        """Setup test configuration for all tests."""
-        self.config = MemoryTestConfig.from_environment()
+    @staticmethod
+    def _get_baseline_memory() -> float:
+        """Get baseline memory measurement.
+        
+        Returns:
+            Baseline memory in MB.
+        """
+        temp_monitor = MemoryMonitor(check_interval=0.1)
+        baseline_stats = temp_monitor.get_current_stats()
+        baseline_memory = baseline_stats["current_memory_mb"]
+        temp_monitor.cleanup()
+        return baseline_memory
 
     def test_thread_cleanup_after_translation_tasks(self):
         """Test thread cleanup after translation tasks."""
@@ -435,10 +467,7 @@ class TestResourceLeakDetection:
     def test_memory_growth_under_load(self):
         """Test memory growth under simulated load."""
         # Get baseline for adaptive threshold calculation
-        temp_monitor = MemoryMonitor(check_interval=0.1)
-        baseline_stats = temp_monitor.get_current_stats()
-        baseline_memory = baseline_stats["current_memory_mb"]
-        temp_monitor.cleanup()
+        baseline_memory = self._get_baseline_memory()
         
         # Use adaptive load threshold
         adaptive_threshold = self.config.get_adaptive_threshold(baseline_memory)

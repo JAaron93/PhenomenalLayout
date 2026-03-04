@@ -1,15 +1,27 @@
 #!/usr/bin/env python3
-"""Debug authentication flow step by step."""
+"""Debug authentication flow step by step.
 
+This script should be run as a module from the project root:
+    python -m debug_auth_flow
+"""
+
+import asyncio
 import os
 import sys
-sys.path.insert(0, '.')
 
-from fastapi.testclient import TestClient
-from app import create_app
-from api.auth import create_jwt_token, UserRole, get_current_user, get_current_user_dependency
-from fastapi import Request
-from unittest.mock import Mock
+# Ensure we can import project modules
+try:
+    from fastapi.testclient import TestClient
+    from app import create_app
+    from api.auth import create_jwt_token, UserRole, get_current_user, get_current_user_dependency
+    from fastapi import Request
+    from unittest.mock import Mock
+except ImportError as e:
+    print(f"Import error: {e}")
+    print("\nThis script should be run as a module from the project root:")
+    print("    python -m debug_auth_flow")
+    print("\nOr ensure the project root is in Python's path.")
+    sys.exit(1)
 
 def main():
     print("=== AUTH FLOW DEBUG ===")

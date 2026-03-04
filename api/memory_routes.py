@@ -6,7 +6,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from api.auth import get_admin_user, get_current_user_optional_dependency, UserRole, ENABLE_AUTH
+from api.auth import (
+    get_admin_user, 
+    get_current_user_optional_dependency, 
+    UserRole, 
+    AuthConfig,
+    _default_config
+)
 from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
 from utils.memory_monitor import (
     force_garbage_collection,
@@ -66,6 +72,59 @@ def fetch_memory_stats_and_handle_errors(request: Request, response: Response) -
         }
 
 
+def get_monitoring_status_and_handle_errors(request: Request, response: Response) -> dict[str, Any]:
+    """Fetch memory monitoring status and handle potential errors.
+
+    Args:
+        request: The FastAPI request object
+        response: The FastAPI response object
+
+    Returns:
+        Dictionary containing monitoring status or error details
+    """
+    try:
+        monitor = get_memory_monitor()
+
+        # Add rate limit headers
+        client_ip = get_client_ip(request)
+        add_rate_limit_headers(response, "read", client_ip)
+
+        # Get current stats using public method
+        current_stats = monitor.get_current_stats()
+        
+        return {
+            "success": True,
+            "data": {
+                "monitoring": monitor.is_monitoring,
+                "check_interval": monitor.check_interval,
+                "alert_threshold_mb": monitor.alert_threshold_mb,
+                "baseline_memory_mb": current_stats["baseline_memory_mb"],
+                "peak_memory_mb": current_stats["peak_memory_mb"]
+            },
+            "message": "Monitoring status retrieved successfully"
+        }
+    except MemoryMonitoringError as e:
+        error_id = str(uuid.uuid4())
+        logger.error("Memory monitoring error [%s]: %s", error_id, e)
+        response.status_code = 503
+        return {
+            "success": False,
+            "error_id": error_id,
+            "error": "Service unavailable",
+            "message": "Memory monitoring unavailable"
+        }
+    except Exception:
+        error_id = str(uuid.uuid4())
+        logger.exception("Unexpected error getting monitoring status [%s]", error_id)
+        response.status_code = 500
+        return {
+            "success": False,
+            "error_id": error_id,
+            "error": "Internal server error",
+            "message": "An unexpected error occurred"
+        }
+
+
 @router.get("/stats")
 async def get_memory_statistics(
     request: Request,
@@ -78,7 +137,7 @@ async def get_memory_statistics(
     
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
-        if not ENABLE_AUTH:
+        if not _default_config.enable_auth:
             return fetch_memory_stats_and_handle_errors(request, response)
         else:
             response.status_code = 401
@@ -124,6 +183,7 @@ async def force_garbage_collection_endpoint(
     except Exception as e:
         error_id = str(uuid.uuid4())
         logger.exception("Failed to force garbage collection [%s]", error_id)
+        response.status_code = 500
         return {
             "success": False,
             "error_id": error_id,
@@ -162,6 +222,7 @@ async def start_memory_monitoring_endpoint(
     except Exception as e:
         error_id = str(uuid.uuid4())
         logger.exception("Failed to start memory monitoring [%s]", error_id)
+        response.status_code = 500
         return {
             "success": False,
             "error_id": error_id,
@@ -194,6 +255,7 @@ async def stop_memory_monitoring_endpoint(
     except Exception as e:
         error_id = str(uuid.uuid4())
         logger.exception("Failed to stop memory monitoring [%s]", error_id)
+        response.status_code = 500
         return {
             "success": False,
             "error_id": error_id,
@@ -214,35 +276,8 @@ async def get_monitoring_status(
     
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
-        if not ENABLE_AUTH:
-            try:
-                monitor = get_memory_monitor()
-                
-                # Add rate limit headers
-                client_ip = get_client_ip(request)
-                add_rate_limit_headers(response, "read", client_ip)
-                
-                return {
-                    "success": True,
-                    "data": {
-                        "monitoring": monitor.is_monitoring,
-                        "check_interval": monitor.check_interval,
-                        "alert_threshold_mb": monitor.alert_threshold_mb,
-                        "baseline_memory_mb": monitor.baseline_memory,
-                        "peak_memory_mb": monitor.peak_memory
-                    },
-                    "message": "Monitoring status retrieved successfully"
-                }
-            except Exception as e:
-                error_id = str(uuid.uuid4())
-                logger.exception("Unexpected error getting monitoring status [%s]", error_id)
-                response.status_code = 500
-                return {
-                    "success": False,
-                    "error_id": error_id,
-                    "error": "Internal server error",
-                    "message": "An unexpected error occurred"
-                }
+        if not _default_config.enable_auth:
+            return get_monitoring_status_and_handle_errors(request, response)
         else:
             response.status_code = 401
             return {
@@ -250,7 +285,7 @@ async def get_monitoring_status(
                 "error": "Unauthorized",
                 "message": "Authentication required"
             }
-    
+
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
         from fastapi import HTTPException, status
@@ -258,32 +293,5 @@ async def get_monitoring_status(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions for read-only access"
         )
-    
-    try:
-        monitor = get_memory_monitor()
-        
-        # Add rate limit headers
-        client_ip = get_client_ip(request)
-        add_rate_limit_headers(response, "read", client_ip)
-        
-        return {
-            "success": True,
-            "data": {
-                "monitoring": monitor.is_monitoring,
-                "check_interval": monitor.check_interval,
-                "alert_threshold_mb": monitor.alert_threshold_mb,
-                "baseline_memory_mb": monitor.baseline_memory,
-                "peak_memory_mb": monitor.peak_memory
-            },
-            "message": "Monitoring status retrieved successfully"
-        }
-    except Exception as e:
-        error_id = str(uuid.uuid4())
-        logger.exception("Unexpected error getting monitoring status [%s]", error_id)
-        response.status_code = 500
-        return {
-            "success": False,
-            "error_id": error_id,
-            "error": "Internal server error",
-            "message": "An unexpected error occurred"
-        }
+
+    return get_monitoring_status_and_handle_errors(request, response)

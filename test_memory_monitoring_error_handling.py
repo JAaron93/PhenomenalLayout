@@ -117,12 +117,11 @@ class TestMemoryMonitoringErrorHandling:
                 ]
                 
                 # First call should handle the error
-                try:
+                with pytest.raises(MemoryMonitoringError) as exc_info:
                     stats = monitor.get_current_stats()
-                    assert False, "First call should raise MemoryMonitoringError"
-                except MemoryMonitoringError:
-                    # First call should raise, but monitoring continues
-                    pass
+                
+                # Verify the exception contains expected message
+                assert "Test failure" in str(exc_info.value)
                 
                 # Second call should succeed and test recovery
                 stats = monitor.get_current_stats()

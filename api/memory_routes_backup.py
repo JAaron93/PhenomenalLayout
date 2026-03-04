@@ -3,9 +3,17 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 
-from api.auth import get_admin_user, get_read_only_user, get_current_user_optional_dependency, UserRole, ENABLE_AUTH
+from api.auth import get_admin_user, get_current_user_optional_dependency, UserRole, ENABLE_AUTH
 from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
 from utils.memory_monitor import (
     force_garbage_collection,
@@ -51,7 +59,7 @@ async def get_memory_statistics(
                 response.status_code = 503
                 return {
                     "success": False,
-                    "error": str(e),
+                    "error": "Service unavailable",
                     "message": "Memory monitoring service unavailable"
                 }
             except Exception as e:
@@ -59,7 +67,7 @@ async def get_memory_statistics(
                 response.status_code = 500
                 return {
                     "success": False,
-                    "error": str(e),
+                    "error": "Internal server error",
                     "message": "Internal server error"
                 }
         else:
@@ -72,7 +80,6 @@ async def get_memory_statistics(
     
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions for read-only access"
@@ -95,7 +102,7 @@ async def get_memory_statistics(
         response.status_code = 503
         return {
             "success": False,
-            "error": str(e),
+            "error": "Service unavailable",
             "message": "Memory monitoring service unavailable"
         }
     except Exception as e:
@@ -103,7 +110,7 @@ async def get_memory_statistics(
         response.status_code = 500
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "message": "Internal server error"
         }
 
@@ -135,7 +142,7 @@ async def force_garbage_collection_endpoint(
         response.status_code = 500
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "message": "Failed to perform garbage collection"
         }
 
@@ -145,8 +152,16 @@ async def start_memory_monitoring_endpoint(
     request: Request,
     response: Response,
     current_user: dict = Depends(get_admin_user),
-    check_interval: float = 60.0,
-    alert_threshold_mb: float = 100.0
+    check_interval: float = Query(
+        60.0,
+        gt=0,
+        description="Check interval in seconds (must be positive)"
+    ),
+    alert_threshold_mb: float = Query(
+        100.0,
+        gt=0,
+        description="Alert threshold in MB (must be positive)"
+    )
 ) -> dict[str, Any]:
     """Start memory monitoring with specified parameters."""
     # Check rate limit
@@ -172,7 +187,7 @@ async def start_memory_monitoring_endpoint(
         response.status_code = 500
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "message": "Failed to start memory monitoring"
         }
 
@@ -203,7 +218,7 @@ async def stop_memory_monitoring_endpoint(
         response.status_code = 500
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "message": "Failed to stop memory monitoring"
         }
 
@@ -240,12 +255,20 @@ async def get_monitoring_status(
                     },
                     "message": "Monitoring status retrieved successfully"
                 }
+            except MemoryMonitoringError as e:
+                logger.error("Memory monitoring error: %s", e)
+                response.status_code = 503
+                return {
+                    "success": False,
+                    "error": "Service unavailable",
+                    "message": "Memory monitoring unavailable"
+                }
             except Exception as e:
                 logger.exception("Unexpected error getting monitoring status")
                 response.status_code = 500
                 return {
                     "success": False,
-                    "error": str(e),
+                    "error": "Internal server error",
                     "message": "Internal server error"
                 }
         else:
@@ -258,7 +281,6 @@ async def get_monitoring_status(
     
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions for read-only access"
@@ -283,12 +305,20 @@ async def get_monitoring_status(
             },
             "message": "Monitoring status retrieved successfully"
         }
+    except MemoryMonitoringError as e:
+        logger.error("Memory monitoring error: %s", e)
+        response.status_code = 503
+        return {
+            "success": False,
+            "error": "Service unavailable",
+            "message": "Memory monitoring unavailable"
+        }
     except Exception as e:
         logger.exception("Unexpected error getting monitoring status")
         response.status_code = 500
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "message": "Internal server error"
         }
 

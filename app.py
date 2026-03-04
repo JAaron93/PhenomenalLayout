@@ -9,6 +9,7 @@ import contextlib
 import logging
 import os
 from contextlib import asynccontextmanager
+from typing import Optional
 
 import gradio as gr
 import uvicorn
@@ -138,26 +139,32 @@ async def lifespan(_app: FastAPI):
         logger.exception("Failed to shutdown translation service")
 
 
-# FastAPI app will be created by factory
-# app = FastAPI(
-#     title="PhenomenalLayout",
-#     description=(
-#         "Advanced layout preservation engine for document translation - "
-#         "orchestrating Lingo.dev translation services with Dolphin OCR "
-#         "for pixel-perfect formatting integrity"
-#     ),
-#     version="2.0.0",
-#     lifespan=lifespan,
-# )
-
-
-def create_app():
-    """Create FastAPI app with current environment.
+def get_config_value(app: FastAPI, key: str, default=None):
+    """Get configuration value from injected config or fallback to environment.
     
+    Args:
+        app: FastAPI application instance
+        key: Configuration key to look up
+        default: Default value if not found in config or environment
+        
+    Returns:
+        Configuration value from injected config or environment variable
+    """
+    if hasattr(app.state, '_config') and key in app.state._config:
+        return app.state._config[key]
+    return os.getenv(key, default)
+
+
+def create_app(config: dict | None = None):
+    """Create FastAPI app with optional configuration injection.
+    
+    Args:
+        config: Optional configuration dict for testing/overrides
+        
     Returns:
         FastAPI: Configured application instance
     """
-    # Create FastAPI app
+    # Store injected config in app.state for access by modules
     app = FastAPI(
         title="PhenomenalLayout",
         description=(
@@ -168,6 +175,12 @@ def create_app():
         version="2.0.0",
         lifespan=lifespan,
     )
+    
+    # Store configuration in app.state for module access
+    if config is not None:
+        app.state._config = config
+    else:
+        app.state._config = {}
     
     # Add CORS middleware
     app.add_middleware(

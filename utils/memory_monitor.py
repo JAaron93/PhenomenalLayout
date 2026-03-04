@@ -52,7 +52,7 @@ class MemoryMonitor:
         """Initialize memory monitor.
 
         Args:
-            check_interval: Seconds between memory checks (must be between 0.001 and 3600, enforced)
+            check_interval: Seconds between memory checks (must be > 0 and <= 3600, enforced)
             alert_threshold_mb: Memory growth threshold in MB for alerts (must be between 0 and 10240, enforced)
             
         Raises:

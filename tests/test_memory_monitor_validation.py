@@ -30,10 +30,11 @@ class TestMemoryMonitorValidation:
             MemoryMonitor(check_interval=interval, alert_threshold_mb=threshold)
 
     @pytest.mark.parametrize("interval, threshold", [
-        (0, 100),
-        (3601, 100),
-        (60, -1),
-        (60, 10241),
+        (0, 100),       # interval too low
+        (-1, 100),      # interval negative
+        (3601, 100),    # interval too high
+        (60, -1),       # threshold negative
+        (60, 10241),    # threshold too high
     ])
     def test_start_monitoring_value_errors(self, interval, threshold):
         """Test that start_memory_monitoring raises ValueError for invalid ranges."""
@@ -44,8 +45,10 @@ class TestMemoryMonitorValidation:
             stop_memory_monitoring()
 
     @pytest.mark.parametrize("interval, threshold", [
-        ("60", 100),
-        (60, "100"),
+        ("60", 100),    # interval not a number
+        (60, "100"),    # threshold not a number
+        (None, 100),    # interval None
+        (60, []),       # threshold list
     ])
     def test_start_monitoring_type_errors(self, interval, threshold):
         """Test that start_memory_monitoring raises TypeError for invalid types."""

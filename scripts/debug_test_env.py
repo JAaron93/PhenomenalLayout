@@ -39,7 +39,6 @@ def main():
                 "ERROR: GC endpoint returned non-200 status: "
                 f"{response.status_code}"
             )
-            print(f"Response body: {response.text}")
 
     except Exception as e:
         print(
@@ -61,7 +60,6 @@ def main():
                 f"ERROR: Status endpoint returned non-200 status: "
                 f"{response.status_code}"
             )
-            print(f"Response body: {response.text}")
 
     except Exception as e:
         print(

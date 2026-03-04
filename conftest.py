@@ -2,11 +2,6 @@ import os
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-from app import create_app
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import pytest as pytest_api
 
 pytest_plugins: tuple[str, ...] = ("pytest_asyncio",)
 
