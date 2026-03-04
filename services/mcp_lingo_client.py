@@ -111,6 +111,11 @@ class McpLingoClient:
         self._tool_name: Optional[str] = None
         self._tool_schema: Optional[dict[str, Any]] = None
 
+    @property
+    def config(self) -> McpLingoConfig:
+        """Return the client configuration."""
+        return self._config
+
     async def start(self) -> None:
         if self._session is not None:
             return

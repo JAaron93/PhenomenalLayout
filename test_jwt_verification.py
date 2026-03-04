@@ -19,15 +19,21 @@ def test_jwt_verification():
         importlib.reload(api.auth)
         
         # Create admin token
-        admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
-        print(f"Admin token: {admin_token}")
+        user_id = "admin_user"
+        role = api.auth.UserRole.ADMIN
+        admin_token = api.auth.create_jwt_token(user_id, role)
         
         # Test verification directly
-        try:
-            payload = verify_jwt_token(admin_token)
-            print(f"JWT verification result: {payload}")
-        except Exception as e:
-            print(f"JWT verification error: {e}")
+        payload = api.auth.verify_jwt_token(admin_token)
+        
+        # Proper assertions
+        assert payload["user_id"] == user_id
+        assert payload["role"] == role
+        assert "exp" in payload
+        assert "iat" in payload
+        assert payload["type"] == "access"
+        
+        print("✓ JWT verification test passed with proper assertions")
 
 if __name__ == "__main__":
     test_jwt_verification()

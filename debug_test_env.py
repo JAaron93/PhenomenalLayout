@@ -12,14 +12,16 @@ from api.auth import create_jwt_token, UserRole
 def main():
     print("=== ENVIRONMENT DEBUG ===")
     print(f"MEMORY_API_ENABLE_AUTH: {os.getenv('MEMORY_API_ENABLE_AUTH')}")
-    print(f"MEMORY_API_JWT_SECRET: {os.getenv('MEMORY_API_JWT_SECRET')}")
-    print(f"MEMORY_API_KEY: {os.getenv('MEMORY_API_KEY')}")
+    jwt_secret = os.getenv('MEMORY_API_JWT_SECRET')
+    print(f"MEMORY_API_JWT_SECRET: {'[SET]' if jwt_secret else '[NOT SET]'}")
+    api_key = os.getenv('MEMORY_API_KEY')
+    print(f"MEMORY_API_KEY: {'[SET]' if api_key else '[NOT SET]'}")
     
     # Create app and client
     app = create_app()
     client = TestClient(app)
-    
-    # Create admin token
+    admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
+    print(f"Admin token generated: {admin_token[:20]}... (truncated)")
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
     print(f"Admin token: {admin_token}")
     

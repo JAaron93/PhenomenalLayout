@@ -20,7 +20,7 @@ def main():
     
     # Create admin token
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
-    print(f"Admin token: {admin_token}")
+    print(f"Admin token created (length: {len(admin_token)})")
     
     # Test 1: Direct dependency function
     print("\n--- Test 1: Direct dependency function ---")
@@ -30,7 +30,7 @@ def main():
         request.headers = {"Authorization": f"Bearer {admin_token}"}
         
         # Test the dependency function directly
-        user = get_current_user_dependency(request)
+        user = asyncio.run(get_current_user_dependency(request))
         print(f"✅ get_current_user_dependency result: {user}")
     except Exception as e:
         print(f"❌ get_current_user_dependency failed: {e}")

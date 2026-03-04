@@ -20,12 +20,12 @@ ENABLE_AUTH = os.getenv("MEMORY_API_ENABLE_AUTH", "true").lower() == "true"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
-# Security validation for production
-if os.getenv("ENVIRONMENT", "").lower() == "production":
+# Security validation
+if ENABLE_AUTH:
     if not JWT_SECRET:
-        raise ValueError("MEMORY_API_JWT_SECRET environment variable is required in production")
+        raise ValueError("MEMORY_API_JWT_SECRET environment variable is required when ENABLE_AUTH is true")
     if not API_KEY:
-        raise ValueError("MEMORY_API_KEY environment variable is required in production")
+        raise ValueError("MEMORY_API_KEY environment variable is required when ENABLE_AUTH is true")
 
 # Security schemes - dynamically created based on auth enabled
 def get_api_key_header():
@@ -128,6 +128,15 @@ async def get_current_user(
     Raises:
         HTTPException: If authentication fails
     """
+    # Authentication disabled - return anonymous user
+    if not ENABLE_AUTH:
+        return {
+            "user_id": "anonymous",
+            "role": UserRole.ADMIN,
+            "authenticated": False,
+            "method": "disabled"
+        }
+
     # Get dynamic security schemes
     bearer_scheme = get_bearer_scheme()
     
@@ -157,15 +166,6 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
     
-    # Authentication disabled - return anonymous user
-    if not ENABLE_AUTH:
-        return {
-            "user_id": "anonymous",
-            "role": UserRole.ADMIN,
-            "authenticated": False,
-            "method": "disabled"
-        }
-    
     # No valid authentication provided
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -194,7 +194,8 @@ async def get_current_user_optional(
         return {
             "user_id": "anonymous",
             "role": UserRole.ADMIN,
-            "authenticated": False
+            "authenticated": False,
+            "method": "disabled"
         }
     
     try:

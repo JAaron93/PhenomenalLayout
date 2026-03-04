@@ -29,61 +29,55 @@ class TestMemoryMonitorProperties:
         assert not monitor.is_monitoring, "Initial monitoring state should be False"
         assert isinstance(monitor.is_monitoring, bool), "Should return boolean"
 
-    def test_is_monitoring_property_after_start_stop(self):
+    def test_is_monitoring_property_after_start_stop(self, memory_monitor):
         """Test is_monitoring property reflects start/stop state."""
-        monitor = MemoryMonitor(check_interval=0.1)
-        
         # Initially not monitoring
-        assert not monitor.is_monitoring
+        assert not memory_monitor.is_monitoring
         
         # Start monitoring
-        monitor.start_monitoring()
-        assert monitor.is_monitoring, "Should be True after start_monitoring"
+        memory_monitor.start_monitoring()
+        assert memory_monitor.is_monitoring, "Should be True after start_monitoring"
         
         # Stop monitoring
-        monitor.stop_monitoring()
-        assert not monitor.is_monitoring, "Should be False after stop_monitoring"
+        memory_monitor.stop_monitoring()
+        assert not memory_monitor.is_monitoring, "Should be False after stop_monitoring"
 
     def test_baseline_memory_property_initial_state(self):
         """Test baseline_memory_mb property returns None initially."""
         monitor = MemoryMonitor()
         assert monitor.baseline_memory_mb is None, "Initial baseline should be None"
 
-    def test_baseline_memory_property_after_start(self):
+    def test_baseline_memory_property_after_start(self, memory_monitor):
         """Test baseline_memory_mb property returns value after start."""
-        monitor = MemoryMonitor(check_interval=0.1)
-        
         # Should be None before start
-        assert monitor.baseline_memory_mb is None
+        assert memory_monitor.baseline_memory_mb is None
         
         # Should have value after start
-        monitor.start_monitoring()
-        baseline = monitor.baseline_memory_mb
+        memory_monitor.start_monitoring()
+        baseline = memory_monitor.baseline_memory_mb
         assert baseline is not None, "Should have baseline after start"
         assert baseline > 0, "Baseline should be positive"
         assert isinstance(baseline, float), "Should return float"
         
-        monitor.stop_monitoring()
+        memory_monitor.stop_monitoring()
 
     def test_peak_memory_property_initial_state(self):
         """Test peak_memory_mb property returns 0.0 initially."""
         monitor = MemoryMonitor()
         assert monitor.peak_memory_mb == 0.0, "Initial peak should be 0.0"
 
-    def test_peak_memory_property_after_start(self):
+    def test_peak_memory_property_after_start(self, memory_monitor):
         """Test peak_memory_mb property returns value after start."""
-        monitor = MemoryMonitor(check_interval=0.1)
-        
         # Should be 0.0 before start
-        assert monitor.peak_memory_mb == 0.0
+        assert memory_monitor.peak_memory_mb == 0.0
         
         # Should have value after start
-        monitor.start_monitoring()
-        peak = monitor.peak_memory_mb
+        memory_monitor.start_monitoring()
+        peak = memory_monitor.peak_memory_mb
         assert peak > 0, "Peak should be positive after start"
         assert isinstance(peak, float), "Should return float"
         
-        monitor.stop_monitoring()
+        memory_monitor.stop_monitoring()
 
     def test_properties_thread_safety(self, memory_monitor):
         """Test that properties are thread-safe."""
@@ -140,26 +134,24 @@ class TestMemoryMonitorProperties:
         assert not results["errors"], f"Thread safety errors: {results['errors']}"
         assert len(results["values"]) > 0, "Should have collected values"
 
-    def test_properties_return_same_values_as_private_attributes(self):
+    def test_properties_return_same_values_as_private_attributes(self, memory_monitor):
         """Test properties return same values as private attributes for compatibility."""
-        monitor = MemoryMonitor(check_interval=0.1)
-        
         # Test initial state
-        assert monitor.is_monitoring == monitor._monitoring
-        assert monitor.baseline_memory_mb == monitor._baseline_memory
-        assert monitor.peak_memory_mb == monitor._peak_memory
+        assert memory_monitor.is_monitoring == memory_monitor._monitoring
+        assert memory_monitor.baseline_memory_mb == memory_monitor._baseline_memory
+        assert memory_monitor.peak_memory_mb == memory_monitor._peak_memory
         
         # Test after start
-        monitor.start_monitoring()
-        assert monitor.is_monitoring == monitor._monitoring
-        assert monitor.baseline_memory_mb == monitor._baseline_memory
-        assert monitor.peak_memory_mb == monitor._peak_memory
+        memory_monitor.start_monitoring()
+        assert memory_monitor.is_monitoring == memory_monitor._monitoring
+        assert memory_monitor.baseline_memory_mb == memory_monitor._baseline_memory
+        assert memory_monitor.peak_memory_mb == memory_monitor._peak_memory
         
         # Test after stop
-        monitor.stop_monitoring()
-        assert monitor.is_monitoring == monitor._monitoring
-        assert monitor.baseline_memory_mb == monitor._baseline_memory
-        assert monitor.peak_memory_mb == monitor._peak_memory
+        memory_monitor.stop_monitoring()
+        assert memory_monitor.is_monitoring == memory_monitor._monitoring
+        assert memory_monitor.baseline_memory_mb == memory_monitor._baseline_memory
+        assert memory_monitor.peak_memory_mb == memory_monitor._peak_memory
 
     def test_properties_with_memory_monitoring_error(self):
         """Test properties handle MemoryMonitoringError gracefully."""

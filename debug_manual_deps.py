@@ -16,7 +16,7 @@ async def test_manual_injection():
     
     # Create admin token
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
-    print(f"Admin token: {admin_token}")
+    print(f"Admin token (truncated): {admin_token[:20]}...")
     
     # Create a mock request with Authorization header
     class MockRequest:

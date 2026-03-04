@@ -19,6 +19,11 @@ def test_auth_debug():
         import api.auth
         importlib.reload(api.auth)
         
+        # Rebind names from reloaded module to reflect patched environment
+        create_jwt_token = api.auth.create_jwt_token
+        verify_jwt_token = api.auth.verify_jwt_token
+        UserRole = api.auth.UserRole
+        
         # Create tokens
         read_token = create_jwt_token("read_user", UserRole.READ_ONLY)
         admin_token = create_jwt_token("admin_user", UserRole.ADMIN)

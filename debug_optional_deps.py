@@ -15,7 +15,7 @@ async def test_optional_dependency():
     
     # Create read token
     read_token = create_jwt_token("read_user", UserRole.READ_ONLY)
-    print(f"Read token: {read_token}")
+    print(f"Read token: {read_token[:20]}...{read_token[-10:]}")
     
     # Create a mock request with Authorization header
     class MockRequest:

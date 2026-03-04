@@ -8,58 +8,11 @@ from fastapi.testclient import TestClient
 from app import create_app
 from api.auth import create_jwt_token, verify_jwt_token, UserRole
 
-@pytest.fixture
-def test_client():
-    """Pytest fixture providing a test client with test environment."""
-    test_env = {
-        "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
-        "MEMORY_API_KEY": "test-admin-key",
-        "MEMORY_API_READ_RATE_LIMIT": "100",
-        "MEMORY_API_WRITE_RATE_LIMIT": "100", 
-        "MEMORY_API_ADMIN_RATE_LIMIT": "100"
-    }
-    
-    with patch.dict('os.environ', test_env):
-        # Reload modules to pick up environment
-        import importlib
-        import api.auth
-        import api.memory_routes
-        import api.rate_limit
-        import app  # Also reload app to pick up changes
-        importlib.reload(api.auth)
-        importlib.reload(api.memory_routes)
-        importlib.reload(api.rate_limit)
-        importlib.reload(app)
-        
-        # Create test client with patched environment
-        client = TestClient(create_app())
-        return client
-
-@pytest.fixture
-def read_token():
-    """Pytest fixture providing a read-only token."""
-    return create_jwt_token("read_user", UserRole.READ_ONLY)
-
-@pytest.fixture
-def admin_token():
-    """Pytest fixture providing an admin token."""
-    return create_jwt_token("admin_user", UserRole.ADMIN)
-
-@pytest.mark.parametrize("user_role", ["read_only", "admin"])
-def test_memory_endpoints_with_auth(test_client, user_role, read_token, admin_token):
+def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
     """Test memory endpoints with authentication."""
-    print(f"Testing memory endpoints with {user_role} authentication...", flush=True)
+    print(f"Testing memory endpoints with authentication...", flush=True)
     print(f"Using test_client: {type(test_client)}", flush=True)
     print(f"ENABLE_AUTH env: {os.getenv('MEMORY_API_ENABLE_AUTH')}", flush=True)
-    
-    # Get appropriate token
-    if user_role == "read_only":
-        token = read_token
-    elif user_role == "admin":
-        token = admin_token
-    else:
-        pytest.skip(f"Unsupported user role: {user_role}")
     
     # Test GET /memory/stats with read token
     response = test_client.get(
@@ -197,32 +150,98 @@ def test_memory_endpoints_with_auth(test_client, user_role, read_token, admin_to
 
 
 @pytest.mark.parametrize("auth_enabled", ["true", "false"])
-def test_memory_endpoints_no_auth(test_client, auth_enabled):
-    """Test memory endpoints with authentication disabled."""
+def test_memory_endpoints_no_auth(auth_enabled):
+    """Test memory endpoints behave correctly with and without authentication.
+
+    When auth is disabled (``auth_enabled="false"``), unauthenticated requests
+    should succeed because the auth dependencies return an anonymous admin user.
+    When auth is enabled (``auth_enabled="true"``), unauthenticated requests
+    should be rejected with 401.
+    """
     print(f"Testing memory endpoints with auth={auth_enabled}...")
-    
-    # Set environment to disable auth
+
+    # Set environment for the desired auth mode
     test_env = {
         "MEMORY_API_ENABLE_AUTH": auth_enabled,
         "MEMORY_API_JWT_SECRET": "test-secret-key",
-        "MEMORY_API_KEY": "test-admin-key"
+        "MEMORY_API_KEY": "test-admin-key",
+        "MEMORY_API_READ_RATE_LIMIT": "100",
+        "MEMORY_API_WRITE_RATE_LIMIT": "100",
+        "MEMORY_API_ADMIN_RATE_LIMIT": "100",
     }
-    
-    with patch.dict('os.environ', test_env):
-        # Reload modules
+
+    with patch.dict("os.environ", test_env):
+        # Reload modules so they re-read the patched environment
         import importlib
         import api.auth
         import api.memory_routes
+        import api.rate_limit
+        import app as app_module
+
         importlib.reload(api.auth)
+        importlib.reload(api.rate_limit)
+        importlib.reload(api.memory_routes)
+        importlib.reload(app_module)
+
+        # Create a fresh test client against the reloaded app
+        client = TestClient(app_module.create_app())
+
+        # -- Read endpoints (use get_current_user_optional_dependency) --
+        read_endpoints = [
+            ("GET", "/api/v1/memory/stats"),
+            ("GET", "/api/v1/memory/monitoring/status"),
+        ]
+        # -- Admin endpoints (use get_admin_user) --
+        admin_endpoints = [
+            ("POST", "/api/v1/memory/gc"),
+            ("POST", "/api/v1/memory/monitoring/start"),
+            ("POST", "/api/v1/memory/monitoring/stop"),
+        ]
+
+        if auth_enabled == "false":
+            # Auth disabled – all endpoints should succeed without credentials
+            for method, url in read_endpoints:
+                resp = client.request(method, url)
+                assert resp.status_code == 200, (
+                    f"{method} {url} should succeed with auth disabled: "
+                    f"status={resp.status_code}, body={resp.text}"
+                )
+                body = resp.json()
+                assert body.get("success") is True, (
+                    f"{method} {url} response should indicate success: {body}"
+                )
+
+            for method, url in admin_endpoints:
+                resp = client.request(method, url)
+                assert resp.status_code == 200, (
+                    f"{method} {url} should succeed with auth disabled: "
+                    f"status={resp.status_code}, body={resp.text}"
+                )
+                body = resp.json()
+                assert body.get("success") is True, (
+                    f"{method} {url} response should indicate success: {body}"
+                )
+
+        else:
+            # Auth enabled – requests without credentials should be rejected
+            for method, url in read_endpoints + admin_endpoints:
+                resp = client.request(method, url)
+                assert resp.status_code == 401, (
+                    f"{method} {url} should return 401 with auth enabled and "
+                    f"no credentials: status={resp.status_code}, body={resp.text}"
+                )
+
+    print(f"\n✓ Auth {'disabled' if auth_enabled == 'false' else 'enabled'} tests passed!")
 
 @pytest.mark.parametrize("rate_limiting", ["enabled", "disabled"])
-def test_rate_limiting_headers(test_client, rate_limiting, test_env):
+def test_rate_limiting_headers(test_client, rate_limiting):
     """Test rate limiting headers presence."""
     print(f"Testing rate limiting headers with rate limiting {rate_limiting}...")
     
     # Set up environment for testing
     test_env = {
         "MEMORY_API_ENABLE_RATE_LIMITING": rate_limiting,
+        "MEMORY_API_ENABLE_AUTH": "false",
         "MEMORY_API_JWT_SECRET": "test-secret-key",
         "MEMORY_API_KEY": "test-admin-key"
     }
@@ -232,14 +251,16 @@ def test_rate_limiting_headers(test_client, rate_limiting, test_env):
         import importlib
         import api.auth
         import api.memory_routes
+        import api.rate_limit
         importlib.reload(api.auth)
+        importlib.reload(api.rate_limit)
         importlib.reload(api.memory_routes)
         
         # Create test client with patched environment
         client = TestClient(create_app())
         
         # Test rate limiting headers
-        response = client.get("/api/v1/memory/stats")
+        response = client.get("/api/v1/memory/stats", headers={"X-API-Key": "test-admin-key"})
         if rate_limiting == "enabled":
             assert "X-RateLimit-Limit" in response.headers, "Rate limiting headers should be present"
             assert "X-RateLimit-Remaining" in response.headers, "Rate limit remaining should be present"

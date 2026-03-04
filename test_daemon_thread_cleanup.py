@@ -87,7 +87,7 @@ def test_interruptible_sleep(monitor_with_long_interval):
     monitor_with_long_interval.stop_monitoring()
     stop_time = time.time() - start_time
     
-    # Should stop much faster than 5 second interval
+    # Should stop much faster than 10 second interval
     assert stop_time < 2.0, f"Should stop quickly due to interruptible sleep, took {stop_time}"
     
     print("✓ Interruptible sleep working correctly")
@@ -166,13 +166,33 @@ def test_destructor_cleanup():
 
 if __name__ == "__main__":
     try:
-        test_non_daemon_thread_creation(monitor())
-        test_improved_shutdown_handling(monitor())
-        test_interruptible_sleep(monitor())
-        test_cleanup_method(monitor())
+        # Create monitors directly for manual test execution
+        m1 = MemoryMonitor(check_interval=0.1)
+        try:
+            test_non_daemon_thread_creation(m1)
+        finally:
+            m1.stop_monitoring()
+        
+        m2 = MemoryMonitor(check_interval=0.1)
+        try:
+            test_improved_shutdown_handling(m2)
+        finally:
+            m2.stop_monitoring()
+        
+        m3 = MemoryMonitor(check_interval=10.0)
+        try:
+            test_interruptible_sleep(m3)
+        finally:
+            m3.stop_monitoring()
+        
+        m4 = MemoryMonitor(check_interval=0.1)
+        try:
+            test_cleanup_method(m4)
+        finally:
+            m4.stop_monitoring()
+        
         test_atexit_handler()
         test_destructor_cleanup()
-        
         print("\n🎉 Memory monitor daemon thread cleanup fix verified successfully!")
         print("\nKey Improvements:")
         print("- Thread created as non-daemon for proper cleanup")

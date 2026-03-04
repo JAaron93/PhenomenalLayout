@@ -96,6 +96,16 @@ def test_validation():
     except Exception as e:
         print(f"  ❌ Wrong exception type: {e}")
         return False
+
+    try:
+        start_memory_monitoring(alert_threshold_mb=10241.0)
+        print("  ❌ Should have failed with start_memory_monitoring alert_threshold_mb=10241.0")
+        return False
+    except ValueError as e:
+        print(f"  ✓ Correctly rejected start_memory_monitoring alert_threshold_mb=10241.0: {e}")
+    except Exception as e:
+        print(f"  ❌ Wrong exception type: {e}")
+        return False
     
     print("✓ All validation tests passed!")
     return True

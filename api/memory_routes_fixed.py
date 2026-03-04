@@ -1,3 +1,19 @@
+"""Memory monitoring API routes (fixed version)."""
+
+import logging
+from typing import Any
+
+from fastapi import APIRouter, Depends, Request, Response
+
+from api.auth import get_current_user_optional_dependency, UserRole
+from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
+from utils.memory_monitor import get_memory_monitor
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/memory", tags=["memory"])
+
+
 @router.get("/monitoring/status")
 async def get_monitoring_status(
     request: Request,
@@ -20,11 +36,11 @@ async def get_monitoring_status(
             return {
                 "success": True,
                 "data": {
-                    "monitoring": monitor.is_monitoring(),
+                    "monitoring": monitor.is_monitoring,
                     "check_interval": monitor.check_interval,
                     "alert_threshold_mb": monitor.alert_threshold_mb,
-                    "baseline_memory_mb": monitor._baseline_memory,
-                    "peak_memory_mb": monitor._peak_memory
+                    "baseline_memory_mb": monitor.baseline_memory,
+                    "peak_memory_mb": monitor.peak_memory
                 },
                 "message": "Monitoring status retrieved successfully"
             }
@@ -55,19 +71,19 @@ async def get_monitoring_status(
         return {
             "success": True,
             "data": {
-                "monitoring": monitor.is_monitoring(),
+                "monitoring": monitor.is_monitoring,
                 "check_interval": monitor.check_interval,
                 "alert_threshold_mb": monitor.alert_threshold_mb,
-                "baseline_memory_mb": monitor._baseline_memory,
-                "peak_memory_mb": monitor._peak_memory
+                "baseline_memory_mb": monitor.baseline_memory,
+                "peak_memory_mb": monitor.peak_memory
             },
             "message": "Monitoring status retrieved successfully"
         }
     except Exception as e:
-        logger.exception("Failed to get monitoring status")
-        response.status_code = 503
+        logger.exception("Unexpected error getting monitoring status")
+        response.status_code = 500
         return {
             "success": False,
             "error": str(e),
-            "message": "Memory monitoring service unavailable"
+            "message": "Internal server error"
         }

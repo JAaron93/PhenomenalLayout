@@ -6,7 +6,13 @@ import sys
 from pathlib import Path
 
 # Add project root to Python path
-project_root = Path(__file__).resolve().parent if '__file__' in globals() else Path('.').resolve()
+if '__file__' not in globals():
+    raise RuntimeError(
+        "Script must be run from a file context to determine project_root. "
+        "Callers must use a proper file-based execution environment."
+    )
+
+project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root))
 
 def test_timeout_configuration():
@@ -71,13 +77,14 @@ def test_timeout_configuration():
 
     if 'lingo' in service.providers:
         lingo_provider = service.providers['lingo']
-        if hasattr(lingo_provider, '_client') and hasattr(lingo_provider._client, '_config'):
-            config = lingo_provider._client._config
+        # Use public client_config accessor instead of private _client._config
+        config = getattr(lingo_provider, 'client_config', None)
+        if config:
             assert config.session_cleanup_timeout_s == 35.0, f"Expected 35.0, got {config.session_cleanup_timeout_s}"
             assert config.stdio_cleanup_timeout_s == 40.0, f"Expected 40.0, got {config.stdio_cleanup_timeout_s}"
             verification_succeeded = True
         else:
-            print("  ❌ MCP provider not fully initialized (missing _client or _config)")
+            print("  ❌ MCP provider missing public client_config accessor")
     else:
         print("  ❌ MCP provider not found in service.providers")
 
@@ -93,9 +100,9 @@ def test_timeout_configuration():
     print("✓ All timeout configuration tests passed!")
     return True
 
-def test_cleanup_timeout_usage():
-    """Test that the configured timeouts are actually used in cleanup methods."""
-    print("\nTesting cleanup timeout usage...")
+def test_cleanup_timeout_configuration():
+    """Test that the configured timeouts are parsed and assigned correctly."""
+    print("\nTesting cleanup timeout configuration...")
 
     # Set custom timeouts
     os.environ['LINGO_MCP_SESSION_CLEANUP_TIMEOUT'] = '15.0'
@@ -124,7 +131,7 @@ def test_cleanup_timeout_usage():
 if __name__ == "__main__":
     try:
         success = (
-            test_timeout_configuration() and test_cleanup_timeout_usage()
+            test_timeout_configuration() and test_cleanup_timeout_configuration()
         )
 
         if success:

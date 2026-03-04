@@ -15,6 +15,7 @@ TRUST_FORWARDER_HEADERS = os.getenv("TRUST_FORWARDER_HEADERS", "false").lower() 
 TRUSTED_PROXIES = [
     ip.strip() for ip in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",")
 ] if TRUST_FORWARDER_HEADERS else []
+ENABLE_RATE_LIMITING = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "enabled").lower() == "enabled"
 
 
 class TokenBucket:
@@ -82,6 +83,7 @@ class RateLimiter:
         self._cleanup_thread: threading.Thread | None = None
         self._stop_event = threading.Event()  # For shutdown signaling
         self._lock = threading.Lock()
+        self._cleanup_lock = threading.Lock()
     
     def get_bucket(self, client_id: str, max_tokens: float, refill_rate: float) -> TokenBucket:
         """Get or create token bucket for client.
@@ -128,14 +130,15 @@ class RateLimiter:
     
     def start_cleanup(self) -> None:
         """Start the cleanup thread if not already running."""
-        if self._cleanup_thread is None or not self._cleanup_thread.is_alive():
-            self._stop_event.clear()  # Clear any previous stop signal
-            self._cleanup_thread = threading.Thread(
-                target=self._cleanup_old_buckets,
-                daemon=True,
-                name="RateLimiterCleanup"
-            )
-            self._cleanup_thread.start()
+        with self._cleanup_lock:
+            if self._cleanup_thread is None or not self._cleanup_thread.is_alive():
+                self._stop_event.clear()  # Clear any previous stop signal
+                self._cleanup_thread = threading.Thread(
+                    target=self._cleanup_old_buckets,
+                    daemon=True,
+                    name="RateLimiterCleanup"
+                )
+                self._cleanup_thread.start()
     
     def _cleanup_old_buckets(self) -> None:
         """Clean up old inactive buckets."""
@@ -158,12 +161,14 @@ class RateLimiter:
     
     def stop(self) -> None:
         """Stop the cleanup thread gracefully."""
-        if self._cleanup_thread and self._cleanup_thread.is_alive():
-            self._stop_event.set()  # Signal shutdown
-            self._cleanup_thread.join(timeout=10.0)  # Wait for graceful shutdown
-            if self._cleanup_thread.is_alive():
-                # Thread didn't shut down gracefully, but it's daemon so will exit on process exit
-                pass
+        with self._cleanup_lock:
+            if self._cleanup_thread and self._cleanup_thread.is_alive():
+                self._stop_event.set()  # Signal shutdown
+                self._cleanup_thread.join(timeout=10.0)  # Wait for graceful shutdown
+                if self._cleanup_thread.is_alive():
+                    # Thread didn't shut down gracefully, but it's daemon so will exit on process exit
+                    pass
+                self._cleanup_thread = None
 
 
 # Global rate limiter instance
@@ -261,6 +266,9 @@ def check_rate_limit(
     Raises:
         HTTPException: If rate limit exceeded
     """
+    if not ENABLE_RATE_LIMITING:
+        return True, 0.0
+        
     if limit_type not in RATE_LIMITS_PER_SECOND:
         raise ValueError(f"Unknown rate limit type: {limit_type}")
     
@@ -299,7 +307,7 @@ def add_rate_limit_headers(
         limit_type: Type of limit
         client_ip: Client IP address
     """
-    if limit_type not in RATE_LIMITS:
+    if not ENABLE_RATE_LIMITING or limit_type not in RATE_LIMITS:
         return
     
     max_tokens = RATE_LIMITS[limit_type]

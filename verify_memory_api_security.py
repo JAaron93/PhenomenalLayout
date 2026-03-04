@@ -13,6 +13,10 @@ def test_security_configuration():
     """Verify security components are properly configured."""
     print("Testing security configuration...")
     
+    # Set dummy values to satisfy import-time validation in api.auth
+    os.environ.setdefault("MEMORY_API_JWT_SECRET", "test-secret-12345")
+    os.environ.setdefault("MEMORY_API_KEY", "test-key-12345")
+    
     # Test authentication module
     from api.auth import (
         create_jwt_token, 
@@ -95,7 +99,9 @@ def test_memory_routes_security():
     assert "from api.rate_limit import" in content
     
     # Should have authentication dependencies
-    assert "get_read_only_user" in content
+    # Check for at least one user-related dependency
+    has_read_auth = "get_read_only_user" in content or "get_current_user_optional_dependency" in content
+    assert has_read_auth, "Memory routes should import at least one user-related dependency"
     assert "get_admin_user" in content
     
     # Should have rate limiting calls
@@ -129,9 +135,18 @@ def test_endpoint_security_levels():
     
     from api.memory_routes import router
     
-    # Read-only endpoints should use get_read_only_user
+    # Define route classifications
     read_only_paths = ["/stats", "/monitoring/status"]
     admin_paths = ["/gc", "/monitoring/start", "/monitoring/stop"]
+    exempt_paths = set()  # No-auth routes (e.g., health checks)
+    
+    # Recognized authentication helpers
+    approved_auth_helpers = [
+        "get_read_only_user", 
+        "get_admin_user", 
+        "get_current_user_dependency", 
+        "get_current_user_optional_dependency"
+    ]
     
     # Check each route's dependencies
     for route in router.routes:
@@ -143,17 +158,26 @@ def test_endpoint_security_levels():
                     if hasattr(dep, 'call') and hasattr(dep.call, '__name__'):
                         dependency_names.append(dep.call.__name__)
             
-            # Check read-only endpoints
+            # 1. Check specific read-only endpoints
             if route.path in read_only_paths:
-                assert "get_read_only_user" in dependency_names, f"Read-only endpoint {route.path} should use get_read_only_user"
-                print(f"  ✓ {route.path} uses get_read_only_user")
+                has_read_auth = any(h in dependency_names for h in ["get_read_only_user", "get_current_user_optional_dependency"])
+                assert has_read_auth, f"Read-only endpoint {route.path} missing appropriate auth dependency"
+                print(f"  ✓ {route.path} verified as read-only/optional auth")
             
-            # Check admin endpoints
+            # 2. Check specific admin endpoints
             elif route.path in admin_paths:
-                assert "get_admin_user" in dependency_names, f"Admin endpoint {route.path} should use get_admin_user"
-                print(f"  ✓ {route.path} uses get_admin_user")
-    
-    print("✓ Endpoint security levels test passed")
+                assert "get_admin_user" in dependency_names, f"Admin endpoint {route.path} missing get_admin_user"
+                print(f"  ✓ {route.path} verified as admin auth")
+            
+            # 3. Global Security Check: Any route not explicitly classified or exempt MUST have auth
+            elif route.path not in exempt_paths:
+                has_auth = any(helper in dependency_names for helper in approved_auth_helpers)
+                assert has_auth, f"SECURITY VIOLATION: Route {route.path} is not exempt and lacks a recognized authentication dependency"
+                print(f"  ✓ {route.path} passed global auth check")
+            
+            # 4. Explicitly allow exempt paths
+            else:
+                print(f"  - {route.path} is explicitly exempt from authentication")
     
     print("✓ Endpoint security levels test passed")
 

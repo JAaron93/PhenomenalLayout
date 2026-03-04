@@ -4,7 +4,6 @@
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from app import create_app
-from api.auth import create_jwt_token, UserRole
 
 def test_auth_debug():
     """Debug authentication issue."""
@@ -23,9 +22,9 @@ def test_auth_debug():
         
         client = TestClient(create_app())
         
-        # Create tokens
-        read_token = create_jwt_token("read_user", UserRole.READ_ONLY)
-        admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
+        # Create tokens using reloaded module
+        read_token = api.auth.create_jwt_token("read_user", api.auth.UserRole.READ_ONLY)
+        admin_token = api.auth.create_jwt_token("admin_user", api.auth.UserRole.ADMIN)
         
         print(f"Read token: {read_token}")
         print(f"Admin token: {admin_token}")

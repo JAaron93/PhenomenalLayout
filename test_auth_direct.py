@@ -25,10 +25,10 @@ def test_auth_direct():
         importlib.reload(api.memory_routes)
         importlib.reload(app)
         
-        client = TestClient(create_app())
+        client = TestClient(app.create_app())
         
         # Create admin token
-        admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
+        admin_token = api.auth.create_jwt_token("admin_user", api.auth.UserRole.ADMIN)
         print(f"Admin token: {admin_token}")
         
         # Test the actual endpoint instead of dependency directly
@@ -37,8 +37,9 @@ def test_auth_direct():
             headers={"Authorization": f"Bearer {admin_token}"}
         )
         
-        print(f"GC endpoint test - Status: {response.status_code}")
-        print(f"GC endpoint test - Body: {response.text}")
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        # Add additional assertions based on expected response structure
+        # e.g., assert "success" in response.json() or similar
 
 if __name__ == "__main__":
     test_auth_direct()

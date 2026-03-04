@@ -258,12 +258,8 @@ if __name__ == "__main__":
         test_jwt_authentication()
         
         # Test API key authentication with mock fixture
-        import pytest
-        from api.auth import verify_api_key
-        
         # Manually set up the fixture environment for standalone test
         test_key = "test-api-key-12345"
-        import os
         os.environ["MEMORY_API_KEY"] = test_key
         
         # Reload auth module to pick up environment variable
@@ -275,6 +271,10 @@ if __name__ == "__main__":
         assert api.auth.verify_api_key(test_key) is True, "Valid API key should pass"
         assert api.auth.verify_api_key("invalid-key") is False, "Invalid API key should fail"
         print("✓ API key authentication test passed")
+        
+        # Clean up environment
+        del os.environ["MEMORY_API_KEY"]
+        importlib.reload(api.auth)
         
         test_rate_limiting()
         test_client_ip_extraction()

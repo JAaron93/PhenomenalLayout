@@ -23,12 +23,15 @@ def test_dependency():
         
         # Create admin token
         import jwt
+        import time
+        
+        now = int(time.time())
         admin_token = jwt.encode(
             {
                 "user_id": "admin_user",
                 "role": "admin",
-                "exp": 1772596372,
-                "iat": 1772509972,
+                "exp": now + 86400,  # 24 hours from now
+                "iat": now,
                 "type": "access"
             },
             "test-secret-key",
@@ -48,7 +51,13 @@ def test_dependency():
         request = MockRequest(headers={"Authorization": f"Bearer {admin_token}"})
         
         try:
+            import inspect
+            import asyncio
+            
             user = get_current_user_dependency(request)
+            if inspect.iscoroutine(user):
+                user = asyncio.run(user)
+                
             print(f"User from dependency: {user}")
         except Exception as e:
             print(f"Dependency error: {e}")

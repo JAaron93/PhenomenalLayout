@@ -2,9 +2,8 @@
 """Debug test to verify fixture behavior."""
 
 import pytest
-from test_memory_api_integration import test_client
 
-def test_fixture_debug():
+def test_fixture_debug(test_client):
     """Test that fixture is working correctly."""
     print(f"Test client type: {type(test_client)}")
     print(f"Test client value: {test_client}")

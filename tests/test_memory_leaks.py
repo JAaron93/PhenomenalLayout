@@ -97,10 +97,13 @@ class MockMemoryMonitor(MemoryMonitor):
                             self._peak_memory = current_memory
                         
                         # Check for memory growth alert
-                        if (stats["growth_mb"] > self.alert_threshold_mb and
-                            self._baseline_memory is not None):
-                            self._send_alert(stats)
-                            self._callback_alert_event.set()  # Signal callback
+                        should_alert = (stats["growth_mb"] > self.alert_threshold_mb and
+                                        self.baseline_memory is not None)
+                    
+                    # Send alert outside lock to prevent deadlock
+                    if should_alert:
+                        self._send_alert(stats)
+                        self._callback_alert_event.set()  # Signal callback
                     
                     # Periodic logging (simplified)
                     current_time = time.time()
@@ -343,10 +346,14 @@ class TestMemoryMonitor:
         
         monitor.stop_monitoring()
 
-        # Verify callback was called (may not be called if no memory growth)
+        # Verify callback behavior
         if callback_triggered:
+            # Callback was triggered (memory grew past threshold)
             assert callback_stats is not None
             assert "current_memory_mb" in callback_stats
+        else:
+            # Callback wasn't triggered (no significant memory growth occurred in this environment)
+            assert callback_stats is None
 
     def test_force_garbage_collection(self):
         """Test garbage collection forcing."""
@@ -368,6 +375,11 @@ class TestMemoryMonitor:
 
 class TestResourceLeakDetection:
     """Integration tests for resource leak detection."""
+
+    @pytest.fixture(autouse=True)
+    def setup_test_config(self):
+        """Setup test configuration for all tests."""
+        self.config = MemoryTestConfig.from_environment()
 
     def test_thread_cleanup_after_translation_tasks(self):
         """Test thread cleanup after translation tasks."""

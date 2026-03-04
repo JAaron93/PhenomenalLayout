@@ -22,22 +22,25 @@ def test_gc_endpoint():
         
         client = TestClient(create_app())
         
-        # Create admin token
+        # Create admin token with dynamic timestamps
         import jwt
+        from datetime import datetime, timedelta, timezone
+        
+        now = datetime.now(timezone.utc)
+        iat = int(now.timestamp())
+        exp = int((now + timedelta(days=1)).timestamp())
+        
         admin_token = jwt.encode(
             {
                 "user_id": "admin_user",
                 "role": "admin",
-                "exp": 1772596372,
-                "iat": 1772509972,
+                "exp": exp,
+                "iat": iat,
                 "type": "access"
             },
             "test-secret-key",
             algorithm="HS256"
         )
-        
-        print(f"Admin token: {admin_token}")
-        
         # Test GC endpoint
         response = client.post(
             "/api/v1/memory/gc",

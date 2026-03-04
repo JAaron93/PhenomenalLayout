@@ -40,6 +40,10 @@ def test_gc_direct():
         print(f"GC Response status: {response.status_code}")
         print(f"GC Response body: {response.text}")
         
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        # Add more specific assertions based on expected response structure
+        # e.g., assert "collected" in response.json()
+        
         # Also test monitoring status to make sure it works
         response2 = client.get(
             "/api/v1/memory/monitoring/status",
@@ -48,6 +52,8 @@ def test_gc_direct():
         
         print(f"Status Response status: {response2.status_code}")
         print(f"Status Response body: {response2.text}")
+        
+        assert response2.status_code == 200, f"Expected 200, got {response2.status_code}: {response2.text}"
 
 if __name__ == "__main__":
     test_gc_direct()

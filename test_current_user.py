@@ -36,18 +36,20 @@ def test_current_user():
         
         class MockRequest:
             def __init__(self, headers):
-                    self.headers = headers
-            def get(self, key, default=None):
-                    return self.headers.get(key, default)
+                self.headers = headers
         
         request = MockRequest(headers={"Authorization": f"Bearer {admin_token}"})
         
+        import pytest
+        from fastapi import HTTPException
         import asyncio
-        try:
-            user = asyncio.run(get_current_user(request, None, None))
-            print(f"get_current_user result: {user}")
-        except Exception as e:
-            print(f"get_current_user error: {e}")
+        
+        with pytest.raises(HTTPException) as exc_info:
+            # Passes None for credentials, skipping FastAPI's dependency injection which naturally expects a 401
+            asyncio.run(get_current_user(request, None, None))
+            
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Authentication required"
 
 if __name__ == "__main__":
     test_current_user()

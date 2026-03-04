@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Test error handling in MemoryMonitor to ensure no error masking."""
 
+from typing import Generator
 import pytest
 import psutil
 from unittest.mock import patch, MagicMock
+from fastapi.testclient import TestClient
 from utils.memory_monitor import MemoryMonitor, MemoryMonitoringError, get_memory_stats
+from app import create_app
 
 
 class TestMemoryMonitoringErrorHandling:
@@ -167,47 +170,86 @@ class TestMemoryMonitoringErrorHandling:
             assert str(exception) in str(exc_info.value.__cause__)
 
 
+@pytest.fixture
+def memory_test_client() -> Generator[tuple[TestClient, MagicMock], None, None]:
+    """Fixture to provide a TestClient with mocked memory stats and auth disabled."""
+    with patch('api.memory_routes.get_memory_stats') as mock_stats, \
+         patch('api.memory_routes.ENABLE_AUTH', False):
+        app = create_app()
+        client = TestClient(app)
+        yield client, mock_stats
+
+
 class TestAPIErrorHandling:
     """Test API layer error handling for memory monitoring."""
 
-    def test_api_memory_monitoring_error_response(self):
+    def test_api_memory_monitoring_error_response(self, memory_test_client):
         """Test API returns proper HTTP status for memory monitoring errors."""
-        from fastapi.testclient import TestClient
-        from app import create_app
+        client, mock_stats = memory_test_client
+        mock_stats.side_effect = MemoryMonitoringError("Service unavailable")
         
-        # Mock get_memory_stats to raise MemoryMonitoringError
-        with patch('api.memory_routes.get_memory_stats') as mock_stats, \
-             patch('api.memory_routes.ENABLE_AUTH', False):
-            mock_stats.side_effect = MemoryMonitoringError("Service unavailable")
-            
-            app = create_app()
-            client = TestClient(app)
-            response = client.get("/api/v1/memory/stats")
-            
-            assert response.status_code == 503
-            data = response.json()
-            assert not data["success"]
-            assert "Memory monitoring service unavailable" in data["message"]
-            assert "Service unavailable" in data["error"]
+        response = client.get("/api/v1/memory/stats")
+        
+        assert response.status_code == 503
+        data = response.json()
+        assert not data["success"]
+        assert "Memory monitoring service unavailable" in data["message"]
+        assert "Service unavailable" in data["error"]
+        assert "error_id" in data
 
-    def test_api_general_error_response(self):
+    def test_api_general_error_response(self, memory_test_client):
         """Test API returns proper HTTP status for general errors."""
-        from fastapi.testclient import TestClient
-        from app import create_app
+        client, mock_stats = memory_test_client
+        mock_stats.side_effect = RuntimeError("Unexpected error")
         
-        # Mock get_memory_stats to raise general exception
-        with patch('api.memory_routes.get_memory_stats') as mock_stats, \
-             patch('api.memory_routes.ENABLE_AUTH', False):
-            mock_stats.side_effect = RuntimeError("Unexpected error")
+        response = client.get("/api/v1/memory/stats")
+        
+        assert response.status_code == 500
+        data = response.json()
+        assert not data["success"]
+        assert "An unexpected error occurred" in data["message"]
+        assert "Internal server error" in data["error"]
+        assert "error_id" in data
+
+
+class TestLogMemoryUsage:
+    """Test exception handling in log_memory_usage helper."""
+
+    def test_log_memory_usage_memory_monitoring_error(self):
+        """Test log_memory_usage handles MemoryMonitoringError gracefully."""
+        from utils.memory_monitor import log_memory_usage
+        
+        with patch('utils.memory_monitor.get_memory_stats') as mock_stats:
+            mock_stats.side_effect = MemoryMonitoringError("Test failure")
             
-            app = create_app()
-            client = TestClient(app)
-            response = client.get("/api/v1/memory/stats")
+            with patch('utils.memory_monitor.logger') as mock_logger:
+                # Should not raise exception
+                log_memory_usage("test-label")
+                
+                # Should log a warning
+                mock_logger.warning.assert_called_once()
+                args = mock_logger.warning.call_args[0]
+                assert "Failed to log memory usage%s: %s" == args[0]
+                assert " [test-label]" == args[1]
+                assert "Test failure" == args[2]
+
+    def test_log_memory_usage_general_exception(self):
+        """Test log_memory_usage handles general exceptions gracefully."""
+        from utils.memory_monitor import log_memory_usage
+        
+        with patch('utils.memory_monitor.get_memory_stats') as mock_stats:
+            mock_stats.side_effect = RuntimeError("Crazy error")
             
-            assert response.status_code == 500
-            data = response.json()
-            assert not data["success"]
-            assert "Internal server error" in data["message"]
+            with patch('utils.memory_monitor.logger') as mock_logger:
+                # Should not raise exception
+                log_memory_usage()
+                
+                # Should log an error
+                mock_logger.error.assert_called_once()
+                args = mock_logger.error.call_args[0]
+                assert "Unexpected error logging memory usage%s: %s" == args[0]
+                assert "" == args[1]
+                assert "Crazy error" == args[2]
 
 
 if __name__ == "__main__":

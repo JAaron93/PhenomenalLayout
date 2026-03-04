@@ -181,6 +181,11 @@ class MCPLingoTranslator(BaseTranslator):
         self._started: bool = False
         self._lock: asyncio.Lock = asyncio.Lock()
 
+    @property
+    def client_config(self) -> McpLingoConfig:
+        """Return the underlying MCP client configuration."""
+        return self._client.config
+
     async def _ensure_started(self) -> None:
         if self._started:
             return

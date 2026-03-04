@@ -157,39 +157,23 @@ def create_app():
     Returns:
         FastAPI: Configured application instance
     """
-    # Check if authentication is enabled
-    enable_auth = os.getenv("MEMORY_API_ENABLE_AUTH", "true").lower() == "true"
-    
-    if enable_auth:
-        # Authentication enabled - use security schemes
-        app = FastAPI(
-            title="PhenomenalLayout",
-            description=(
-                "Advanced layout preservation engine for document translation - "
-                "orchestrating Lingo.dev translation services with Dolphin OCR "
-                "for pixel-perfect formatting integrity"
-            ),
-            version="2.0.0",
-            lifespan=lifespan,
-        )
-    else:
-        # Authentication disabled - no security schemes
-        app = FastAPI(
-            title="PhenomenalLayout",
-            description=(
-                "Advanced layout preservation engine for document translation - "
-                "orchestrating Lingo.dev translation services with Dolphin OCR "
-                "for pixel-perfect formatting integrity"
-            ),
-            version="2.0.0",
-            lifespan=lifespan,
-        )
+    # Create FastAPI app
+    app = FastAPI(
+        title="PhenomenalLayout",
+        description=(
+            "Advanced layout preservation engine for document translation - "
+            "orchestrating Lingo.dev translation services with Dolphin OCR "
+            "for pixel-perfect formatting integrity"
+        ),
+        version="2.0.0",
+        lifespan=lifespan,
+    )
     
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
