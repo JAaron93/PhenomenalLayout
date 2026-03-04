@@ -70,10 +70,9 @@ def test_gc_direct():
     
     # Validate timestamp format by attempting to parse it
     try:
-        parsed_timestamp = datetime.fromisoformat(timestamp_value)
-        assert parsed_timestamp is not None, (
-            "Timestamp parsing returned None"
-        )
+        # Handle 'Z' suffix for UTC if present (for robustness)
+        ts_str = timestamp_value.replace('Z', '+00:00') if timestamp_value.endswith('Z') else timestamp_value
+        datetime.fromisoformat(ts_str)
     except (ValueError, TypeError) as e:
         raise AssertionError(
             f"Failed to parse timestamp '{timestamp_value}' "

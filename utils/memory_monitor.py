@@ -71,6 +71,23 @@ class MemoryMonitor:
         self._lock = threading.RLock()  # Reentrant lock for thread safety
         self._last_periodic_log: float = 0.0  # Track last periodic log time
 
+    def configure(self, check_interval: float, alert_threshold_mb: float) -> None:
+        """Configure memory monitoring parameters.
+
+        Args:
+            check_interval: Seconds between memory checks
+            alert_threshold_mb: Memory growth threshold in MB for alerts
+
+        Raises:
+            ValueError: If parameters are invalid
+        """
+        # Validate parameters
+        _validate_monitoring_params(check_interval, alert_threshold_mb)
+
+        with self._lock:
+            self.check_interval = check_interval
+            self.alert_threshold_mb = alert_threshold_mb
+
     def start_monitoring(self) -> None:
         """Start memory monitoring in background thread."""
         with self._lock:
@@ -375,13 +392,8 @@ def start_memory_monitoring(check_interval: float = 60.0, alert_threshold_mb: fl
     Raises:
         ValueError: If check_interval <= 0 or > 3600, or alert_threshold_mb < 0 or > 10240
     """
-    # Validate parameters
-    _validate_monitoring_params(check_interval, alert_threshold_mb)
-    
     monitor = get_memory_monitor()
-    with monitor._lock:
-        monitor.check_interval = check_interval
-        monitor.alert_threshold_mb = alert_threshold_mb
+    monitor.configure(check_interval, alert_threshold_mb)
     monitor.start_monitoring()
 
 

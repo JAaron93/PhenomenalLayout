@@ -141,7 +141,8 @@ async def get_memory_statistics(
         else:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required"
+                detail="Authentication required",
+                headers={"WWW-Authenticate": "Bearer"}
             )
     
     # Auth is enabled, check user role

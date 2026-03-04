@@ -120,7 +120,7 @@ def _fetch_monitor_status_with_headers(
             "error": "Service unavailable",
             "message": "Memory monitoring unavailable"
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Unexpected error getting monitoring status")
         response.status_code = 500
 
@@ -132,6 +132,30 @@ def _fetch_monitor_status_with_headers(
             "error": "Internal server error",
             "message": "Internal server error"
         }
+
+
+def _set_error_response_with_rate_limit_headers(
+    response: Response,
+    client_ip: str,
+    limit_type: str,
+    status_code: int,
+    error: str,
+    message: str
+) -> dict[str, Any]:
+    """
+    Helper to set error response with consistent rate-limit headers.
+
+    Ensures admin endpoints return the same rate-limit headers on error paths
+    as they do on success paths, matching the behavior of
+    _fetch_monitor_status_with_headers.
+    """
+    response.status_code = status_code
+    add_rate_limit_headers(response, limit_type, client_ip)
+    return {
+        "success": False,
+        "error": error,
+        "message": message
+    }
 
 
 @router.get("/stats")
@@ -188,14 +212,16 @@ async def force_garbage_collection_endpoint(
             "data": result,
             "message": f"Garbage collection completed: {result['collected_objects']} objects collected"
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to force garbage collection")
-        response.status_code = 500
-        return {
-            "success": False,
-            "error": "Internal server error",
-            "message": "Failed to perform garbage collection"
-        }
+        return _set_error_response_with_rate_limit_headers(
+            response,
+            client_ip,
+            "admin",
+            500,
+            "Internal server error",
+            "Failed to perform garbage collection"
+        )
 
 
 @router.post("/monitoring/start")
@@ -219,14 +245,16 @@ async def start_memory_monitoring_endpoint(
     """Start memory monitoring with specified parameters."""
     # Check rate limit
     check_rate_limit(request, "admin")
-    
+
+    # Get client IP for rate limit headers (for both success and error paths)
+    client_ip = get_client_ip(request)
+
     try:
         start_memory_monitoring(check_interval, alert_threshold_mb)
-        
+
         # Add rate limit headers
-        client_ip = get_client_ip(request)
         add_rate_limit_headers(response, "admin", client_ip)
-        
+
         return {
             "success": True,
             "data": {
@@ -235,14 +263,16 @@ async def start_memory_monitoring_endpoint(
             },
             "message": "Memory monitoring started successfully"
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to start memory monitoring")
-        response.status_code = 500
-        return {
-            "success": False,
-            "error": "Internal server error",
-            "message": "Failed to start memory monitoring"
-        }
+        return _set_error_response_with_rate_limit_headers(
+            response,
+            client_ip,
+            "admin",
+            500,
+            "Internal server error",
+            "Failed to start memory monitoring"
+        )
 
 
 @router.post("/monitoring/stop")
@@ -254,26 +284,30 @@ async def stop_memory_monitoring_endpoint(
     """Stop memory monitoring."""
     # Check rate limit
     check_rate_limit(request, "admin")
-    
+
+    # Get client IP for rate limit headers (for both success and error paths)
+    client_ip = get_client_ip(request)
+
     try:
         stop_memory_monitoring()
-        
+
         # Add rate limit headers
-        client_ip = get_client_ip(request)
         add_rate_limit_headers(response, "admin", client_ip)
-        
+
         return {
             "success": True,
             "message": "Memory monitoring stopped successfully"
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to stop memory monitoring")
-        response.status_code = 500
-        return {
-            "success": False,
-            "error": "Internal server error",
-            "message": "Failed to stop memory monitoring"
-        }
+        return _set_error_response_with_rate_limit_headers(
+            response,
+            client_ip,
+            "admin",
+            500,
+            "Internal server error",
+            "Failed to stop memory monitoring"
+        )
 
 
 @router.get("/monitoring/status")

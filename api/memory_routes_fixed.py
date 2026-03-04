@@ -47,7 +47,7 @@ def build_monitoring_response(
             },
             "message": "Monitoring status retrieved successfully"
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Unexpected error getting monitoring status")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

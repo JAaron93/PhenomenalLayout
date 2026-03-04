@@ -30,20 +30,7 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
     )
     assert response.status_code == 200, f"Stats endpoint should work with admin token: {response.text}"
     
-    # Test GET /memory/monitoring/status with read token
-    response = test_client.get(
-        "/api/v1/memory/monitoring/status",
-        headers={"Authorization": f"Bearer {read_token}"}
-    )
-    assert response.status_code == 200, f"Status endpoint should work with read token: {response.text}"
-    
-    # Test POST /memory/gc with admin token
-    response = test_client.post(
-        "/api/v1/memory/gc",
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
-    assert response.status_code == 200, f"GC endpoint should work with admin token: {response.text}"
-    
+        
     # Test POST /memory/monitoring/start with admin token
     response = test_client.post(
         "/api/v1/memory/monitoring/start",

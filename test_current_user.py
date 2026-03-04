@@ -2,7 +2,6 @@
 """Test get_current_user function directly."""
 
 from unittest.mock import patch
-from api.auth import UserRole
 import pytest
 from fastapi import HTTPException
 import asyncio

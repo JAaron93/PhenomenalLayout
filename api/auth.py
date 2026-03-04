@@ -16,6 +16,16 @@ from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredenti
 logger = __import__("logging").getLogger(__name__)
 
 # Auth event logging configuration
+# Mapping of log level names to logger methods - defined once at module level
+_LOG_METHODS = {
+    "DEBUG": logger.debug,
+    "INFO": logger.info,
+    "WARNING": logger.warning,
+    "ERROR": logger.error,
+    "CRITICAL": logger.critical,
+}
+
+# Auth event logging configuration
 def _parse_sampling_rate() -> float:
     """Parse and validate AUTH_ACCESS_SAMPLING_RATE from environment."""
     raw = os.getenv("AUTH_ACCESS_SAMPLING_RATE", "0.1")
@@ -391,16 +401,8 @@ def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
         if random.random() >= _AUTH_ACCESS_SAMPLING_RATE:
             return  # Skip logging this access event based on sampling rate
         
-        # Log at configured level using mapping
-        log_methods = {
-            "DEBUG": logger.debug,
-            "INFO": logger.info,
-            "WARNING": logger.warning,
-            "ERROR": logger.error,
-            "CRITICAL": logger.critical,
-        }
-        
-        log_method = log_methods.get(_AUTH_ACCESS_LOG_LEVEL, logger.debug)
+        # Log at configured level using module-level mapping
+        log_method = _LOG_METHODS.get(_AUTH_ACCESS_LOG_LEVEL, logger.debug)
         log_method(message)
     elif event_type == "login":
         logger.info(message)
