@@ -77,13 +77,14 @@ def test_optional_dependency_no_token(auth_env):
     from app import create_app
 
     app = create_app()
-    client = TestClient(app)
+    with TestClient(app) as client:
+        # Test without authentication token
+        response = client.get('/api/v1/memory/stats')
 
-    # Test without authentication token
-    response = client.get('/api/v1/memory/stats')
-
-    # Should succeed when auth is disabled or fail gracefully when enabled
-    assert response.status_code in [200, 401, 403]
+        # Should fail with 401 Unauthorized when auth is enabled
+        assert response.status_code == 401, (
+            f"Expected 401 Unauthorized, got {response.status_code}"
+        )
 
 
 @pytest.mark.asyncio

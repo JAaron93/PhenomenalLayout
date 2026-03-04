@@ -49,12 +49,10 @@ def build_monitoring_response(
         }
     except Exception as e:
         logger.exception("Unexpected error getting monitoring status")
-        response.status_code = 500
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Internal server error"
-        }
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 
 @router.get("/monitoring/status")

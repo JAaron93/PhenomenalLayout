@@ -9,9 +9,8 @@ from fastapi import APIRouter, Depends, Request, Response
 from api.auth import (
     get_admin_user, 
     get_current_user_optional_dependency, 
-    UserRole, 
-    AuthConfig,
-    _default_config
+    UserRole,
+    is_auth_enabled
 )
 from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
 from utils.memory_monitor import (
@@ -137,7 +136,7 @@ async def get_memory_statistics(
     
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
-        if not _default_config.enable_auth:
+        if not is_auth_enabled():
             return fetch_memory_stats_and_handle_errors(request, response)
         else:
             response.status_code = 401
@@ -276,7 +275,7 @@ async def get_monitoring_status(
     
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
-        if not _default_config.enable_auth:
+        if not is_auth_enabled():
             return get_monitoring_status_and_handle_errors(request, response)
         else:
             response.status_code = 401

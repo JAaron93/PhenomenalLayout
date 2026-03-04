@@ -18,7 +18,7 @@ TRUST_FORWARDER_HEADERS = os.getenv("TRUST_FORWARDER_HEADERS", "false").lower() 
 TRUSTED_PROXIES = [
     ip.strip() for ip in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",")
 ] if TRUST_FORWARDER_HEADERS else []
-ENABLE_RATE_LIMITING = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() == "true"
+ENABLE_RATE_LIMITING = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() in ("true", "enabled")
 
 
 class TokenBucket:
@@ -168,8 +168,8 @@ class RateLimiter:
             thread = self._cleanup_thread
             if thread and thread.is_alive():
                 self._stop_event.set()  # Signal shutdown
-            self._cleanup_thread = None
 
+        # Join outside the lock to avoid blocking start_cleanup() unnecessarily
         if thread and thread.is_alive():
             thread.join(timeout=10.0)  # Wait for graceful shutdown
             if thread.is_alive():
@@ -183,6 +183,10 @@ class RateLimiter:
                     thread_name,
                     thread_id
                 )
+        
+        # Clear the thread reference only after join completes
+        with self._cleanup_lock:
+            self._cleanup_thread = None
 
 
 

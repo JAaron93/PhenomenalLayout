@@ -109,23 +109,22 @@ class TestMemoryMonitoringErrorHandling:
         
         # Mock the monitoring loop to test error handling
         with patch.object(monitor, '_get_memory_usage_mb') as mock_get_memory:
-            with patch('time.sleep') as mock_sleep:
-                # First call fails, second succeeds
-                mock_get_memory.side_effect = [
-                    MemoryMonitoringError("Test failure"),
-                    120.0  # Success
-                ]
-                
-                # First call should handle the error
-                with pytest.raises(MemoryMonitoringError) as exc_info:
-                    stats = monitor.get_current_stats()
-                
-                # Verify the exception contains expected message
-                assert "Test failure" in str(exc_info.value)
-                
-                # Second call should succeed and test recovery
+            # First call fails, second succeeds
+            mock_get_memory.side_effect = [
+                MemoryMonitoringError("Test failure"),
+                120.0  # Success
+            ]
+            
+            # First call should handle the error
+            with pytest.raises(MemoryMonitoringError) as exc_info:
                 stats = monitor.get_current_stats()
-                assert stats["current_memory_mb"] == 120.0, "Should recover and return valid stats"
+            
+            # Verify the exception contains expected message
+            assert "Test failure" in str(exc_info.value)
+            
+            # Second call should succeed and test recovery
+            stats = monitor.get_current_stats()
+            assert stats["current_memory_mb"] == 120.0, "Should recover and return valid stats"
 
     def test_get_memory_stats_function_propagates_error(self):
         """Test get_memory_stats function propagates MemoryMonitoringError."""

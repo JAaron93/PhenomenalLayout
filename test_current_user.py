@@ -2,7 +2,7 @@
 """Test get_current_user function directly."""
 
 from unittest.mock import patch
-from api.auth import create_jwt_token, UserRole, get_current_user
+from api.auth import UserRole
 import pytest
 from fastapi import HTTPException
 import asyncio
@@ -21,6 +21,10 @@ def test_current_user():
         import api.auth
         
         importlib.reload(api.auth)
+        
+        # Rebind functions from reloaded module
+        create_jwt_token = api.auth.create_jwt_token
+        get_current_user = api.auth.get_current_user
         
         # Create admin token
         admin_token = create_jwt_token("admin_user", UserRole.ADMIN)

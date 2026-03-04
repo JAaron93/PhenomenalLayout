@@ -24,22 +24,14 @@ from fastapi.security import HTTPAuthorizationCredentials
 def mock_api_key(monkeypatch):
     """Pytest fixture that sets up test API key and reloads auth module."""
     test_key = "test-api-key-12345"
-    # Save original value to restore in teardown
-    original_value = os.environ.get("MEMORY_API_KEY")
     monkeypatch.setenv("MEMORY_API_KEY", test_key)
-    
+
     # Reload the auth module to pick up new environment variable
     import api.auth
     importlib.reload(api.auth)
-    
+
     yield test_key
-    
-    # Teardown: restore original environment and reload module
-    if original_value is None:
-        monkeypatch.delenv("MEMORY_API_KEY", raising=False)
-    else:
-        monkeypatch.setenv("MEMORY_API_KEY", original_value)
-    
+
     # Reload auth module to pick up restored environment
     importlib.reload(api.auth)
 

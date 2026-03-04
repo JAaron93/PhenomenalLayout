@@ -144,13 +144,26 @@ class TestMemoryMonitorProperties:
         # After start: monitoring active, baseline set and positive, peak positive
         memory_monitor.start_monitoring()
         assert memory_monitor.is_monitoring is True
-        assert memory_monitor.baseline_memory_mb is not None
-        assert memory_monitor.baseline_memory_mb > 0
+        baseline = memory_monitor.baseline_memory_mb
+        assert baseline is not None, "Should have baseline after start"
+        assert baseline > 0, "Baseline should be positive"
         assert memory_monitor.peak_memory_mb > 0
 
-        # After stop (fixture teardown handles cleanup; stop here to test post-stop state)
+        # Store values before stopping to verify they're retained
+        baseline_before_stop = baseline
+        peak_before_stop = memory_monitor.peak_memory_mb
+
+        # After stop: monitoring inactive but baseline and peak retained
         memory_monitor.stop_monitoring()
         assert memory_monitor.is_monitoring is False
+        # Baseline should be retained after stop (not reset to None)
+        assert memory_monitor.baseline_memory_mb == baseline_before_stop, (
+            "Baseline should be retained after stop_monitoring()"
+        )
+        # Peak should be retained after stop (not reset to 0.0)
+        assert memory_monitor.peak_memory_mb == peak_before_stop, (
+            "Peak memory should be retained after stop_monitoring()"
+        )
 
     def test_properties_with_memory_monitoring_error(self):
         """Test properties handle MemoryMonitoringError gracefully."""

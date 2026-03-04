@@ -20,11 +20,11 @@ def test_auth_debug():
         # Rebind names from reloaded module to reflect patched environment
         create_jwt_token = api.auth.create_jwt_token
         verify_jwt_token = api.auth.verify_jwt_token
-        user_role = api.auth.UserRole
+        UserRole = api.auth.UserRole
 
         # Create tokens
-        read_token = create_jwt_token("read_user", user_role.READ_ONLY)
-        admin_token = create_jwt_token("admin_user", user_role.ADMIN)
+        read_token = create_jwt_token("read_user", UserRole.READ_ONLY)
+        admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
 
         print(f"Read token: {read_token}")
         print(f"Admin token: {admin_token}")

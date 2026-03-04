@@ -13,6 +13,22 @@ from services.mcp_lingo_client import McpLingoClient, McpLingoConfig
 from utils.memory_monitor import MemoryMonitor, force_garbage_collection
 
 
+def get_baseline_memory() -> float:
+    """Get baseline memory measurement.
+
+    Creates a MemoryMonitor with check_interval=0.1, retrieves current
+    stats, extracts current_memory_mb, cleans up, and returns the value.
+
+    Returns:
+        Baseline memory in MB.
+    """
+    temp_monitor = MemoryMonitor(check_interval=0.1)
+    baseline_stats = temp_monitor.get_current_stats()
+    baseline_memory = baseline_stats["current_memory_mb"]
+    temp_monitor.cleanup()
+    return baseline_memory
+
+
 @dataclass
 class MemoryTestConfig:
     """Configuration for memory test thresholds."""
@@ -292,24 +308,11 @@ class TestMcpClientMemoryLeaks:
 
 class TestMemoryMonitor:
     """Test memory monitor functionality with configurable thresholds."""
-    
-    @staticmethod
-    def _get_baseline_memory() -> float:
-        """Get baseline memory measurement.
-        
-        Returns:
-            Baseline memory in MB.
-        """
-        temp_monitor = MemoryMonitor(check_interval=0.1)
-        baseline_stats = temp_monitor.get_current_stats()
-        baseline_memory = baseline_stats["current_memory_mb"]
-        temp_monitor.cleanup()
-        return baseline_memory
-    
+
     def test_memory_monitor_basic_functionality(self):
         """Test basic memory monitor functionality."""
         # Get baseline for adaptive threshold calculation
-        baseline_memory = self._get_baseline_memory()
+        baseline_memory = get_baseline_memory()
         
         # Use adaptive threshold
         adaptive_threshold = self.config.get_adaptive_threshold(baseline_memory)
@@ -342,7 +345,7 @@ class TestMemoryMonitor:
     def test_memory_monitor_callbacks(self):
         """Test memory monitor callback functionality."""
         # Get baseline for adaptive threshold calculation
-        baseline_memory = self._get_baseline_memory()
+        baseline_memory = get_baseline_memory()
         
         # Use adaptive callback threshold
         adaptive_threshold = self.config.get_adaptive_threshold(baseline_memory)
@@ -400,19 +403,6 @@ class TestMemoryMonitor:
 class TestResourceLeakDetection:
     """Integration tests for resource leak detection."""
 
-    @staticmethod
-    def _get_baseline_memory() -> float:
-        """Get baseline memory measurement.
-        
-        Returns:
-            Baseline memory in MB.
-        """
-        temp_monitor = MemoryMonitor(check_interval=0.1)
-        baseline_stats = temp_monitor.get_current_stats()
-        baseline_memory = baseline_stats["current_memory_mb"]
-        temp_monitor.cleanup()
-        return baseline_memory
-
     def test_thread_cleanup_after_translation_tasks(self):
         """Test thread cleanup after translation tasks."""
         initial_thread_count = threading.active_count()
@@ -467,7 +457,7 @@ class TestResourceLeakDetection:
     def test_memory_growth_under_load(self):
         """Test memory growth under simulated load."""
         # Get baseline for adaptive threshold calculation
-        baseline_memory = self._get_baseline_memory()
+        baseline_memory = get_baseline_memory()
         
         # Use adaptive load threshold
         adaptive_threshold = self.config.get_adaptive_threshold(baseline_memory)

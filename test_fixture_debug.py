@@ -20,12 +20,16 @@ def test_fixture_debug(test_client):
     )
 
     response_json = response.json()
-    assert not response_json["success"], "Expected success to be False"
-    assert response_json["error"] == "Unauthorized", (
-        f"Expected 'Unauthorized' error, got {response_json.get('error')}"
+    success = response_json.get("success")
+    error = response_json.get("error")
+    message = response_json.get("message")
+
+    assert not success, f"Expected success to be False, got {success}"
+    assert error == "Unauthorized", (
+        f"Expected 'Unauthorized' error, got {error}"
     )
-    assert response_json["message"] == "Authentication required", (
-        f"Expected 'Authentication required' message, got {response_json.get('message')}"
+    assert message == "Authentication required", (
+        f"Expected 'Authentication required' message, got {message}"
     )
 
 

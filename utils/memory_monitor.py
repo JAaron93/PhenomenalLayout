@@ -392,10 +392,18 @@ def stop_memory_monitoring() -> None:
 
 
 def cleanup_memory_monitor() -> None:
-    """Clean up global memory monitor during application shutdown."""
+    """Clean up global memory monitor during application shutdown.
+    
+    This function stops monitoring, clears resources, and resets the global
+    monitor reference to None, ensuring a clean state for subsequent tests
+    or application restarts.
+    """
+    global _memory_monitor
     try:
-        monitor = get_memory_monitor()
-        monitor.cleanup()
+        with _memory_monitor_lock:
+            if _memory_monitor is not None:
+                _memory_monitor.cleanup()
+                _memory_monitor = None
     except Exception as e:
         logger.error("Error during memory monitor cleanup: %s", e)
 

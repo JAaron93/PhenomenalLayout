@@ -55,15 +55,19 @@ async def test_manual_injection():
 
 def main():
     print("=== MANUAL DEPENDENCY DEBUG ===")
-    
+
     # Test 1: Manual dependency injection
     user = asyncio.run(test_manual_injection())
-    # user variable is captured for debugging purposes
-    
+    # Validate result for debugging: ensure user object was created successfully
+    assert user is not None, "Expected user object from manual injection"
+    assert isinstance(user, dict), "Expected user to be a dict"
+    assert "user_id" in user, "Expected user_id in user object"
+    print(f"✅ User validation passed: {user.get('user_id')}")
+
     # Test 2: Through FastAPI client
     print("\n--- Test 2: Through FastAPI client ---")
     app = create_app()
-    
+
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
     with TestClient(app) as client:
         response = client.post(

@@ -4,6 +4,7 @@ import os
 import secrets
 import time
 import functools
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Union
 
@@ -12,6 +13,10 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 
 logger = __import__("logging").getLogger(__name__)
+
+# Auth event logging configuration
+_AUTH_ACCESS_SAMPLING_RATE = float(os.getenv("AUTH_ACCESS_SAMPLING_RATE", "0.1"))  # 10% by default
+_AUTH_ACCESS_LOG_LEVEL = os.getenv("AUTH_ACCESS_LOG_LEVEL", "DEBUG").upper()  # DEBUG by default
 
 
 class AuthConfig:
@@ -65,9 +70,9 @@ JWT_EXPIRATION_HOURS = 24
 # Security validation using default config
 if _default_config.enable_auth:
     if not _default_config.jwt_secret:
-        raise ValueError("MEMORY_API_JWT_SECRET environment variable is required when ENABLE_AUTH is true")
+        raise ValueError("MEMORY_API_JWT_SECRET environment variable is required when MEMORY_API_ENABLE_AUTH is true")
     if not _default_config.api_key:
-        raise ValueError("MEMORY_API_KEY environment variable is required when ENABLE_AUTH is true")
+        raise ValueError("MEMORY_API_KEY environment variable is required when MEMORY_API_ENABLE_AUTH is true")
 else:
     logger.warning(
         "AUTHENTICATION IS DISABLED. Anonymous users will be granted UserRole.ADMIN access. "
@@ -97,6 +102,15 @@ def get_bearer_scheme():
     return _BEARER_SCHEME
 
 
+def is_auth_enabled() -> bool:
+    """Check if authentication is enabled.
+    
+    Returns:
+        True if authentication is enabled, False otherwise.
+    """
+    return _default_config.enable_auth
+
+
 class AuthError(Exception):
     """Authentication error."""
     pass
@@ -106,6 +120,15 @@ class UserRole:
     """User roles for access control."""
     READ_ONLY = "read_only"
     ADMIN = "admin"
+
+
+# Anonymous user returned when authentication is disabled
+ANONYMOUS_USER = {
+    "user_id": "anonymous",
+    "role": UserRole.ADMIN,
+    "authenticated": False,
+    "method": "disabled"
+}
 
 
 def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY, config: Optional[AuthConfig] = None) -> str:
@@ -204,12 +227,7 @@ async def get_current_user(
     # Authentication disabled - return anonymous user
     # See module-level warning when ENABLE_AUTH is false
     if not _default_config.enable_auth:
-        return {
-            "user_id": "anonymous",
-            "role": UserRole.ADMIN,
-            "authenticated": False,
-            "method": "disabled"
-        }
+        return ANONYMOUS_USER
 
     # Get dynamic security schemes
     bearer_scheme = get_bearer_scheme()
@@ -266,12 +284,7 @@ async def get_current_user_optional(
     if not _default_config.enable_auth:
         # Authentication disabled - return anonymous admin user
         # See module-level warning when ENABLE_AUTH is false
-        return {
-            "user_id": "anonymous",
-            "role": UserRole.ADMIN,
-            "authenticated": False,
-            "method": "disabled"
-        }
+        return ANONYMOUS_USER
     
     try:
         return await get_current_user(request, api_key, credentials)
@@ -320,7 +333,12 @@ def require_role(required_role: str):
 
 
 def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
-    """Log authentication event for audit trail.
+    """Log authentication event for audit trail with configurable sampling.
+    
+    Access events are sampled to prevent log flooding in high-traffic scenarios.
+    Configure via environment variables:
+    - AUTH_ACCESS_SAMPLING_RATE: Fraction of access events to log (0.0-1.0, default 0.1)
+    - AUTH_ACCESS_LOG_LEVEL: Log level for access events (DEBUG/INFO, default DEBUG)
     
     Args:
         event_type: Type of event (login, logout, access, denied)
@@ -331,7 +349,17 @@ def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
     if details:
         message += f" - Details: {details}"
     
-    if event_type in ["login", "access"]:
+    # Apply sampling to access events to prevent log flooding
+    if event_type == "access":
+        if random.random() >= _AUTH_ACCESS_SAMPLING_RATE:
+            return  # Skip logging this access event based on sampling rate
+        
+        # Log at configured level (DEBUG by default for high-traffic scenarios)
+        if _AUTH_ACCESS_LOG_LEVEL == "INFO":
+            logger.info(message)
+        else:
+            logger.debug(message)
+    elif event_type == "login":
         logger.info(message)
     else:
         logger.warning(message)

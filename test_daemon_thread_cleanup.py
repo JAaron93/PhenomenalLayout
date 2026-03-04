@@ -133,11 +133,16 @@ def test_atexit_handler():
     # Call cleanup directly
     cleanup_memory_monitor()
     
-    # Monitor should be cleaned up
+    # Monitor should be cleaned up and global reference reset
     assert not monitor._monitoring, "Should not be monitoring after cleanup"
     
-    # Also stop specifically just in case
-    monitor.stop_monitoring()
+    # Verify global state is reset by checking that get_memory_monitor returns a new instance
+    new_monitor = get_memory_monitor()
+    assert new_monitor is not monitor, "Should get a new monitor instance after cleanup"
+    assert not new_monitor._monitoring, "New monitor should not be monitoring"
+    
+    # Clean up the new monitor to leave no global state behind
+    cleanup_memory_monitor()
     
     print("✓ Atexit handler registered and working correctly")
 
@@ -145,8 +150,13 @@ def test_atexit_handler():
 if __name__ == "__main__":
     try:
         # Run tests directly for manual execution
-        # Note: These functions handle their own MemoryMonitor lifecycle
-        test_non_daemon_thread_creation(MemoryMonitor(check_interval=0.1))
+        # Note: Some functions handle their own lifecycle, others need explicit cleanup
+        monitor1 = MemoryMonitor(check_interval=0.1)
+        try:
+            test_non_daemon_thread_creation(monitor1)
+        finally:
+            monitor1.stop_monitoring()
+        
         test_improved_shutdown_handling(MemoryMonitor(check_interval=0.1))
         test_interruptible_sleep(MemoryMonitor(check_interval=10.0))
         test_cleanup_method(MemoryMonitor(check_interval=0.1))

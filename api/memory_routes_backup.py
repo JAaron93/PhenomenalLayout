@@ -29,6 +29,55 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/memory", tags=["memory"])
 
 
+def _fetch_memory_stats_with_headers(
+    request: Request,
+    response: Response
+) -> dict[str, Any]:
+    """
+    Helper to fetch memory stats and add rate-limit headers.
+
+    Handles all error cases and ensures rate-limit headers are added
+    on all code paths (success and error).
+    """
+    client_ip = get_client_ip(request)
+
+    try:
+        stats = get_memory_stats()
+
+        # Add rate limit headers on success
+        add_rate_limit_headers(response, "read", client_ip)
+
+        return {
+            "success": True,
+            "data": stats,
+            "message": "Memory statistics retrieved successfully"
+        }
+    except MemoryMonitoringError:
+        logger.error("Memory monitoring error", exc_info=True)
+        response.status_code = 503
+
+        # Add rate limit headers on error
+        add_rate_limit_headers(response, "read", client_ip)
+
+        return {
+            "success": False,
+            "error": "Service unavailable",
+            "message": "Memory monitoring service unavailable"
+        }
+    except Exception:
+        logger.exception("Unexpected error getting memory statistics")
+        response.status_code = 500
+
+        # Add rate limit headers on error
+        add_rate_limit_headers(response, "read", client_ip)
+
+        return {
+            "success": False,
+            "error": "Internal server error",
+            "message": "Internal server error"
+        }
+
+
 @router.get("/stats")
 async def get_memory_statistics(
     request: Request,
@@ -38,38 +87,11 @@ async def get_memory_statistics(
     """Get current memory usage statistics."""
     # Check rate limit
     check_rate_limit(request, "read")
-    
+
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
         if not ENABLE_AUTH:
-            try:
-                stats = get_memory_stats()
-                
-                # Add rate limit headers
-                client_ip = get_client_ip(request)
-                add_rate_limit_headers(response, "read", client_ip)
-                
-                return {
-                    "success": True,
-                    "data": stats,
-                    "message": "Memory statistics retrieved successfully"
-                }
-            except MemoryMonitoringError as e:
-                logger.error("Memory monitoring error: %s", e)
-                response.status_code = 503
-                return {
-                    "success": False,
-                    "error": "Service unavailable",
-                    "message": "Memory monitoring service unavailable"
-                }
-            except Exception as e:
-                logger.exception("Unexpected error getting memory statistics")
-                response.status_code = 500
-                return {
-                    "success": False,
-                    "error": "Internal server error",
-                    "message": "Internal server error"
-                }
+            return _fetch_memory_stats_with_headers(request, response)
         else:
             response.status_code = 401
             return {
@@ -77,42 +99,15 @@ async def get_memory_statistics(
                 "error": "Unauthorized",
                 "message": "Authentication required"
             }
-    
+
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions for read-only access"
         )
-    
-    try:
-        stats = get_memory_stats()
-        
-        # Add rate limit headers
-        client_ip = get_client_ip(request)
-        add_rate_limit_headers(response, "read", client_ip)
-        
-        return {
-            "success": True,
-            "data": stats,
-            "message": "Memory statistics retrieved successfully"
-        }
-    except MemoryMonitoringError as e:
-        logger.error("Memory monitoring error: %s", e)
-        response.status_code = 503
-        return {
-            "success": False,
-            "error": "Service unavailable",
-            "message": "Memory monitoring service unavailable"
-        }
-    except Exception as e:
-        logger.exception("Unexpected error getting memory statistics")
-        response.status_code = 500
-        return {
-            "success": False,
-            "error": "Internal server error",
-            "message": "Internal server error"
-        }
+
+    return _fetch_memory_stats_with_headers(request, response)
 
 
 @router.post("/gc")
@@ -155,12 +150,14 @@ async def start_memory_monitoring_endpoint(
     check_interval: float = Query(
         60.0,
         gt=0,
-        description="Check interval in seconds (must be positive)"
+        lt=86400,
+        description="Check interval in seconds (1 second to 1 day)"
     ),
     alert_threshold_mb: float = Query(
         100.0,
         gt=0,
-        description="Alert threshold in MB (must be positive)"
+        lt=131072,
+        description="Alert threshold in MB (1 MB to 128 GB)"
     )
 ) -> dict[str, Any]:
     """Start memory monitoring with specified parameters."""

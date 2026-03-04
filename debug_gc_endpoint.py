@@ -15,13 +15,25 @@ def run_test_in_subprocess():
         "MEMORY_API_KEY": "test-admin-key"
     })
 
-    # Run the actual test function in a subprocess
-    result = subprocess.run(
-        [sys.executable, __file__, "--run-test"],
-        env=test_env,
-        capture_output=True,
-        text=True
-    )
+    # Run the actual test function in a subprocess with timeout
+    try:
+        result = subprocess.run(
+            [sys.executable, __file__, "--run-test"],
+            env=test_env,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+    except subprocess.TimeoutExpired as e:
+        print(
+            "ERROR: Test subprocess timed out after 30 seconds",
+            file=sys.stderr
+        )
+        if e.stdout:
+            print("STDOUT before timeout:", e.stdout)
+        if e.stderr:
+            print("STDERR before timeout:", e.stderr, file=sys.stderr)
+        return 1
 
     print(result.stdout)
     if result.stderr:
@@ -82,6 +94,8 @@ def test_gc_endpoint():
                 "No response object available "
                 "(request failed before receiving response)"
             )
+        # Exit with non-zero status to propagate failure
+        sys.exit(1)
 
 
 if __name__ == "__main__":

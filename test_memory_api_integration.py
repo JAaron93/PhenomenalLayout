@@ -253,9 +253,7 @@ def test_rate_limiting_headers(rate_limiting):
         client = TestClient(create_app())
         
         # Test rate limiting headers
-        # Note: X-API-Key header included for consistency even though auth is disabled
-        # Rate limiting is IP-based, not auth-based, so header doesn't affect the test
-        response = client.get("/api/v1/memory/stats", headers={"X-API-Key": "test-admin-key"})
+        response = client.get("/api/v1/memory/stats")
         if rate_limiting == "true":
             assert "X-RateLimit-Limit" in response.headers, "Rate limiting headers should be present"
             assert "X-RateLimit-Remaining" in response.headers, "Rate limit remaining should be present"

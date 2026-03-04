@@ -6,7 +6,6 @@ This script should be run as a module from the project root:
 """
 
 import asyncio
-import os
 import sys
 
 # Ensure we can import project modules
@@ -24,38 +23,49 @@ except ImportError as e:
     sys.exit(1)
 
 def main():
+    """Debug authentication flow step by step."""
     print("=== AUTH FLOW DEBUG ===")
-    
+
     # Create app and client
     app = create_app()
     client = TestClient(app)
-    
+
     # Create admin token
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
     print(f"Admin token created (length: {len(admin_token)})")
-    
+
     # Test 1: Direct dependency function
     print("\n--- Test 1: Direct dependency function ---")
     try:
-        # Create a mock request with Authorization header
+        # Create a mock request with Authorization header and other required
+        # attributes that get_current_user_dependency may access
         request = Mock(spec=Request)
         request.headers = {"Authorization": f"Bearer {admin_token}"}
-        
+        request.cookies = {}
+        request.query_params = {}
+        request.url = Mock()
+        request.url.path = "/api/v1/memory/gc"
+        request.client = Mock()
+        request.client.host = "127.0.0.1"
+
         # Test the dependency function directly
         user = asyncio.run(get_current_user_dependency(request))
         print(f"✅ get_current_user_dependency result: {user}")
     except Exception as e:
         print(f"❌ get_current_user_dependency failed: {e}")
-    
+
     # Test 2: GC endpoint with debug
     print("\n--- Test 2: GC endpoint ---")
-    response = client.post('/api/v1/memory/gc', headers={'Authorization': f'Bearer {admin_token}'})
+    response = client.post(
+        "/api/v1/memory/gc",
+        headers={"Authorization": f"Bearer {admin_token}"}
+    )
     print(f"GC Response - Status: {response.status_code}")
     print(f"GC Response - Body: {response.text}")
-    
+
     # Test 3: Status endpoint (working)
     print("\n--- Test 3: Status endpoint ---")
-    response = client.get('/api/v1/memory/monitoring/status')
+    response = client.get("/api/v1/memory/monitoring/status")
     print(f"Status Response - Status: {response.status_code}")
     print(f"Status Response - Body: {response.text}")
 
