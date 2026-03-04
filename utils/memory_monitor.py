@@ -26,13 +26,18 @@ class MemoryMonitor:
         """Initialize memory monitor.
 
         Args:
-            check_interval: Seconds between memory checks (must be > 0, recommended 0.1-3600)
-            alert_threshold_mb: Memory growth threshold in MB for alerts (must be >= 0, recommended 0-10240)
+            check_interval: Seconds between memory checks (must be between 0.001 and 3600, enforced)
+            alert_threshold_mb: Memory growth threshold in MB for alerts (must be between 0 and 10240, enforced)
             
         Raises:
-            ValueError: If check_interval <= 0 or alert_threshold_mb < 0
+            ValueError: If check_interval <= 0 or > 3600, or alert_threshold_mb < 0 or > 10240
         """
         # Validate parameters
+        if not isinstance(check_interval, (int, float)):
+            raise TypeError("check_interval must be a number")
+        if not isinstance(alert_threshold_mb, (int, float)):
+            raise TypeError("alert_threshold_mb must be a number")
+            
         if check_interval <= 0:
             raise ValueError(f"check_interval must be > 0, got {check_interval}")
         if check_interval > 3600:
@@ -345,13 +350,18 @@ def start_memory_monitoring(check_interval: float = 60.0, alert_threshold_mb: fl
     """Start global memory monitoring.
     
     Args:
-        check_interval: Seconds between memory checks (must be > 0, recommended 0.1-3600)
-        alert_threshold_mb: Memory growth threshold in MB for alerts (must be >= 0, recommended 0-10240)
+        check_interval: Seconds between memory checks (must be between 0.001 and 3600, enforced)
+        alert_threshold_mb: Memory growth threshold in MB for alerts (must be between 0 and 10240, enforced)
         
     Raises:
-        ValueError: If check_interval <= 0 or alert_threshold_mb < 0
+        ValueError: If check_interval <= 0 or > 3600, or alert_threshold_mb < 0 or > 10240
     """
     # Validate parameters
+    if not isinstance(check_interval, (int, float)):
+        raise TypeError("check_interval must be a number")
+    if not isinstance(alert_threshold_mb, (int, float)):
+        raise TypeError("alert_threshold_mb must be a number")
+        
     if check_interval <= 0:
         raise ValueError(f"check_interval must be > 0, got {check_interval}")
     if check_interval > 3600:
