@@ -98,7 +98,7 @@ def test_rate_limiting():
     # Should allow first request
     allowed, retry_after = limiter.is_allowed("test_client", 5, 1.0)
     assert allowed is True, "First request should be allowed"
-    assert retry_after == 0.0, "Retry after should be 0 for allowed request"
+    assert retry_after == pytest.approx(0.0), "Retry after should be 0 for allowed request"
     
     # Should allow multiple requests up to limit
     for i in range(4):
@@ -159,39 +159,38 @@ def test_client_ip_extraction():
     print("✓ Client IP extraction test passed")
 
 
-def test_memory_routes_security():
-    """Test memory routes with authentication enabled."""
-    print("Testing memory routes security...")
-    
+def test_jwt_tokens_with_auth_enabled():
+    """Test JWT token creation and verification with auth enabled."""
+    print("Testing JWT tokens with auth enabled...")
+
     # Set up environment for testing
     test_env = {
         "MEMORY_API_ENABLE_AUTH": "true",
         "MEMORY_API_JWT_SECRET": "test-secret-key",
         "MEMORY_API_KEY": "test-admin-key"
     }
-    
+
     with patch.dict(os.environ, test_env):
         # Import after setting environment
-        from api.memory_routes import router
         from api.auth import create_jwt_token
-        
+
         # Test JWT token creation
         read_token = create_jwt_token("read_user", UserRole.READ_ONLY)
         admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
-        
+
         assert read_token is not None, "Read token should be created"
         assert admin_token is not None, "Admin token should be created"
-        
+
         # Verify tokens
         from api.auth import verify_jwt_token
-        
+
         read_payload = verify_jwt_token(read_token)
         admin_payload = verify_jwt_token(admin_token)
-        
+
         assert read_payload["role"] == UserRole.READ_ONLY, "Read token should have read role"
         assert admin_payload["role"] == UserRole.ADMIN, "Admin token should have admin role"
-    
-    print("✓ Memory routes security test passed")
+
+    print("✓ JWT tokens with auth enabled test passed")
 
 
 def test_authentication_disabled():
@@ -201,7 +200,6 @@ def test_authentication_disabled():
     # Set environment to disable auth
     with patch.dict(os.environ, {"MEMORY_API_ENABLE_AUTH": "false"}):
         # Reload the module to pick up new environment variable
-        import importlib
         import api.auth
         importlib.reload(api.auth)
         
@@ -219,6 +217,9 @@ def test_authentication_disabled():
         user = asyncio.run(api.auth.get_current_user(request, None, None))
         assert user["user_id"] == "anonymous", "Should return anonymous user"
         assert user["role"] == UserRole.ADMIN, "Should have admin role when auth disabled"
+    
+    # Restore auth module to original state
+    importlib.reload(api.auth)
     
     print("✓ Authentication disabled test passed")
 
@@ -246,9 +247,9 @@ def test_rate_limit_configuration():
         assert RATE_LIMITS["write"] == 20, "Write rate limit should be 20"
         assert RATE_LIMITS["admin"] == 10, "Admin rate limit should be 10"
         
-        assert RATE_LIMITS_PER_SECOND["read"] == 2.0, "Read rate should be 2.0/sec"
-        assert RATE_LIMITS_PER_SECOND["write"] == 0.3333333333333333, "Write rate should be 0.33/sec"
-        assert RATE_LIMITS_PER_SECOND["admin"] == 0.16666666666666666, "Admin rate should be 0.17/sec"
+        assert RATE_LIMITS_PER_SECOND["read"] == pytest.approx(2.0), "Read rate should be 2.0/sec"
+        assert RATE_LIMITS_PER_SECOND["write"] == pytest.approx(20/60), "Write rate should be 0.33/sec"
+        assert RATE_LIMITS_PER_SECOND["admin"] == pytest.approx(10/60), "Admin rate should be 0.17/sec"
     
     print("✓ Rate limit configuration test passed")
 
@@ -281,7 +282,7 @@ if __name__ == "__main__":
         
         test_rate_limiting()
         test_client_ip_extraction()
-        test_memory_routes_security()
+        test_jwt_tokens_with_auth_enabled()
         test_authentication_disabled()
         test_rate_limit_configuration()
         

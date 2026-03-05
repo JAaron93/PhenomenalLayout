@@ -70,7 +70,9 @@ async def get_monitoring_status(
 
     # Verify user has appropriate role (401 already raised by get_current_user
     # if auth is missing/invalid, 403 for insufficient role)
-    if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
+    user_role = current_user.get("role")
+    allowed_roles = [UserRole.READ_ONLY, UserRole.ADMIN, UserRole.READ_ONLY.value, UserRole.ADMIN.value]
+    if user_role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions for read-only access"

@@ -9,7 +9,7 @@ OptimizedUserChoiceManager is intended as a backward-compatible, higher-performa
 Highlights:
 
 - 5–10x faster conflict resolution via pre-computed strategy tables
-- O(1) lookup vs O(n) sequential processing (see DYNAMIC_PROGRAMMING_REFACTORING.md)
+- O(1) lookup vs O(n) sequential processing (see [DYNAMIC_PROGRAMMING_REFACTORING.md](../DYNAMIC_PROGRAMMING_REFACTORING.md))
 - Smart caching with TTL and memoization for >90% cache hit rates
 - Behavioral differences: additional performance metrics, automatic cache warming
 - Backward-compatible drop-in replacement for UserChoiceManager

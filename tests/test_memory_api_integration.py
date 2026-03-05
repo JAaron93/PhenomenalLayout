@@ -8,26 +8,52 @@ from fastapi.testclient import TestClient
 from app import create_app
 from api.auth import create_jwt_token, verify_jwt_token, UserRole
 
+# Module-level constant for test admin API key
+TEST_ADMIN_API_KEY = "test-admin-key"
 
-def _reload_app_with_env(test_env: dict) -> TestClient:
-    """Helper to reload modules with patched environment and return a TestClient.
+
+@pytest.fixture
+def reload_app_with_env():
+    """Fixture to reload modules with patched environment and cleanup after.
 
     Isolates environment changes by patching os.environ, reloading affected
-    modules in dependency order, and returning a fresh TestClient.
+    modules in dependency order, and restoring original modules after test.
+    Yields a factory function that returns a fresh TestClient.
     """
-    with patch.dict("os.environ", test_env):
-        import importlib
-        import api.auth
-        import api.memory_routes
-        import api.rate_limit
-        import app as app_module
+    import importlib
+    import sys
 
-        importlib.reload(api.auth)
-        importlib.reload(api.rate_limit)
-        importlib.reload(api.memory_routes)
-        importlib.reload(app_module)
+    # Modules to reload in dependency order (base → dependent)
+    # Order matters: auth → rate_limit → memory_routes → app
+    MODULE_NAMES = [
+        "api.auth",
+        "api.rate_limit",
+        "api.memory_routes",
+        "app",
+    ]
 
-        return TestClient(app_module.create_app())
+    # Save original module objects before any reloads
+    original_modules = {}
+    for name in MODULE_NAMES:
+        if name in sys.modules:
+            original_modules[name] = sys.modules[name]
+
+    def _factory(test_env: dict) -> TestClient:
+        """Create TestClient with patched environment and reloaded modules."""
+        with patch.dict("os.environ", test_env):
+            # Reload modules in dependency order
+            for name in MODULE_NAMES:
+                importlib.reload(sys.modules[name])
+
+            app_module = sys.modules["app"]
+            return TestClient(app_module.create_app())
+
+    try:
+        yield _factory
+    finally:
+        # Restore original modules to prevent state leakage between tests
+        for name in original_modules:
+            sys.modules[name] = original_modules[name]
 
 
 def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
@@ -80,14 +106,14 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
     # Test with API key
     response = test_client.get(
         "/api/v1/memory/stats",
-        headers={"X-API-Key": "test-admin-key"}
+        headers={"X-API-Key": TEST_ADMIN_API_KEY}
     )
     assert response.status_code == 200, f"Stats endpoint should work with API key: {response.text}"
-    
+
     # Test admin endpoint with API key
     response = test_client.post(
         "/api/v1/memory/gc",
-        headers={"X-API-Key": "test-admin-key"}
+        headers={"X-API-Key": TEST_ADMIN_API_KEY}
     )
     assert response.status_code == 200, f"GC endpoint should work with API key: {response.text}"
     
@@ -137,7 +163,7 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
 
 
 @pytest.mark.parametrize("auth_enabled", ["true", "false"])
-def test_memory_endpoints_no_auth(auth_enabled):
+def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
     """Test memory endpoints behave correctly with and without authentication.
 
     When auth is disabled (``auth_enabled="false"``), unauthenticated requests
@@ -151,13 +177,13 @@ def test_memory_endpoints_no_auth(auth_enabled):
     test_env = {
         "MEMORY_API_ENABLE_AUTH": auth_enabled,
         "MEMORY_API_JWT_SECRET": "test-secret-key",
-        "MEMORY_API_KEY": "test-admin-key",
+        "MEMORY_API_KEY": TEST_ADMIN_API_KEY,
         "MEMORY_API_READ_RATE_LIMIT": "100",
         "MEMORY_API_WRITE_RATE_LIMIT": "100",
         "MEMORY_API_ADMIN_RATE_LIMIT": "100",
     }
 
-    client = _reload_app_with_env(test_env)
+    client = reload_app_with_env(test_env)
 
     # -- Read endpoints (use get_current_user_optional_dependency) --
     read_endpoints = [
@@ -173,14 +199,25 @@ def test_memory_endpoints_no_auth(auth_enabled):
 
     if auth_enabled == "false":
         # Auth disabled – all endpoints should succeed without credentials
+        # Expected response schema: {"success": bool, "data": dict, "message": str}
         for method, url in read_endpoints:
             resp = client.request(method, url)
             assert resp.status_code == 200, (
                 f"{method} {url} should succeed with auth disabled: "
                 f"status={resp.status_code}, body={resp.text}"
             )
+            # Validate response schema explicitly
             body = resp.json()
-            assert body.get("success") is True, (
+            assert isinstance(body, dict), (
+                f"{method} {url} response should be a dict: {type(body)}"
+            )
+            assert "success" in body, (
+                f"{method} {url} response missing 'success' field: {body}"
+            )
+            assert isinstance(body["success"], bool), (
+                f"{method} {url} 'success' should be bool: {type(body['success'])}"
+            )
+            assert body["success"] is True, (
                 f"{method} {url} response should indicate success: {body}"
             )
 
@@ -190,8 +227,18 @@ def test_memory_endpoints_no_auth(auth_enabled):
                 f"{method} {url} should succeed with auth disabled: "
                 f"status={resp.status_code}, body={resp.text}"
             )
+            # Validate response schema explicitly
             body = resp.json()
-            assert body.get("success") is True, (
+            assert isinstance(body, dict), (
+                f"{method} {url} response should be a dict: {type(body)}"
+            )
+            assert "success" in body, (
+                f"{method} {url} response missing 'success' field: {body}"
+            )
+            assert isinstance(body["success"], bool), (
+                f"{method} {url} 'success' should be bool: {type(body['success'])}"
+            )
+            assert body["success"] is True, (
                 f"{method} {url} response should indicate success: {body}"
             )
 
@@ -206,6 +253,7 @@ def test_memory_endpoints_no_auth(auth_enabled):
 
     print(f"\n✓ Auth {'disabled' if auth_enabled == 'false' else 'enabled'} tests passed!")
 
+
 @pytest.mark.parametrize("rate_limiting", ["true", "false"])
 def test_rate_limiting_headers(rate_limiting):
     """Test rate limiting headers presence."""
@@ -216,10 +264,10 @@ def test_rate_limiting_headers(rate_limiting):
         "MEMORY_API_ENABLE_RATE_LIMITING": rate_limiting,
         "MEMORY_API_ENABLE_AUTH": "false",
         "MEMORY_API_JWT_SECRET": "test-secret-key",
-        "MEMORY_API_KEY": "test-admin-key"
+        "MEMORY_API_KEY": TEST_ADMIN_API_KEY
     }
 
-    client = _reload_app_with_env(test_env)
+    client = reload_app_with_env(test_env)
 
     # Test rate limiting headers
     response = client.get("/api/v1/memory/stats")

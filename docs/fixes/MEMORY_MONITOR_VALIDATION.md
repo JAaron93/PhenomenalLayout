@@ -128,7 +128,7 @@ All validation errors include:
 - **Test Types**: Constructor validation, function validation, boundary values, error messages
 
 ### Verification Script
-- **File**: `verify_memory_monitor_validation.py`
+- **File**: `scripts/verify/verify_memory_monitor_validation.py`
 - **Purpose**: Manual verification of validation functionality
 - **Results**: All tests passing ✓
 
@@ -168,7 +168,7 @@ All validation errors include:
    - Comprehensive test suite for validation
    - Tests all edge cases and error conditions
 
-3. **verify_memory_monitor_validation.py** (new)
+3. **`scripts/verify/verify_memory_monitor_validation.py`** (new)
    - Manual verification script
    - Demonstrates validation functionality
 

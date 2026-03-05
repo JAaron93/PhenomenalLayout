@@ -70,5 +70,84 @@ def test_auth_direct():
         f"Expected collected_objects >= 0, got {collected}"
     )
 
+
+def test_auth_no_header():
+    """Test that missing Authorization header returns 401."""
+    test_config = {
+        "MEMORY_API_ENABLE_AUTH": "true",
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_KEY": "test-admin-key"
+    }
+
+    client = TestClient(create_app(test_config))
+
+    response = client.post("/api/v1/memory/gc")
+
+    assert response.status_code == 401, (
+        f"Expected 401, got {response.status_code}: {response.text}"
+    )
+
+
+def test_auth_malformed_jwt():
+    """Test that malformed/invalid JWT returns 401."""
+    test_config = {
+        "MEMORY_API_ENABLE_AUTH": "true",
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_KEY": "test-admin-key"
+    }
+
+    client = TestClient(create_app(test_config))
+
+    response = client.post(
+        "/api/v1/memory/gc",
+        headers={"Authorization": "Bearer invalid-token-string"}
+    )
+
+    assert response.status_code == 401, (
+        f"Expected 401, got {response.status_code}: {response.text}"
+    )
+
+
+def test_auth_expired_token():
+    """Test that expired JWT returns 401."""
+    import jwt
+    from datetime import datetime, timedelta, timezone
+
+    test_config = {
+        "MEMORY_API_ENABLE_AUTH": "true",
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_KEY": "test-admin-key"
+    }
+
+    client = TestClient(create_app(test_config))
+    auth_config = AuthConfig(test_config)
+
+    # Create an expired token (expired 1 hour ago)
+    expiration = datetime.now(timezone.utc) - timedelta(hours=1)
+    payload = {
+        "user_id": "test_user",
+        "role": UserRole.ADMIN,
+        "exp": expiration,
+        "iat": expiration - timedelta(hours=1),
+        "type": "access"
+    }
+    expired_token = jwt.encode(
+        payload, auth_config.jwt_secret, algorithm="HS256"
+    )
+
+    response = client.post(
+        "/api/v1/memory/gc",
+        headers={"Authorization": f"Bearer {expired_token}"}
+    )
+
+    assert response.status_code == 401, (
+        f"Expected 401, got {response.status_code}: {response.text}"
+    )
+
+
 if __name__ == "__main__":
     test_auth_direct()
+    test_auth_no_header()
+    test_auth_malformed_jwt()
+    test_auth_expired_token()
+    print("\nAll auth tests passed!")

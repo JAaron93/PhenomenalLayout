@@ -1,47 +1,77 @@
 #!/usr/bin/env python3
 """Test get_current_user function directly."""
 
+import sys
 from unittest.mock import patch
+import importlib
 import pytest
 from fastapi import HTTPException
-import asyncio
 
-def test_current_user():
-    """Test get_current_user function directly."""
+
+@pytest.fixture
+def auth_module():
+    """Fixture that provides auth module components with patched environment.
+
+    This fixture imports and reloads api.auth with a patched environment,
+    yields the necessary imports, and then reloads again to restore
+    original state.
+    """
     test_env = {
         "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key", 
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
         "MEMORY_API_KEY": "test-admin-key"
     }
-    
+
+    # Store original module if it exists
+    original_module = sys.modules.get('api.auth')
+
     with patch.dict('os.environ', test_env):
-        # Force reload of auth module
-        import importlib
+        # Import and reload auth module to pick up patched environment
         import api.auth
-        
+
         importlib.reload(api.auth)
-        
-        # Rebind functions from reloaded module
-        create_jwt_token = api.auth.create_jwt_token
-        get_current_user = api.auth.get_current_user
-        UserRole = api.auth.UserRole
-        
-        # Create admin token
-        admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
-        
-        # Test get_current_user directly
-        class MockRequest:
-            def __init__(self, headers):
-                self.headers = headers
-        
-        request = MockRequest(headers={"Authorization": f"Bearer {admin_token}"})
-        
-        with pytest.raises(HTTPException) as exc_info:
-            # Passes None for credentials, skipping FastAPI's dependency injection which naturally expects a 401
-            asyncio.run(get_current_user(request, None, None))
-            
-        assert exc_info.value.status_code == 401
-        assert exc_info.value.detail == "Authentication required"
+
+        # Yield the needed components from the reloaded module
+        yield (
+            api.auth.create_jwt_token,
+            api.auth.get_current_user,
+            api.auth.UserRole
+        )
+
+        # After yield, reload again while still in patched context
+        # to restore original state without errors
+        importlib.reload(api.auth)
+
+    # Restore original module state if it was previously loaded
+    if original_module is not None:
+        sys.modules['api.auth'] = original_module
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_raises_401_when_credentials_none(auth_module):
+    """Test get_current_user function directly."""
+    create_jwt_token, get_current_user, UserRole = auth_module
+
+    # Create admin token
+    admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
+
+    # Test get_current_user directly
+    class MockRequest:
+        def __init__(self, headers):
+            self.headers = headers
+
+    request = MockRequest(
+        headers={"Authorization": f"Bearer {admin_token}"}
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        # Passes None for credentials, skipping FastAPI's dependency
+        # injection which naturally expects a 401
+        await get_current_user(request, None, None)
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Authentication required"
+
 
 if __name__ == "__main__":
-    test_current_user()
+    pytest.main([__file__, "-v"])

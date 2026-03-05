@@ -153,7 +153,7 @@ def get_memory_stats() -> dict[str, Any]:
 - Tests API error responses
 
 ### Manual Verification
-**Created**: `verify_memory_monitoring_error_handling.py`
+**Created**: `scripts/verify/verify_memory_monitoring_error_handling.py`
 - Demonstrates error handling behavior
 - Verifies exception chaining
 - Tests graceful degradation
@@ -174,7 +174,7 @@ def get_memory_stats() -> dict[str, Any]:
 
 ### Test Files
 - **test_memory_monitoring_error_handling.py**: Comprehensive test suite
-- **verify_memory_monitoring_error_handling.py**: Manual verification script
+- **`scripts/verify/verify_memory_monitoring_error_handling.py`**: Manual verification script
 
 ### Documentation
 - **MEMORY_MONITORING_ERROR_HANDLING.md**: Complete implementation documentation

@@ -142,7 +142,7 @@ reset_time = response.headers["X-RateLimit-Reset"]      # Unix timestamp
 - Authentication disable/enable testing
 - Configuration validation
 
-### Verification Tests (`verify_memory_api_security.py`)
+### Verification Tests (`scripts/verify/verify_memory_api_security.py`)
 - Security component configuration validation
 - Memory routes security integration
 - Environment variable documentation
@@ -174,7 +174,7 @@ reset_time = response.headers["X-RateLimit-Reset"]      # Unix timestamp
 - `api/auth.py` - Authentication utilities and FastAPI dependencies
 - `api/rate_limit.py` - Rate limiting middleware and algorithms
 - `test_memory_api_security.py` - Comprehensive security tests
-- `verify_memory_api_security.py` - Security implementation verification
+- `scripts/verify/verify_memory_api_security.py` - Security implementation verification
 
 ### Modified Files
 - `api/memory_routes.py` - Added authentication and rate limiting to all endpoints

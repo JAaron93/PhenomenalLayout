@@ -149,8 +149,8 @@ for key in [
 - **tests/test_translation_service.py**: Updated environment cleanup for new variables
 
 ### Verification
-- **verify_mcp_timeout_configuration.py**: Comprehensive verification script
-- **MCP_LINGO_TIMEOUT_CONFIGURATION.md**: Complete implementation documentation
+- **`scripts/verify/verify_mcp_timeout_configuration.py`**: Comprehensive verification script
+- **`docs/fixes/MCP_LINGO_TIMEOUT_CONFIGURATION.md`**: Complete implementation documentation
 
 ## Backward Compatibility
 

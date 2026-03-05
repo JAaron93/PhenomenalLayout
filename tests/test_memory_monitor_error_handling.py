@@ -165,6 +165,7 @@ class TestMemoryMonitoringErrorHandling:
                 MemoryMonitor._get_memory_usage_mb()
             
             assert expected_message in str(exc_info.value)
+            assert exc_info.value.__cause__ is not None, "Exception should be chained"
             assert str(exception) in str(exc_info.value.__cause__)
 
 

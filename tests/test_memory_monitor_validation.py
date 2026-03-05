@@ -91,13 +91,17 @@ class TestMemoryMonitorValidation:
         try:
             # This should work without errors
             start_memory_monitoring(check_interval=30.0, alert_threshold_mb=50.0)
+            stop_memory_monitoring()  # Clean up before next call
 
-            # Boundary values
+            # Boundary values - min values
             start_memory_monitoring(check_interval=0.1, alert_threshold_mb=0.0)
+            stop_memory_monitoring()  # Clean up before next call
+
+            # Boundary values - max values
             start_memory_monitoring(check_interval=3600.0, alert_threshold_mb=10240.0)
         finally:
             # Ensure cleanup to prevent thread pollution
-            stop_memory_monitoring()
+            stop_memory_monitoring()  # Final cleanup for last started monitor
 
     def test_start_memory_monitoring_invalid_check_interval(self):
         """Test start_memory_monitoring with invalid check_interval values."""
@@ -133,17 +137,15 @@ class TestMemoryMonitorValidation:
 
     def test_error_messages_are_descriptive(self):
         """Test that error messages include the invalid values."""
-        try:
+        with pytest.raises(ValueError) as exc_info:
             MemoryMonitor(check_interval=-5.5)
-        except ValueError as e:
-            assert "-5.5" in str(e)
-            assert "check_interval must be > 0" in str(e)
+        assert "-5.5" in str(exc_info.value)
+        assert "check_interval must be > 0" in str(exc_info.value)
 
-        try:
+        with pytest.raises(ValueError) as exc_info:
             MemoryMonitor(alert_threshold_mb=15000.0)
-        except ValueError as e:
-            assert "15000.0" in str(e)
-            assert "alert_threshold_mb must be <= 10240" in str(e)
+        assert "15000.0" in str(exc_info.value)
+        assert "alert_threshold_mb must be <= 10240" in str(exc_info.value)
 
     def test_parameter_types(self):
         """Test parameter type handling."""

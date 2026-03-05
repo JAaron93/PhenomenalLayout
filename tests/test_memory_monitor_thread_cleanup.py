@@ -7,10 +7,6 @@ from pathlib import Path
 
 import pytest
 
-# Add project root to Python path (needed when running from tests/ subdirectory)
-project_root = Path(__file__).resolve().parents[1] if '__file__' in globals() else Path('.').resolve()
-sys.path.insert(0, str(project_root))
-
 # Import test dependencies at module level
 from utils.memory_monitor import MemoryMonitor, cleanup_memory_monitor
 
@@ -117,8 +113,8 @@ def test_cleanup_method(monitor):
     
     print("✓ Cleanup method working correctly")
 
-def test_atexit_handler():
-    """Test that atexit handler is registered."""
+def test_cleanup_memory_monitor_function():
+    """Test that cleanup_memory_monitor function works correctly."""
     print("\nTesting atexit handler registration...")
     
     # Test that the cleanup function exists and is callable
@@ -146,7 +142,7 @@ def test_atexit_handler():
     # Clean up the new monitor to leave no global state behind
     cleanup_memory_monitor()
     
-    print("✓ Atexit handler registered and working correctly")
+    print("✓ cleanup_memory_monitor function working correctly")
 
 
 if __name__ == "__main__":
@@ -177,7 +173,7 @@ if __name__ == "__main__":
         finally:
             monitor4.cleanup()
         
-        test_atexit_handler()
+        test_cleanup_memory_monitor_function()
         print("\n🎉 Memory monitor daemon thread cleanup fix verified successfully!")
         print("\nKey Improvements:")
         print("- Thread created as non-daemon for proper cleanup")

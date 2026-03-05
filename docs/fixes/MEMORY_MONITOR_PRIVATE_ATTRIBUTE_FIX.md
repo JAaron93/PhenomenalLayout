@@ -152,7 +152,7 @@ def peak_memory_mb(self) -> float:
 
 ### Test Files  
 - **test_memory_monitor_properties.py**: Comprehensive test suite for new properties
-- **verify_memory_monitor_fix.py**: Integration verification script
+- **`scripts/verify/verify_memory_monitor_fix.py`**: Integration verification script
 
 ### Documentation
 - **MEMORY_MONITOR_PRIVATE_ATTRIBUTE_FIX.md**: Complete implementation documentation

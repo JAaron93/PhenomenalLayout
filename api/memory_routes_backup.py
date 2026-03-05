@@ -6,15 +6,17 @@ from typing import Any
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Query,
     Request,
     Response,
-    status,
 )
 
-from api.auth import get_admin_user, get_current_user_optional_dependency, UserRole, ENABLE_AUTH
-from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
+from api.auth import (
+    get_admin_user, get_current_user_optional_dependency, UserRole, ENABLE_AUTH
+)
+from api.rate_limit import (
+    add_rate_limit_headers, check_rate_limit, get_client_ip
+)
 from utils.memory_monitor import (
     force_garbage_collection,
     get_memory_monitor,
@@ -136,8 +138,7 @@ def _fetch_monitor_status_with_headers(
 
 def _set_error_response_with_rate_limit_headers(
     response: Response,
-    client_ip: str,
-    limit_type: str,
+    request: Request,
     status_code: int,
     error: str,
     message: str
@@ -145,12 +146,13 @@ def _set_error_response_with_rate_limit_headers(
     """
     Helper to set error response with consistent rate-limit headers.
 
-    Ensures admin endpoints return the same rate-limit headers on error paths
-    as they do on success paths, matching the behavior of
-    _fetch_monitor_status_with_headers.
+    Ensures endpoints return the same rate-limit headers on error paths
+    as they do on success paths, centralizing get_client_ip, response handling,
+    and add_rate_limit_headers calls.
     """
+    client_ip = get_client_ip(request)
     response.status_code = status_code
-    add_rate_limit_headers(response, limit_type, client_ip)
+    add_rate_limit_headers(response, "read", client_ip)
     return {
         "success": False,
         "error": error,
@@ -173,27 +175,17 @@ async def get_memory_statistics(
         if not ENABLE_AUTH:
             return _fetch_memory_stats_with_headers(request, response)
         else:
-            response.status_code = 401
-            # Add rate limit headers on auth error
-            client_ip = get_client_ip(request)
-            add_rate_limit_headers(response, "read", client_ip)
-            return {
-                "success": False,
-                "error": "Unauthorized",
-                "message": "Authentication required"
-            }
+            return _set_error_response_with_rate_limit_headers(
+                response, request, 401,
+                "Unauthorized", "Authentication required"
+            )
 
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        response.status_code = status.HTTP_403_FORBIDDEN
-        # Add rate limit headers on auth error
-        client_ip = get_client_ip(request)
-        add_rate_limit_headers(response, "read", client_ip)
-        return {
-            "success": False,
-            "error": "Forbidden",
-            "message": "Insufficient permissions for read-only access"
-        }
+        return _set_error_response_with_rate_limit_headers(
+            response, request, 403, "Forbidden",
+            "Insufficient permissions for read-only access"
+        )
 
     return _fetch_memory_stats_with_headers(request, response)
 
@@ -220,7 +212,10 @@ async def force_garbage_collection_endpoint(
         return {
             "success": True,
             "data": result,
-            "message": f"Garbage collection completed: {result['collected_objects']} objects collected"
+            "message": (
+                f"Garbage collection completed: "
+                f"{result['collected_objects']} objects collected"
+            )
         }
     except Exception:
         logger.exception("Failed to force garbage collection")
@@ -335,27 +330,17 @@ async def get_monitoring_status(
         if not ENABLE_AUTH:
             return _fetch_monitor_status_with_headers(request, response)
         else:
-            response.status_code = 401
-            # Add rate limit headers on auth error
-            client_ip = get_client_ip(request)
-            add_rate_limit_headers(response, "read", client_ip)
-            return {
-                "success": False,
-                "error": "Unauthorized",
-                "message": "Authentication required"
-            }
+            return _set_error_response_with_rate_limit_headers(
+                response, request, 401,
+                "Unauthorized", "Authentication required"
+            )
     
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        response.status_code = status.HTTP_403_FORBIDDEN
-        # Add rate limit headers on auth error
-        client_ip = get_client_ip(request)
-        add_rate_limit_headers(response, "read", client_ip)
-        return {
-            "success": False,
-            "error": "Forbidden",
-            "message": "Insufficient permissions for read-only access"
-        }
+        return _set_error_response_with_rate_limit_headers(
+            response, request, 403, "Forbidden",
+            "Insufficient permissions for read-only access"
+        )
 
     return _fetch_monitor_status_with_headers(request, response)
 

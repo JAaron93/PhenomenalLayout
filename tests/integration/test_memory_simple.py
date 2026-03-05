@@ -2,11 +2,13 @@
 """Simple test to verify fixture is working."""
 
 import logging
+import sys
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 logger = logging.getLogger(__name__)
+
 
 @pytest.fixture
 def test_client():
@@ -16,6 +18,10 @@ def test_client():
         "MEMORY_API_JWT_SECRET": "test-secret-key",
         "MEMORY_API_KEY": "test-admin-key"
     }
+
+    # Save the original api.auth module state before patching
+    original_auth = sys.modules.get('api.auth')
+
     with patch.dict('os.environ', test_env):
         import importlib
         import api.auth
@@ -25,6 +31,14 @@ def test_client():
         client = TestClient(create_app())
         logger.debug("Created test client for testing")
         yield client
+
+    # Restore the original api.auth module state after the test
+    if original_auth is not None:
+        sys.modules['api.auth'] = original_auth
+    else:
+        # Module wasn't originally loaded, remove it from sys.modules
+        sys.modules.pop('api.auth', None)
+
 
 def test_simple_endpoint(test_client):
     """Test simple endpoint to verify auth is working."""

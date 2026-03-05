@@ -20,9 +20,13 @@ def test_fixture_debug(test_client):
     )
 
     response_json = response.json()
-    success = response_json["success"]
-    error = response_json["error"]
-    message = response_json["message"]
+    success = response_json.get("success")
+    error = response_json.get("error")
+    message = response_json.get("message")
+
+    assert success is not None, f"response missing 'success': {response_json}"
+    assert error is not None, f"response missing 'error': {response_json}"
+    assert message is not None, f"response missing 'message': {response_json}"
 
     assert not success, f"Expected success to be False, got {success}"
     assert error == "Unauthorized", (

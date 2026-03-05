@@ -43,7 +43,7 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ.setdefault("DEBUG", "true")
     # Provide a deterministic SECRET_KEY for tests to ensure consistency across workers
     os.environ.setdefault(
-        "SECRET_KEY", "test-secret-key-deterministic-for-testing-only-32chars"
+        "SECRET_KEY", "test-secret-key-for-testing-only!"
     )
     # When focusing, quiet output at runtime without relying on pre-parsed
     # addopts
@@ -82,6 +82,12 @@ def test_client():
         # Create test client with patched environment
         client = TestClient(app_module.create_app())
         yield client
+
+        # Teardown: reload modules to restore state after patch context exits
+        importlib.reload(app_module)
+        importlib.reload(api.rate_limit)
+        importlib.reload(api.memory_routes)
+        importlib.reload(api.auth)
 
 
 @pytest.fixture
