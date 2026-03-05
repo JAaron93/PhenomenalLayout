@@ -115,7 +115,7 @@ def test_cleanup_method(monitor):
 
 def test_cleanup_memory_monitor_function():
     """Test that cleanup_memory_monitor function works correctly."""
-    print("\nTesting atexit handler registration...")
+    print("\nTesting cleanup_memory_monitor function...")
     
     # Test that the cleanup function exists and is callable
     assert callable(cleanup_memory_monitor), "Cleanup function should be callable"

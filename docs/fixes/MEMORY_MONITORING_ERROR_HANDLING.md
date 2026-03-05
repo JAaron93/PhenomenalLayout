@@ -174,7 +174,7 @@ def get_memory_stats() -> dict[str, Any]:
 
 ### Test Files
 - **test_memory_monitoring_error_handling.py**: Comprehensive test suite
-- **`scripts/verify/verify_memory_monitoring_error_handling.py`**: Manual verification script
+- **scripts/verify/verify_memory_monitoring_error_handling.py**: Manual verification script
 
 ### Documentation
 - **MEMORY_MONITORING_ERROR_HANDLING.md**: Complete implementation documentation

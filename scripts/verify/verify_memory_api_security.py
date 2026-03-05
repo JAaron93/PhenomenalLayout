@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 # Add the project root to Python path
-project_root = Path(__file__).resolve().parent if '__file__' in globals() else Path('.').resolve()
+project_root = Path(__file__).resolve().parent.parent.parent if '__file__' in globals() else Path('.').resolve()
 sys.path.insert(0, str(project_root))
 
 def test_security_configuration():
@@ -37,6 +37,7 @@ def test_security_configuration():
     # Test API key functionality
     test_key = "test-key-12345"
     original_key = os.getenv("MEMORY_API_KEY")
+    original_jwt_secret = os.getenv("MEMORY_API_JWT_SECRET")
     try:
         os.environ["MEMORY_API_KEY"] = test_key
         # Reload to pick up env var
@@ -51,7 +52,11 @@ def test_security_configuration():
             os.environ["MEMORY_API_KEY"] = original_key
         else:
             os.environ.pop("MEMORY_API_KEY", None)
-    
+        
+        if original_jwt_secret is not None:
+            os.environ["MEMORY_API_JWT_SECRET"] = original_jwt_secret
+        else:
+            os.environ.pop("MEMORY_API_JWT_SECRET", None)
     # Test rate limiting module
     from api.rate_limit import (
         TokenBucket,
@@ -91,7 +96,8 @@ def test_memory_routes_security():
     print("Testing memory routes security...")
     
     # Check that memory routes file imports auth and rate limiting
-    with open('/Users/pretermodernist/PhenomenalLayout/api/memory_routes.py', 'r') as f:
+    memory_routes_path = project_root / 'api' / 'memory_routes.py'
+    with open(memory_routes_path, 'r') as f:
         content = f.read()
     
     # Should import auth and rate limiting
@@ -116,7 +122,8 @@ def test_environment_variables():
     print("Testing environment variables...")
     
     # Check .env.example has new variables
-    with open('/Users/pretermodernist/PhenomenalLayout/.env.example', 'r') as f:
+    env_example_path = project_root / '.env.example'
+    with open(env_example_path, 'r') as f:
         content = f.read()
     
     assert "MEMORY_API_ENABLE_AUTH" in content
@@ -206,7 +213,7 @@ if __name__ == "__main__":
         print("✓ api/rate_limit.py - Rate limiting middleware")
         print("✓ api/memory_routes.py - Secured memory endpoints")
         print("✓ .env.example - Security configuration")
-        print("✓ test_memory_api_security.py - Security tests")
+        print("✓ verify_memory_api_security.py - Security verification script")
         
         print("\nSecurity Features:")
         print("- JWT tokens with 24-hour expiration")

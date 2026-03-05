@@ -24,7 +24,7 @@ def auth_setup():
         "MEMORY_API_KEY": "test-admin-key"
     }
     
-    # Save the original module if it exists
+    # Save original module if it exists
     original_module = sys.modules.get('api.auth')
     
     with patch.dict('os.environ', test_env):
@@ -32,16 +32,16 @@ def auth_setup():
         import api.auth
         importlib.reload(api.auth)
         
-        # Yield the module and its exports for tests
+        # Yield module and its exports for tests
         yield {
             'module': api.auth,
             'create_jwt_token': api.auth.create_jwt_token,
             'verify_jwt_token': api.auth.verify_jwt_token,
             'UserRole': api.auth.UserRole
         }
-        
-        # Teardown: reload to restore original state
-        importlib.reload(api.auth)
+    
+    # Teardown: reload to restore original state after patch context has exited
+    importlib.reload(api.auth)
     
     # Restore the original module in sys.modules if it existed
     if original_module is not None:

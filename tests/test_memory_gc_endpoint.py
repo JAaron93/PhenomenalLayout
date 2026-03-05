@@ -7,114 +7,33 @@ from fastapi.testclient import TestClient
 from app import create_app
 from api.auth import create_jwt_token, UserRole, AuthConfig
 
-def test_gc_direct():
-    """Test GC endpoint directly."""
-    test_config = {
-        "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key", 
-        "MEMORY_API_KEY": "test-admin-key"
-    }
-    
-    # Create app with test configuration
-    client = TestClient(create_app(test_config))
-    
-    # Create auth config for token generation
-    auth_config = AuthConfig(test_config)
-    
-    # Create admin token
-    admin_token = create_jwt_token("admin_user", UserRole.ADMIN, auth_config)
-    
-    # Test GC endpoint
-    response = client.post(
-        "/api/v1/memory/gc",
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
-    
-    assert response.status_code == 200, (
-        f"Expected 200, got {response.status_code}: {response.text}"
-    )
 
-    # Validate response structure
-    response_json = response.json()
+def validate_response_structure(response_json):
+    """Validate common API response structure."""
     assert isinstance(response_json, dict), (
         f"Expected dict response, got {type(response_json)}"
     )
-
+    
     # Validate top-level keys
     assert response_json.get("success") is True, (
         f"Expected success=True, got {response_json.get('success')}"
     )
     assert "data" in response_json, "Expected 'data' key in response"
     assert "message" in response_json, "Expected 'message' key in response"
-
+    assert isinstance(response_json.get("message"), str), (
+        f"Expected message to be str, got {type(response_json.get('message'))}"
+    )
+    
     # Validate data structure
     data = response_json.get("data")
-    assert isinstance(data, dict), f"Expected data to be dict, got {type(data)}"
-    assert "collected_objects" in data, (
-        "Expected 'collected_objects' in data"
+    assert isinstance(data, dict), (
+        f"Expected data to be dict, got {type(data)}"
     )
-    assert isinstance(data.get("collected_objects"), int), (
-        f"Expected collected_objects to be int, "
-        f"got {type(data.get('collected_objects'))}"
-    )
-    assert data.get("collected_objects") >= 0, (
-        f"Expected collected_objects >= 0, "
-        f"got {data.get('collected_objects')}"
-    )
+    return data
 
-    # Validate timestamp
-    assert "timestamp" in data, "Expected 'timestamp' in data"
-    timestamp_value = data.get("timestamp")
-    assert isinstance(timestamp_value, str), (
-        f"Expected timestamp to be str, got {type(timestamp_value)}"
-    )
-    
-    # Validate timestamp format by attempting to parse it
-    try:
-        # Python 3.11+ has native 'Z' support; 3.10 and below need workaround
-        if sys.version_info < (3, 11) and timestamp_value.endswith('Z'):
-            ts_str = timestamp_value[:-1] + '+00:00'
-        else:
-            ts_str = timestamp_value
-        datetime.fromisoformat(ts_str)
-    except (ValueError, TypeError) as e:
-        raise AssertionError(
-            f"Failed to parse timestamp '{timestamp_value}' "
-            f"as ISO format: {e}"
-        )
-    
-    # Also test monitoring status to make sure it works
-    response2 = client.get(
-        "/api/v1/memory/monitoring/status",
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
 
-    assert response2.status_code == 200, (
-        f"Expected 200, got {response2.status_code}: {response2.text}"
-    )
-
-    # Validate monitoring status response structure
-    status_json = response2.json()
-    assert isinstance(status_json, dict), (
-        f"Expected dict response, got {type(status_json)}"
-    )
-
-    # Validate top-level keys
-    assert status_json.get("success") is True, (
-        f"Expected success=True, got {status_json.get('success')}"
-    )
-    assert "data" in status_json, "Expected 'data' key in response"
-    assert "message" in status_json, "Expected 'message' key in response"
-    assert isinstance(status_json.get("message"), str), (
-        f"Expected message to be str, got {type(status_json.get('message'))}"
-    )
-
-    # Validate data structure
-    status_data = status_json.get("data")
-    assert isinstance(status_data, dict), (
-        f"Expected data to be dict, got {type(status_data)}"
-    )
-
+def validate_monitoring_data(status_data):
+    """Validate monitoring-specific data fields."""
     # Validate monitoring flag (boolean)
     assert "monitoring" in status_data, (
         f"Response missing 'monitoring': {status_data}"
@@ -147,7 +66,7 @@ def test_gc_direct():
         f"Expected alert_threshold_mb > 0, got {status_data.get('alert_threshold_mb')}"
     )
 
-    # Validate baseline_memory_mb (float/int or None if not started)
+    # Validate baseline_memory_mb (float/int or None)
     assert "baseline_memory_mb" in status_data, (
         f"Response missing 'baseline_memory_mb': {status_data}"
     )
@@ -171,5 +90,98 @@ def test_gc_direct():
     )
     assert peak_val >= 0, f"Expected peak_memory_mb >= 0, got {peak_val}"
 
+
+def create_test_client_and_token():
+    """Create test client and admin token for testing."""
+    test_config = {
+        "MEMORY_API_ENABLE_AUTH": "true",
+        "MEMORY_API_JWT_SECRET": "test-secret-key", 
+        "MEMORY_API_KEY": "test-admin-key"
+    }
+    
+    # Create app with test configuration
+    client = TestClient(create_app(test_config))
+    
+    # Create auth config for token generation
+    auth_config = AuthConfig(test_config)
+    
+    # Create admin token
+    admin_token = create_jwt_token("admin_user", UserRole.ADMIN, auth_config)
+    
+    return client, admin_token
+
+def test_gc_direct():
+    """Test GC endpoint directly."""
+    client, admin_token = create_test_client_and_token()
+    
+    # Test GC endpoint
+    response = client.post(
+        "/api/v1/memory/gc",
+        headers={"Authorization": f"Bearer {admin_token}"}
+    )
+    
+    assert response.status_code == 200, (
+        f"Expected 200, got {response.status_code}: {response.text}"
+    )
+
+    # Validate response structure
+    data = validate_response_structure(response.json())
+    
+    # Validate GC-specific data
+    assert "collected_objects" in data, (
+        "Expected 'collected_objects' in data"
+    )
+    assert isinstance(data.get("collected_objects"), int), (
+        f"Expected collected_objects to be int, "
+        f"got {type(data.get('collected_objects'))}"
+    )
+    assert data.get("collected_objects") >= 0, (
+        f"Expected collected_objects >= 0, "
+        f"got {data.get('collected_objects')}"
+    )
+
+    # Validate timestamp
+    assert "timestamp" in data, "Expected 'timestamp' in data"
+    timestamp_value = data.get("timestamp")
+    assert isinstance(timestamp_value, str), (
+        f"Expected timestamp to be str, got {type(timestamp_value)}"
+    )
+    
+    # Validate timestamp format by attempting to parse it
+    try:
+        # Python 3.11+ has native 'Z' support; 3.10 and below need workaround
+        if sys.version_info < (3, 11) and timestamp_value.endswith('Z'):
+            ts_str = timestamp_value[:-1] + '+00:00'
+        else:
+            ts_str = timestamp_value
+        datetime.fromisoformat(ts_str)
+    except (ValueError, TypeError) as e:
+        raise AssertionError(
+            f"Failed to parse timestamp '{timestamp_value}' "
+            f"as ISO format: {e}"
+        )
+
+
+def test_monitoring_status():
+    """Test monitoring status endpoint directly."""
+    client, admin_token = create_test_client_and_token()
+    
+    # Test monitoring status endpoint
+    response = client.get(
+        "/api/v1/memory/monitoring/status",
+        headers={"Authorization": f"Bearer {admin_token}"}
+    )
+
+    assert response.status_code == 200, (
+        f"Expected 200, got {response.status_code}: {response.text}"
+    )
+
+    # Validate response structure and get data
+    status_data = validate_response_structure(response.json())
+    
+    # Validate monitoring-specific data
+    validate_monitoring_data(status_data)
+
 if __name__ == "__main__":
     test_gc_direct()
+    test_monitoring_status()

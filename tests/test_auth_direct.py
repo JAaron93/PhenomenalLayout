@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """Test auth dependencies directly."""
 
+from datetime import datetime, timedelta, timezone
+import jwt
 from fastapi.testclient import TestClient
 from app import create_app
 from api.auth import create_jwt_token, UserRole, AuthConfig
 
+# Shared test configuration for all auth tests
+TEST_CONFIG = {
+    "MEMORY_API_ENABLE_AUTH": "true",
+    "MEMORY_API_JWT_SECRET": "test-secret-key",
+    "MEMORY_API_KEY": "test-admin-key"
+}
+
 def test_auth_direct():
     """Test auth dependencies directly."""
-    test_config = {
-        "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key", 
-        "MEMORY_API_KEY": "test-admin-key"
-    }
-    
     # Create app with test configuration
-    client = TestClient(create_app(test_config))
+    client = TestClient(create_app(TEST_CONFIG))
     
     # Create auth config for token generation
-    auth_config = AuthConfig(test_config)
+    auth_config = AuthConfig(TEST_CONFIG)
     
     # Create admin token
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN, auth_config)
@@ -73,13 +76,7 @@ def test_auth_direct():
 
 def test_auth_no_header():
     """Test that missing Authorization header returns 401."""
-    test_config = {
-        "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
-        "MEMORY_API_KEY": "test-admin-key"
-    }
-
-    client = TestClient(create_app(test_config))
+    client = TestClient(create_app(TEST_CONFIG))
 
     response = client.post("/api/v1/memory/gc")
 
@@ -90,13 +87,7 @@ def test_auth_no_header():
 
 def test_auth_malformed_jwt():
     """Test that malformed/invalid JWT returns 401."""
-    test_config = {
-        "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
-        "MEMORY_API_KEY": "test-admin-key"
-    }
-
-    client = TestClient(create_app(test_config))
+    client = TestClient(create_app(TEST_CONFIG))
 
     response = client.post(
         "/api/v1/memory/gc",
@@ -110,17 +101,8 @@ def test_auth_malformed_jwt():
 
 def test_auth_expired_token():
     """Test that expired JWT returns 401."""
-    import jwt
-    from datetime import datetime, timedelta, timezone
-
-    test_config = {
-        "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
-        "MEMORY_API_KEY": "test-admin-key"
-    }
-
-    client = TestClient(create_app(test_config))
-    auth_config = AuthConfig(test_config)
+    client = TestClient(create_app(TEST_CONFIG))
+    auth_config = AuthConfig(TEST_CONFIG)
 
     # Create an expired token (expired 1 hour ago)
     expiration = datetime.now(timezone.utc) - timedelta(hours=1)

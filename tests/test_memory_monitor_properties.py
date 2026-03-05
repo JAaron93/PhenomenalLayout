@@ -105,22 +105,16 @@ class TestMemoryMonitorProperties:
         def writer_thread():
             """Thread that starts/stops monitoring concurrently.
 
-            Uses try/except to handle idempotent start/stop calls, making
-            the test resilient to TOCTOU race conditions.
+            start_monitoring() and stop_monitoring() are idempotent - they
+            handle invalid state gracefully without raising exceptions.
             """
             try:
                 for _ in range(10):
                     # Attempt start (idempotent - ok if already started)
-                    try:
-                        memory_monitor.start_monitoring()
-                    except RuntimeError:
-                        pass  # Already started
+                    memory_monitor.start_monitoring()
                     time.sleep(0.01)
                     # Attempt stop (idempotent - ok if already stopped)
-                    try:
-                        memory_monitor.stop_monitoring()
-                    except RuntimeError:
-                        pass  # Already stopped
+                    memory_monitor.stop_monitoring()
                     time.sleep(0.01)
             except Exception as e:
                 results["errors"].append(str(e))

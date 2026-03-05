@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify MCP Lingo client timeout configuration is working correctly."""
 
+import importlib
 import os
 import sys
 from pathlib import Path
@@ -12,7 +13,7 @@ if '__file__' not in globals():
         "Callers must use a proper file-based execution environment."
     )
 
-project_root = Path(__file__).resolve().parent
+project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 def test_timeout_configuration():
@@ -109,7 +110,6 @@ def test_cleanup_timeout_configuration():
     os.environ['LINGO_MCP_STDIO_CLEANUP_TIMEOUT'] = '20.0'
     
     # Reimport to pick up environment
-    import importlib
     import services.mcp_lingo_client
     importlib.reload(services.mcp_lingo_client)
     from services.mcp_lingo_client import McpLingoConfig, McpLingoClient

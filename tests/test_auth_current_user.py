@@ -38,13 +38,12 @@ def auth_module():
             api.auth.UserRole
         )
 
-        # After yield, reload again while still in patched context
-        # to restore original state without errors
-        importlib.reload(api.auth)
-
     # Restore original module state if it was previously loaded
     if original_module is not None:
         sys.modules['api.auth'] = original_module
+    else:
+        # Remove so next import loads with actual environment
+        sys.modules.pop('api.auth', None)
 
 
 @pytest.mark.asyncio
@@ -52,21 +51,15 @@ async def test_get_current_user_raises_401_when_credentials_none(auth_module):
     """Test get_current_user function directly."""
     create_jwt_token, get_current_user, UserRole = auth_module
 
-    # Create admin token
-    admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
-
-    # Test get_current_user directly
+    # Test get_current_user directly with no credentials
     class MockRequest:
-        def __init__(self, headers):
-            self.headers = headers
+        def __init__(self, headers=None):
+            self.headers = headers or {}
 
-    request = MockRequest(
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
+    request = MockRequest()
 
     with pytest.raises(HTTPException) as exc_info:
-        # Passes None for credentials, skipping FastAPI's dependency
-        # injection which naturally expects a 401
+        # Passes None for credentials to exercise the early 401 path
         await get_current_user(request, None, None)
 
     assert exc_info.value.status_code == 401

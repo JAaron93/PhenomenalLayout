@@ -19,8 +19,9 @@ def test_client():
         "MEMORY_API_KEY": "test-admin-key"
     }
 
-    # Save the original api.auth module state before patching
+    # Save the original module states before patching
     original_auth = sys.modules.get('api.auth')
+    original_app = sys.modules.get('app')
 
     with patch.dict('os.environ', test_env):
         import importlib
@@ -32,12 +33,18 @@ def test_client():
         logger.debug("Created test client for testing")
         yield client
 
-    # Restore the original api.auth module state after the test
+    # Restore the original module states after the test
     if original_auth is not None:
         sys.modules['api.auth'] = original_auth
     else:
         # Module wasn't originally loaded, remove it from sys.modules
         sys.modules.pop('api.auth', None)
+
+    if original_app is not None:
+        sys.modules['app'] = original_app
+    else:
+        # Module wasn't originally loaded, remove it from sys.modules
+        sys.modules.pop('app', None)
 
 
 def test_simple_endpoint(test_client):

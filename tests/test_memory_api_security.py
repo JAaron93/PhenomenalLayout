@@ -171,8 +171,12 @@ def test_jwt_tokens_with_auth_enabled():
     }
 
     with patch.dict(os.environ, test_env):
-        # Import after setting environment
-        from api.auth import create_jwt_token
+        # Reload the auth module to pick up new environment variables
+        import api.auth
+        importlib.reload(api.auth)
+        
+        # Import after reloading module
+        from api.auth import create_jwt_token, verify_jwt_token
 
         # Test JWT token creation
         read_token = create_jwt_token("read_user", UserRole.READ_ONLY)

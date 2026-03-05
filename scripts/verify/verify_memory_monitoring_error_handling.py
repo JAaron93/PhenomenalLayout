@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from utils.memory_monitor import (
     MemoryMonitor,
@@ -19,7 +19,7 @@ def test_error_handling():
     print("Testing memory monitoring error handling...")
     
     # Test 1: Normal operation
-    print("✓ Testing normal operation...")
+    print("Testing normal operation...")
     try:
         memory = MemoryMonitor._get_memory_usage_mb()
         print(f"  Current memory: {memory:.1f} MB")
@@ -29,9 +29,9 @@ def test_error_handling():
         return False
     
     # Test 2: psutil.NoSuchProcess handling
-    print("✓ Testing psutil.NoSuchProcess handling...")
+    print("Testing psutil.NoSuchProcess handling...")
     try:
-        with patch('psutil.Process') as mock_process:
+        with patch('utils.memory_monitor.psutil.Process') as mock_process:
             mock_process.side_effect = psutil.NoSuchProcess(0)
             
             try:
@@ -46,7 +46,7 @@ def test_error_handling():
         return False
     
     # Test 3: get_current_stats error propagation
-    print("✓ Testing get_current_stats error propagation...")
+    print("Testing get_current_stats error propagation...")
     try:
         monitor = MemoryMonitor()
         
@@ -65,7 +65,7 @@ def test_error_handling():
         return False
     
     # Test 4: start_monitoring baseline failure
-    print("✓ Testing start_monitoring baseline failure...")
+    print("Testing start_monitoring baseline failure...")
     try:
         monitor = MemoryMonitor()
         
@@ -84,7 +84,7 @@ def test_error_handling():
         return False
     
     # Test 5: stop_monitoring graceful error handling
-    print("✓ Testing stop_monitoring graceful error handling...")
+    print("Testing stop_monitoring graceful error handling...")
     try:
         monitor = MemoryMonitor()
         monitor._baseline_memory = 100.0
@@ -103,11 +103,12 @@ def test_error_handling():
         return False
     
     # Test 6: get_memory_stats function error propagation
-    print("✓ Testing get_memory_stats function error propagation...")
+    print("Testing get_memory_stats function error propagation...")
     try:
-        from utils.memory_monitor import get_memory_monitor
-        
         with patch('utils.memory_monitor.get_memory_monitor') as mock_get_monitor:
+            # Import get_memory_stats after patch to ensure it uses the mocked get_memory_monitor
+            from utils.memory_monitor import get_memory_stats
+            
             mock_monitor_instance = mock_get_monitor.return_value
             mock_monitor_instance.get_current_stats.side_effect = MemoryMonitoringError("Function failure")
             
@@ -121,7 +122,7 @@ def test_error_handling():
         print(f"  ❌ Unexpected error: {e}")
         return False
     
-    print("✓ All error handling tests passed!")
+    print("All error handling tests passed!")
     return True
 
 def test_error_messages():
@@ -136,7 +137,7 @@ def test_error_messages():
     
     for error_msg, expected_content in test_cases:
         try:
-            with patch('psutil.Process') as mock_process:
+            with patch('utils.memory_monitor.psutil.Process') as mock_process:
                 mock_process.side_effect = Exception(error_msg)
                 
                 try:
@@ -154,7 +155,7 @@ def test_error_messages():
             print(f"  ❌ Unexpected error testing case: {e}")
             return False
     
-    print("✓ All error message tests passed!")
+    print("All error message tests passed!")
     return True
 
 if __name__ == "__main__":
@@ -167,7 +168,7 @@ if __name__ == "__main__":
         print("- Descriptive error messages with original cause")
         print("- Graceful degradation in monitoring loop")
         print("- Proper error propagation to API layer")
-        print("- HTTP 503 responses for monitoring failures")
+        # - HTTP 503 responses for monitoring failures
     else:
         print("\n❌ Error handling tests failed!")
         sys.exit(1)

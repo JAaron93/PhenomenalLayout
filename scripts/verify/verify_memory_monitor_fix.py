@@ -5,7 +5,7 @@ import sys
 import os
 
 # Add project root to Python path
-project_root = os.path.abspath(os.path.dirname(__file__))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
 def test_api_uses_public_properties():
@@ -76,23 +76,43 @@ def test_api_response_structure():
         "current_stats": monitor.get_current_stats()
     }
     
-    # Validate structure
-    assert "is_monitoring" in api_data
-    assert "check_interval" in api_data
-    assert "alert_threshold_mb" in api_data
-    assert "baseline_memory_mb" in api_data
-    assert "peak_memory_mb" in api_data
-    assert "current_stats" in api_data
-    
-    # Validate types
+    # Validate types and values (keys are guaranteed by construction above)
     assert isinstance(api_data["is_monitoring"], bool)
+
+    # check_interval should be a positive number (typically 1-300 seconds)
     assert isinstance(api_data["check_interval"], (int, float))
+    assert api_data["check_interval"] > 0, "check_interval must be positive"
+    assert api_data["check_interval"] <= 300, "check_interval should be <= 300 seconds"
+
+    # alert_threshold_mb should be a positive number (typically > 0)
     assert isinstance(api_data["alert_threshold_mb"], (int, float))
-    assert api_data["baseline_memory_mb"] is None or isinstance(api_data["baseline_memory_mb"], float)
+    assert api_data["alert_threshold_mb"] > 0, "alert_threshold_mb must be positive"
+
+    # baseline_memory_mb should be None (not started) or a positive float
+    baseline = api_data["baseline_memory_mb"]
+    assert baseline is None or isinstance(baseline, float)
+    if baseline is not None:
+        assert baseline >= 0, "baseline_memory_mb must be non-negative"
+
+    # peak_memory_mb should be a non-negative float, and >= baseline if monitoring
     assert isinstance(api_data["peak_memory_mb"], float)
+    assert api_data["peak_memory_mb"] >= 0, "peak_memory_mb must be non-negative"
+    if baseline is not None:
+        assert api_data["peak_memory_mb"] >= baseline, (
+            "peak_memory_mb should be >= baseline_memory_mb"
+        )
+
+    # current_stats should be a dict with expected structure
     assert isinstance(api_data["current_stats"], dict)
-    
-    print("✓ API response structure unchanged")
+    # If monitoring, current_stats should have expected keys
+    if api_data["is_monitoring"] and api_data["current_stats"]:
+        expected_keys = {"current_mb", "trend", "alerts_triggered"}
+        actual_keys = set(api_data["current_stats"].keys())
+        assert actual_keys.intersection(expected_keys), (
+            f"current_stats missing expected keys. Got: {actual_keys}"
+        )
+
+    print("✓ API response structure valid with meaningful value checks")
 
 def test_encapsulation_improvement():
     """Test that encapsulation has been improved."""
@@ -177,6 +197,9 @@ def test_thread_safety():
     
     # Start threads
     threads = [
+        threading.Thread(target=reader_thread),
+        threading.Thread(target=reader_thread),
+        threading.Thread(target=reader_thread),
         threading.Thread(target=reader_thread),
         threading.Thread(target=writer_thread)
     ]

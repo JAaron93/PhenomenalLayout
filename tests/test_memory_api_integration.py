@@ -12,6 +12,43 @@ from api.auth import create_jwt_token, verify_jwt_token, UserRole
 TEST_ADMIN_API_KEY = "test-admin-key"
 
 
+def _assert_success_response(resp, method: str, url: str) -> dict:
+    """Assert response is successful and return parsed body.
+
+    Validates:
+    - status_code == 200
+    - Response body is a dict
+    - 'success' field exists and is a bool
+    - 'success' field is True
+
+    Args:
+        resp: The response object from TestClient
+        method: HTTP method for error messages
+        url: Endpoint URL for error messages
+
+    Returns:
+        Parsed JSON body as dict for additional assertions
+    """
+    assert resp.status_code == 200, (
+        f"{method} {url} should succeed: "
+        f"status={resp.status_code}, body={resp.text}"
+    )
+    body = resp.json()
+    assert isinstance(body, dict), (
+        f"{method} {url} response should be a dict: {type(body)}"
+    )
+    assert "success" in body, (
+        f"{method} {url} response missing 'success' field: {body}"
+    )
+    assert isinstance(body["success"], bool), (
+        f"{method} {url} 'success' should be bool: {type(body['success'])}"
+    )
+    assert body["success"] is True, (
+        f"{method} {url} response should indicate success: {body}"
+    )
+    return body
+
+
 @pytest.fixture
 def reload_app_with_env():
     """Fixture to reload modules with patched environment and cleanup after.
@@ -43,6 +80,8 @@ def reload_app_with_env():
         with patch.dict("os.environ", test_env):
             # Reload modules in dependency order
             for name in MODULE_NAMES:
+                if name not in sys.modules:
+                    raise RuntimeError(f"Module {name} not loaded; cannot reload")
                 importlib.reload(sys.modules[name])
 
             app_module = sys.modules["app"]
@@ -202,45 +241,11 @@ def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
         # Expected response schema: {"success": bool, "data": dict, "message": str}
         for method, url in read_endpoints:
             resp = client.request(method, url)
-            assert resp.status_code == 200, (
-                f"{method} {url} should succeed with auth disabled: "
-                f"status={resp.status_code}, body={resp.text}"
-            )
-            # Validate response schema explicitly
-            body = resp.json()
-            assert isinstance(body, dict), (
-                f"{method} {url} response should be a dict: {type(body)}"
-            )
-            assert "success" in body, (
-                f"{method} {url} response missing 'success' field: {body}"
-            )
-            assert isinstance(body["success"], bool), (
-                f"{method} {url} 'success' should be bool: {type(body['success'])}"
-            )
-            assert body["success"] is True, (
-                f"{method} {url} response should indicate success: {body}"
-            )
+            _assert_success_response(resp, method, url)
 
         for method, url in admin_endpoints:
             resp = client.request(method, url)
-            assert resp.status_code == 200, (
-                f"{method} {url} should succeed with auth disabled: "
-                f"status={resp.status_code}, body={resp.text}"
-            )
-            # Validate response schema explicitly
-            body = resp.json()
-            assert isinstance(body, dict), (
-                f"{method} {url} response should be a dict: {type(body)}"
-            )
-            assert "success" in body, (
-                f"{method} {url} response missing 'success' field: {body}"
-            )
-            assert isinstance(body["success"], bool), (
-                f"{method} {url} 'success' should be bool: {type(body['success'])}"
-            )
-            assert body["success"] is True, (
-                f"{method} {url} response should indicate success: {body}"
-            )
+            _assert_success_response(resp, method, url)
 
     else:
         # Auth enabled – requests without credentials should be rejected
