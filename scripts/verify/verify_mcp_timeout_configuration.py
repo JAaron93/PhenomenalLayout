@@ -38,7 +38,6 @@ def test_timeout_configuration():
     os.environ['LINGO_MCP_STDIO_CLEANUP_TIMEOUT'] = '30.0'
     
     # Force reimport to pick up new environment values
-    import importlib
     import services.mcp_lingo_client
     importlib.reload(services.mcp_lingo_client)
     from services.mcp_lingo_client import McpLingoConfig

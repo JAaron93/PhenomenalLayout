@@ -3,25 +3,27 @@
 
 import sys
 import os
+from typing import Callable, Any
+
 # Add parent directory to path for local development
 # Go up two levels: verify -> scripts -> repo root
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from utils.memory_monitor import MemoryMonitor, start_memory_monitoring
 
-def expect_value_error(description: str, callable: callable) -> bool:
+def expect_value_error(description: str, func: Callable[..., Any]) -> bool:
     """
     Helper function to test if a callable raises ValueError with appropriate error handling.
     
     Args:
         description: Description of the test case
-        callable: Zero-argument callable to test
+        func: Zero-argument callable to test
         
     Returns:
         True if ValueError was raised and handled correctly, False otherwise
     """
     try:
-        callable()
+        func()
         print(f"  ❌ Should have failed with {description}")
         return False
     except ValueError as e:

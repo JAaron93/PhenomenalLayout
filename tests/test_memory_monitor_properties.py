@@ -16,8 +16,7 @@ def memory_monitor():
         yield monitor
     finally:
         # Ensure monitor is stopped even if test fails
-        if monitor.is_monitoring:
-            monitor.stop_monitoring()
+        monitor.stop_monitoring()
 
 
 class TestMemoryMonitorProperties:

@@ -13,8 +13,8 @@ def auth_module():
     """Fixture that provides auth module components with patched environment.
 
     This fixture imports and reloads api.auth with a patched environment,
-    yields the necessary imports, and then reloads again to restore
-    original state.
+    yields the necessary imports, and then restores original module state
+    or removes the module so subsequent imports load with actual environment.
     """
     test_env = {
         "MEMORY_API_ENABLE_AUTH": "true",

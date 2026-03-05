@@ -106,8 +106,7 @@ def test_error_handling():
     print("Testing get_memory_stats function error propagation...")
     try:
         with patch('utils.memory_monitor.get_memory_monitor') as mock_get_monitor:
-            # Import get_memory_stats after patch to ensure it uses the mocked get_memory_monitor
-            from utils.memory_monitor import get_memory_stats
+            # Patching utils.memory_monitor.get_memory_monitor affects calls inside the already-imported get_memory_stats
             
             mock_monitor_instance = mock_get_monitor.return_value
             mock_monitor_instance.get_current_stats.side_effect = MemoryMonitoringError("Function failure")

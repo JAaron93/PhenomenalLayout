@@ -186,7 +186,6 @@ def test_jwt_tokens_with_auth_enabled():
         assert admin_token is not None, "Admin token should be created"
 
         # Verify tokens
-        from api.auth import verify_jwt_token
 
         read_payload = verify_jwt_token(read_token)
         admin_payload = verify_jwt_token(admin_token)
@@ -241,7 +240,6 @@ def test_rate_limit_configuration():
     
     with patch.dict(os.environ, test_env):
         # Reload the module to pick up new environment variable
-        import importlib
         import api.rate_limit
         importlib.reload(api.rate_limit)
         

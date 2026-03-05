@@ -27,7 +27,9 @@ def test_client():
         import importlib
         import api.auth
         from app import create_app
+        import app
         importlib.reload(api.auth)
+        importlib.reload(app)
 
         client = TestClient(create_app())
         logger.debug("Created test client for testing")

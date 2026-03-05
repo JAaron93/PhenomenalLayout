@@ -106,10 +106,13 @@ def test_api_response_structure():
     assert isinstance(api_data["current_stats"], dict)
     # If monitoring, current_stats should have expected keys
     if api_data["is_monitoring"] and api_data["current_stats"]:
-        expected_keys = {"current_mb", "trend", "alerts_triggered"}
+        expected_keys = {"current_memory_mb", "baseline_memory_mb", "peak_memory_mb", 
+                       "growth_mb", "growth_percent", "process_count", 
+                       "thread_count", "gc_stats"}
         actual_keys = set(api_data["current_stats"].keys())
-        assert actual_keys.intersection(expected_keys), (
-            f"current_stats missing expected keys. Got: {actual_keys}"
+        missing_keys = expected_keys - actual_keys
+        assert expected_keys <= actual_keys, (
+            f"current_stats missing expected keys: {missing_keys}. Got: {actual_keys}"
         )
 
     print("✓ API response structure valid with meaningful value checks")
