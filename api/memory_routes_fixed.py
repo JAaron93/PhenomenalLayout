@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response, HTTPException, status
 
-from api.auth import get_current_user_optional_dependency, UserRole
+from api.auth import get_current_user, UserRole
 from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
 from utils.memory_monitor import get_memory_monitor
 
@@ -59,19 +59,22 @@ def build_monitoring_response(
 async def get_monitoring_status(
     request: Request,
     response: Response,
-    current_user: dict = Depends(get_current_user_optional_dependency)
+    current_user: dict = Depends(get_current_user)
 ) -> dict[str, Any]:
-    """Get current memory monitoring status."""
+    """Get current memory monitoring status.
+
+    Requires authentication. Users with READ_ONLY or ADMIN role can access.
+    """
     # Check rate limit
     check_rate_limit(request, "read")
 
-    # If auth is enabled, verify user has appropriate role
-    if current_user is not None:
-        if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions for read-only access"
-            )
+    # Verify user has appropriate role (401 already raised by get_current_user
+    # if auth is missing/invalid, 403 for insufficient role)
+    if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for read-only access"
+        )
 
     # Build and return the monitoring response
     return build_monitoring_response(request, response)

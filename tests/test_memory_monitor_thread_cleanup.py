@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-# Add project root to Python path
-project_root = Path(__file__).resolve().parent if '__file__' in globals() else Path('.').resolve()
+# Add project root to Python path (needed when running from tests/ subdirectory)
+project_root = Path(__file__).resolve().parents[1] if '__file__' in globals() else Path('.').resolve()
 sys.path.insert(0, str(project_root))
 
 # Import test dependencies at module level

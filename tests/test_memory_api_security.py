@@ -11,7 +11,7 @@ import pytest
 import importlib
 
 # Add the project root to Python path
-project_root = Path(__file__).resolve().parents[0] if '__file__' in globals() else Path('.').resolve()
+project_root = Path(__file__).resolve().parents[1] if '__file__' in globals() else Path('.').resolve()
 sys.path.insert(0, str(project_root))
 
 from api.auth import create_jwt_token, verify_jwt_token, verify_api_key, UserRole

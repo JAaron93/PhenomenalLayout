@@ -223,11 +223,9 @@ class TestLogMemoryUsage:
                 log_memory_usage("test-label")
                 
                 # Should log a warning
-                mock_logger.warning.assert_called_once()
-                args = mock_logger.warning.call_args[0]
-                assert args[0] == "Failed to log memory usage%s: %s"
-                assert args[1] == " [test-label]"
-                assert args[2] == "Test failure"
+                mock_logger.warning.assert_called_once_with(
+                    "Failed to log memory usage%s: %s", " [test-label]", "Test failure"
+                )
 
     def test_log_memory_usage_general_exception(self):
         """Test log_memory_usage handles general exceptions gracefully."""

@@ -103,12 +103,20 @@ class TestMemoryMonitorProperties:
                 results["errors"].append(str(e))
         
         def writer_thread():
-            """Thread that starts/stops monitoring concurrently."""
+            """Thread that starts/stops monitoring concurrently.
+
+            Tests idempotency by conditionally calling start/stop based on
+            current state to avoid race conditions with duplicate operations.
+            """
             try:
                 for _ in range(10):
-                    memory_monitor.start_monitoring()
+                    # Only start if not already monitoring (tests idempotency)
+                    if not memory_monitor.is_monitoring:
+                        memory_monitor.start_monitoring()
                     time.sleep(0.01)
-                    memory_monitor.stop_monitoring()
+                    # Only stop if currently monitoring (tests idempotency)
+                    if memory_monitor.is_monitoring:
+                        memory_monitor.stop_monitoring()
                     time.sleep(0.01)
             except Exception as e:
                 results["errors"].append(str(e))

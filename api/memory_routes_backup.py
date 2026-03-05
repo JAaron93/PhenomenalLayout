@@ -185,10 +185,15 @@ async def get_memory_statistics(
 
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for read-only access"
-        )
+        response.status_code = status.HTTP_403_FORBIDDEN
+        # Add rate limit headers on auth error
+        client_ip = get_client_ip(request)
+        add_rate_limit_headers(response, "read", client_ip)
+        return {
+            "success": False,
+            "error": "Forbidden",
+            "message": "Insufficient permissions for read-only access"
+        }
 
     return _fetch_memory_stats_with_headers(request, response)
 
@@ -342,10 +347,15 @@ async def get_monitoring_status(
     
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for read-only access"
-        )
-    
+        response.status_code = status.HTTP_403_FORBIDDEN
+        # Add rate limit headers on auth error
+        client_ip = get_client_ip(request)
+        add_rate_limit_headers(response, "read", client_ip)
+        return {
+            "success": False,
+            "error": "Forbidden",
+            "message": "Insufficient permissions for read-only access"
+        }
+
     return _fetch_monitor_status_with_headers(request, response)
 
