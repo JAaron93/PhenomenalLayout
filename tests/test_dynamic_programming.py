@@ -81,7 +81,7 @@ class TestDynamicProgrammingCore:
         cache.put("d", 4)
 
         # 'a' should be evicted (least recently used)
-        assert cache.get("a") is None
+        assert cache.get("a") is cache.MISS
         assert cache.get("b") == 2
         assert cache.get("c") == 3
         assert cache.get("d") == 4
@@ -102,7 +102,7 @@ class TestDynamicProgrammingCore:
 
         with patch("time.time", return_value=fake_time):
             # Entry should be expired
-            assert cache.get("key") is None
+            assert cache.get("key") is cache.MISS
 
     def test_dynamic_registry_caching(self):
         """Test dynamic registry with caching."""

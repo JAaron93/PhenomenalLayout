@@ -116,7 +116,7 @@ class ConflictContext:
         )
 
 
-class DynamicConflictStrategy(StrategyPattern[Optional[str]]):
+class DynamicConflictStrategy(StrategyPattern[str | None]):
     """Dynamic strategy for conflict resolution."""
 
     def __init__(
@@ -227,7 +227,7 @@ class DynamicConflictResolutionEngine:
 
             # Check cache
             cached_result = self.resolution_cache.get(cache_key)
-            if cached_result is not None:
+            if cached_result is not self.resolution_cache.MISS:
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self.metrics.record_operation(duration_ms, cache_hit=True)
                 return cached_result

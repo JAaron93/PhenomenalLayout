@@ -191,12 +191,13 @@ def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY, config: AuthC
     if not auth_config.jwt_secret:
         raise ValueError("JWT secret not configured")
 
-    expiration = datetime.now(UTC) + timedelta(hours=JWT_EXPIRATION_HOURS)
+    now = datetime.now(UTC)
+    expiration = now + timedelta(hours=JWT_EXPIRATION_HOURS)
     payload = {
         "user_id": user_id,
         "role": role,
         "exp": expiration,
-        "iat": datetime.now(UTC),
+        "iat": now,
         "type": "access"
     }
     return jwt.encode(payload, auth_config.jwt_secret, algorithm=JWT_ALGORITHM)
@@ -472,12 +473,16 @@ async def get_current_user_optional_dependency(
 # Role-based access dependencies
 async def get_read_only_user(current_user: dict = Depends(get_current_user_dependency)) -> dict:
     """Dependency for read-only access."""
-    if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Read-only access required"
-        )
-    return current_user
+    user_role = current_user.get("role", UserRole.READ_ONLY)
+    
+    # Both admin and read-only users can access read-only endpoints
+    if user_role in (UserRole.ADMIN, UserRole.READ_ONLY):
+        return current_user
+        
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Read-only or admin access required"
+    )
 
 
 async def get_admin_user(current_user: dict = Depends(get_current_user_dependency)) -> dict:

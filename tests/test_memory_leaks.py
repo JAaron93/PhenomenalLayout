@@ -198,7 +198,7 @@ class TestTranslationServiceMemoryLeaks:
     def test_translation_service_cleanup_logging(self, translation_service):
         """Test translation service cleanup logging."""
         # Mock logger to capture log messages
-        with pytest.MonkeyPatch().context():
+        with pytest.MonkeyPatch().context() as monkeypatch:
             log_messages = []
 
             def mock_info(msg, *args):
@@ -208,28 +208,20 @@ class TestTranslationServiceMemoryLeaks:
                 log_messages.append(msg % args if args else msg)
 
             import services.translation_service
-            original_info = services.translation_service.logger.info
-            original_debug = services.translation_service.logger.debug
+            monkeypatch.setattr(services.translation_service.logger, "info", mock_info)
+            monkeypatch.setattr(services.translation_service.logger, "debug", mock_debug)
 
-            services.translation_service.logger.info = mock_info
-            services.translation_service.logger.debug = mock_debug
+            # Test synchronous cleanup
+            translation_service.close()
 
-            try:
-                # Test synchronous cleanup
-                translation_service.close()
-
-                # Verify cleanup was logged
-                cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
-                assert len(cleanup_messages) > 0
-
-            finally:
-                services.translation_service.logger.info = original_info
-                services.translation_service.logger.debug = original_debug
+            # Verify cleanup was logged
+            cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
+            assert len(cleanup_messages) > 0
 
     @pytest.mark.asyncio
     async def test_translation_service_async_cleanup_logging(self, translation_service):
         """Test translation service async cleanup logging."""
-        with pytest.MonkeyPatch().context():
+        with pytest.MonkeyPatch().context() as monkeypatch:
             log_messages = []
 
             def mock_info(msg, *args):
@@ -239,23 +231,15 @@ class TestTranslationServiceMemoryLeaks:
                 log_messages.append(msg % args if args else msg)
 
             import services.translation_service
-            original_info = services.translation_service.logger.info
-            original_debug = services.translation_service.logger.debug
+            monkeypatch.setattr(services.translation_service.logger, "info", mock_info)
+            monkeypatch.setattr(services.translation_service.logger, "debug", mock_debug)
 
-            services.translation_service.logger.info = mock_info
-            services.translation_service.logger.debug = mock_debug
+            # Test async cleanup
+            await translation_service.aclose()
 
-            try:
-                # Test async cleanup
-                await translation_service.aclose()
-
-                # Verify cleanup was logged
-                cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
-                assert len(cleanup_messages) > 0
-
-            finally:
-                services.translation_service.logger.info = original_info
-                services.translation_service.logger.debug = original_debug
+            # Verify cleanup was logged
+            cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
+            assert len(cleanup_messages) > 0
 
 
 class TestMcpClientMemoryLeaks:
@@ -431,9 +415,6 @@ class TestResourceLeakDetection:
 
     def test_gc_effectiveness(self):
         """Test garbage collection effectiveness."""
-        # Create objects and measure before/after GC
-        gc.get_count() if hasattr(gc, 'get_count') else (0, 0, 0)
-
         # Create some cyclic references
         objects = []
         for i in range(100):

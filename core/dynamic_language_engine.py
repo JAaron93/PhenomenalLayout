@@ -369,7 +369,7 @@ class DynamicLanguageDetector:
 
             # Check result cache
             cached_result = self.result_cache.get(cache_key)
-            if cached_result:
+            if cached_result is not self.result_cache.MISS:
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self.metrics.record_operation(duration_ms, cache_hit=True)
                 return cached_result
@@ -397,7 +397,10 @@ class DynamicLanguageDetector:
 
             return best_language
 
-        except Exception:
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("Language detection failed: %s", str(e), exc_info=True)
             duration_ms = (time.perf_counter() - start_time) * 1000
             self.metrics.record_operation(duration_ms, cache_hit=False)
             return "Unknown"
@@ -439,7 +442,7 @@ class DynamicLanguageDetector:
             cache_key = fingerprint.to_cache_key()
             cached_result = self.result_cache.get(cache_key)
 
-            if cached_result:
+            if cached_result is not self.result_cache.MISS:
                 results.append(cached_result)
                 cache_hits += 1
             else:
@@ -599,8 +602,6 @@ class DynamicLanguageDetector:
         self, test_texts: list[str], iterations: int = 100
     ) -> dict[str, Any]:
         """Benchmark optimized approach vs original sequential detection."""
-        import time
-
         # Benchmark optimized approach
         start = time.perf_counter()
         for _ in range(iterations):

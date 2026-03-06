@@ -7,7 +7,12 @@ import time
 import pytest
 
 # Import test dependencies at module level
-from utils.memory_monitor import MemoryMonitor, cleanup_memory_monitor
+from utils.memory_monitor import (
+    MemoryMonitor, 
+    cleanup_memory_monitor,
+    get_memory_monitor,
+    start_memory_monitoring
+)
 
 
 @pytest.fixture
@@ -121,7 +126,6 @@ def test_cleanup_memory_monitor_function():
     assert callable(cleanup_memory_monitor), "Cleanup function should be callable"
 
     # Test that cleanup function works when called directly
-    from utils.memory_monitor import get_memory_monitor, start_memory_monitoring
 
     # Start global monitoring
     start_memory_monitoring(check_interval=0.1)

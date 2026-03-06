@@ -20,6 +20,74 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Generic, TypeVar
 
+
+def _normalize_value(value: Any) -> Hashable:
+    """Recursively normalize unhashable values into hashable representations.
+    
+    Handles:
+    - Lists -> tuples (recursively normalized)
+    - Sets -> sorted tuples (recursively normalized)
+    - Dictionaries -> sorted tuple of key-value pairs (recursively normalized)
+    - Dataclasses -> tuple of class name and sorted fields (recursively normalized)
+    - Objects with __dict__ -> tuple of class name and sorted attributes (recursively normalized)
+    - Enums -> tuple of class name, name, and value
+    - Other unhashable types -> repr string
+    """
+    try:
+        # Try to hash the value first - if it works, return as-is
+        hash(value)
+        return value
+    except TypeError:
+        # Value is unhashable, need to normalize it
+        if isinstance(value, list):
+            return tuple(_normalize_value(item) for item in value)
+        elif isinstance(value, set):
+            # Convert to sorted tuple for deterministic ordering
+            try:
+                return tuple(sorted(_normalize_value(item) for item in value))
+            except TypeError:
+                # Items might not be sortable, fall back to repr-based sorting
+                return tuple(
+                    sorted((_normalize_value(item) for item in value), key=str)
+                )
+        elif isinstance(value, dict):
+            # Convert to tuple of sorted (key, value) pairs with recursive normalization
+            normalized_items = []
+            for k, v in sorted(value.items()):
+                normalized_items.append(
+                    (_normalize_value(k), _normalize_value(v))
+                )
+            return tuple(normalized_items)
+        elif hasattr(value, "__dataclass_fields__"):
+            # Handle dataclass objects
+            import dataclasses
+
+            normalized_fields = []
+            for field_obj in sorted(
+                dataclasses.fields(value), key=lambda f: f.name
+            ):
+                field_name = field_obj.name
+                field_value = getattr(value, field_name)
+                normalized_fields.append(
+                    (field_name, _normalize_value(field_value))
+                )
+            return (value.__class__.__name__, tuple(normalized_fields))
+        elif hasattr(value, "__dict__"):
+            # Handle regular objects with __dict__
+            normalized_attrs = []
+            for k, v in sorted(value.__dict__.items()):
+                normalized_attrs.append((k, _normalize_value(v)))
+            return (value.__class__.__name__, tuple(normalized_attrs))
+        elif hasattr(value, "_name") and hasattr(value, "_value"):
+            # Handle enum objects
+            return (value.__class__.__name__, value._name, value._value)
+        elif hasattr(value, "name") and hasattr(value, "value"):
+            # Handle enum objects (alternative pattern)
+            return (value.__class__.__name__, value.name, value.value)
+        else:
+            # For any other unhashable type, use repr as stable string representation
+            return repr(value)
+
 # Type variables for generic implementations
 T = TypeVar("T")
 K = TypeVar("K", bound=Hashable)
@@ -161,6 +229,9 @@ class SmartCache(Generic[K, V]):
     - FIFO: OrderedDict for O(1) eviction
     - LRU: List for O(1) eviction (existing)
     """
+    
+    # Sentinel object to distinguish between miss and cached None
+    MISS = object()
 
     def __init__(
         self,
@@ -187,17 +258,17 @@ class SmartCache(Generic[K, V]):
         # For FIFO: OrderedDict for O(1) insert/delete
         self._fifo_order: OrderedDict[K, None] = OrderedDict()
 
-    def get(self, key: K) -> V | None:
+    def get(self, key: K) -> V | object:
         """Get value from cache with policy-aware access tracking."""
         with self._lock:
             entry = self._cache.get(key)
             if entry is None:
-                return None
+                return self.MISS
 
             # Check TTL expiration
             if self.ttl_seconds and (time.time() - entry.timestamp) > self.ttl_seconds:
                 self._remove_key(key)
-                return None
+                return self.MISS
 
             # Update access patterns based on policy
             if self.policy == CachePolicy.LRU:
@@ -356,7 +427,7 @@ class DynamicRegistry(Generic[T]):
         start_time = time.perf_counter()
         cached_result = self._cache.get(cache_key)
 
-        if cached_result is not None:
+        if cached_result is not self._cache.MISS:
             duration_ms = (time.perf_counter() - start_time) * 1000
             self._metrics[key].record_operation(duration_ms, cache_hit=True)
             return cached_result
@@ -381,64 +452,6 @@ class DynamicRegistry(Generic[T]):
 
     def _create_cache_key(self, key: str, args: tuple, kwargs: dict) -> tuple:
         """Create a hashable cache key from arguments."""
-
-        def _normalize_value(value):
-            """Recursively normalize unhashable values into hashable representations."""
-            try:
-                # Try to hash the value first - if it works, return as-is
-                hash(value)
-                return value
-            except TypeError:
-                # Value is unhashable, need to normalize it
-                if isinstance(value, list):
-                    return tuple(_normalize_value(item) for item in value)
-                elif isinstance(value, set):
-                    # Convert to sorted tuple for deterministic ordering
-                    try:
-                        return tuple(sorted(_normalize_value(item) for item in value))
-                    except TypeError:
-                        # Items might not be sortable, fall back to repr-based sorting
-                        return tuple(
-                            sorted((_normalize_value(item) for item in value), key=str)
-                        )
-                elif isinstance(value, dict):
-                    # Convert to tuple of sorted (key, value) pairs with recursive normalization
-                    normalized_items = []
-                    for k, v in sorted(value.items()):
-                        normalized_items.append(
-                            (_normalize_value(k), _normalize_value(v))
-                        )
-                    return tuple(normalized_items)
-                elif hasattr(value, "__dataclass_fields__"):
-                    # Handle dataclass objects
-                    import dataclasses
-
-                    normalized_fields = []
-                    for field_obj in sorted(
-                        dataclasses.fields(value), key=lambda f: f.name
-                    ):
-                        field_name = field_obj.name
-                        field_value = getattr(value, field_name)
-                        normalized_fields.append(
-                            (field_name, _normalize_value(field_value))
-                        )
-                    return (value.__class__.__name__, tuple(normalized_fields))
-                elif hasattr(value, "__dict__"):
-                    # Handle regular objects with __dict__
-                    normalized_attrs = []
-                    for k, v in sorted(value.__dict__.items()):
-                        normalized_attrs.append((k, _normalize_value(v)))
-                    return (value.__class__.__name__, tuple(normalized_attrs))
-                elif hasattr(value, "_name") and hasattr(value, "_value"):
-                    # Handle enum objects
-                    return (value.__class__.__name__, value._name, value._value)
-                elif hasattr(value, "name") and hasattr(value, "value"):
-                    # Handle enum objects (alternative pattern)
-                    return (value.__class__.__name__, value.name, value.value)
-                else:
-                    # For any other unhashable type, use repr as stable string representation
-                    return repr(value)
-
         # Normalize args tuple recursively
         normalized_args = tuple(_normalize_value(arg) for arg in args)
 
@@ -471,11 +484,11 @@ class DynamicRegistry(Generic[T]):
 class DecisionTreeNode(Generic[T]):
     """Node in a dynamic decision tree for pattern matching."""
 
-    def __init__(self, condition: Callable[[Any], bool], result: T | None = None):
+    def __init__(self, condition: Callable[[Any], bool], result: T | None = None, cache: SmartCache[str, T] | None = None):
         self.condition = condition
         self.result = result
         self.children: list[DecisionTreeNode[T]] = []
-        self.cache: SmartCache[str, T] = SmartCache(max_size=64)
+        self.cache: SmartCache[str, T] | None = cache
 
     def add_child(self, child: DecisionTreeNode[T]) -> None:
         """Add a child node to the decision tree."""
@@ -486,22 +499,25 @@ class DecisionTreeNode(Generic[T]):
         # Create cache key from context
         context_key = self._create_context_key(context)
 
-        # Check cache first
-        cached_result = self.cache.get(context_key)
-        if cached_result is not None:
-            return cached_result
+        # Check cache first if available
+        if self.cache is not None:
+            cached_result = self.cache.get(context_key)
+            if cached_result is not self.cache.MISS:
+                return cached_result
 
         # Evaluate condition
         if self.condition(context):
             if self.result is not None:
-                self.cache.put(context_key, self.result)
+                if self.cache is not None:
+                    self.cache.put(context_key, self.result)
                 return self.result
 
             # Check children
             for child in self.children:
                 child_result = child.evaluate(context)
                 if child_result is not None:
-                    self.cache.put(context_key, child_result)
+                    if self.cache is not None:
+                        self.cache.put(context_key, child_result)
                     return child_result
 
         return None
@@ -513,8 +529,6 @@ class DecisionTreeNode(Generic[T]):
             context_str = str(sorted(context.__dict__.items()))
         else:
             context_str = str(context)
-
-        import hashlib
 
         return hashlib.md5(context_str.encode(), usedforsecurity=False).hexdigest()[:16]
 
@@ -562,7 +576,7 @@ class StrategyRegistry(Generic[T]):
 
         # Check cache
         cached_strategy = self._cache.get(context_key)
-        if cached_strategy is not None:
+        if cached_strategy is not self._cache.MISS:
             duration_ms = (time.perf_counter() - start_time) * 1000
             self._metrics.record_operation(duration_ms, cache_hit=True)
             return cached_strategy
@@ -637,67 +651,6 @@ def memoize(cache_size: int = 128, ttl_seconds: float | None = None):
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
-            def _normalize_value(value):
-                """Recursively normalize unhashable values into hashable representations."""
-                try:
-                    # Try to hash the value first - if it works, return as-is
-                    hash(value)
-                    return value
-                except TypeError:
-                    # Value is unhashable, need to normalize it
-                    if isinstance(value, list):
-                        return tuple(_normalize_value(item) for item in value)
-                    elif isinstance(value, set):
-                        # Convert to sorted tuple for deterministic ordering
-                        try:
-                            return tuple(
-                                sorted(_normalize_value(item) for item in value)
-                            )
-                        except TypeError:
-                            # Items might not be sortable, fall back to repr-based sorting
-                            return tuple(
-                                sorted(
-                                    (_normalize_value(item) for item in value), key=str
-                                )
-                            )
-                    elif isinstance(value, dict):
-                        # Convert to tuple of sorted (key, value) pairs with recursive normalization
-                        normalized_items = []
-                        for k, v in sorted(value.items()):
-                            normalized_items.append(
-                                (_normalize_value(k), _normalize_value(v))
-                            )
-                        return tuple(normalized_items)
-                    elif hasattr(value, "__dataclass_fields__"):
-                        # Handle dataclass objects
-                        import dataclasses
-
-                        normalized_fields = []
-                        for field_obj in sorted(
-                            dataclasses.fields(value), key=lambda f: f.name
-                        ):
-                            field_name = field_obj.name
-                            field_value = getattr(value, field_name)
-                            normalized_fields.append(
-                                (field_name, _normalize_value(field_value))
-                            )
-                        return (value.__class__.__name__, tuple(normalized_fields))
-                    elif hasattr(value, "__dict__"):
-                        # Handle regular objects with __dict__
-                        normalized_attrs = []
-                        for k, v in sorted(value.__dict__.items()):
-                            normalized_attrs.append((k, _normalize_value(v)))
-                        return (value.__class__.__name__, tuple(normalized_attrs))
-                    elif hasattr(value, "_name") and hasattr(value, "_value"):
-                        # Handle enum objects
-                        return (value.__class__.__name__, value._name, value._value)
-                    elif hasattr(value, "name") and hasattr(value, "value"):
-                        # Handle enum objects (alternative pattern)
-                        return (value.__class__.__name__, value.name, value.value)
-                    else:
-                        # For any other unhashable type, use repr as stable string representation
-                        return repr(value)
-
             # Create cache key with normalization
             normalized_args = tuple(_normalize_value(arg) for arg in args)
             normalized_kwargs_items = []
@@ -712,7 +665,7 @@ def memoize(cache_size: int = 128, ttl_seconds: float | None = None):
 
             # Check cache
             cached_result = cache.get(cache_key)
-            if cached_result is not None:
+            if cached_result is not cache.MISS:
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 metrics.record_operation(duration_ms, cache_hit=True)
                 return cached_result

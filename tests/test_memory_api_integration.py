@@ -74,21 +74,46 @@ def reload_app_with_env():
         if name in sys.modules:
             original_modules[name] = sys.modules[name]
 
-    def _factory(test_env: dict) -> TestClient:
-        """Create TestClient with patched environment and reloaded modules."""
-        with patch.dict("os.environ", test_env):
-            # Reload modules in dependency order
-            for name in MODULE_NAMES:
-                if name not in sys.modules:
-                    raise RuntimeError(f"Module {name} not loaded; cannot reload")
-                importlib.reload(sys.modules[name])
+    # Track active patches
+    active_patches = []
 
-            app_module = sys.modules["app"]
-            return TestClient(app_module.create_app())
+    def _factory(test_env: dict) -> TestClient:
+        """Create TestClient with patched environment and fresh module imports."""
+        # Create a long-lived patch that stays active
+        patch_obj = patch.dict("os.environ", test_env)
+        patch_obj.start()
+        active_patches.append(patch_obj)
+        
+        print(f"Inside fixture:")
+        for key, value in test_env.items():
+            print(f"  {key} = {os.getenv(key)}")
+        
+        # Remove modules from sys.modules to ensure fresh imports
+        for name in MODULE_NAMES:
+            if name in sys.modules:
+                print(f"Removing module: {name}")
+                del sys.modules[name]
+        
+        # Import fresh modules
+        for name in MODULE_NAMES:
+            print(f"Importing module: {name}")
+            __import__(name)
+            
+            # Verify the module imported correctly with the right environment
+            if name == "api.rate_limit":
+                print(f"  api.rate_limit.ENABLE_RATE_LIMITING = {sys.modules['api.rate_limit'].ENABLE_RATE_LIMITING}")
+            elif name == "api.auth":
+                print(f"  api.auth._default_config.enable_auth = {sys.modules['api.auth']._default_config.enable_auth}")
+
+        app_module = sys.modules["app"]
+        return TestClient(app_module.create_app())
 
     try:
         yield _factory
     finally:
+        # Stop all active patches
+        for patch_obj in active_patches:
+            patch_obj.stop()
         # Restore original modules to prevent state leakage between tests
         for name in original_modules:
             sys.modules[name] = original_modules[name]
@@ -200,6 +225,76 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
     print("\n✓ All authentication tests passed!")
 
 
+def test_debug_memory_endpoints_no_auth_false(reload_app_with_env):
+    """Debug test for the problematic scenario."""
+    auth_enabled = "false"
+    print(f"Testing with auth_enabled={auth_enabled}")
+    
+    test_env = {
+        "MEMORY_API_ENABLE_AUTH": auth_enabled,
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_KEY": TEST_ADMIN_API_KEY,
+        "MEMORY_API_READ_RATE_LIMIT": "100",
+        "MEMORY_API_WRITE_RATE_LIMIT": "100",
+        "MEMORY_API_ADMIN_RATE_LIMIT": "100",
+    }
+    
+    # Keep track of initial module state
+    import sys
+    import os
+    if 'api.auth' in sys.modules:
+        print(f"api.auth already exists before fixture: {id(sys.modules['api.auth'])}")
+    print(f"Before fixture - MEMORY_API_ENABLE_AUTH: {os.getenv('MEMORY_API_ENABLE_AUTH')}")
+    
+    client = reload_app_with_env(test_env)
+    
+    # Check module state immediately after fixture
+    import api.auth
+    import sys
+    import os
+    print(f"\nAfter fixture:")
+    print(f"sys.modules['api.auth'] id: {id(sys.modules['api.auth'])}")
+    print(f"api.auth module id: {id(api.auth)}")
+    print(f"_default_config: {id(api.auth._default_config)}")
+    print(f"enable_auth: {api.auth._default_config.enable_auth}")
+    print(f"Environment variable MEMORY_API_ENABLE_AUTH: {os.getenv('MEMORY_API_ENABLE_AUTH')}")
+    
+    # Check what config is being used by the actual endpoints
+    from fastapi.testclient import TestClient
+    from api import auth
+    from api.auth import get_current_user
+    print(f"\nget_current_user module: {id(get_current_user)}")
+    print(f"get_current_user function: {get_current_user}")
+    
+    try:
+        # Test getting current user directly
+        from fastapi import Depends, FastAPI
+        app_test = FastAPI()
+        
+        @app_test.get("/test_auth")
+        def test_auth(user: dict = Depends(get_current_user)):
+            return user
+        
+        test_client = TestClient(app_test)
+        print(f"\nDirect get_current_user call:")
+        response = test_client.get("/test_auth")
+        print(f"Status: {response.status_code}")
+        print(f"Response: {response.text}")
+    except Exception as e:
+        print(f"\nError testing get_current_user directly: {e}")
+        import traceback
+        print(traceback.format_exc())
+    
+    # Test endpoint
+    print(f"\nCalling /api/v1/memory/stats")
+    response = client.get('/api/v1/memory/stats')
+    
+    print(f"Response status: {response.status_code}")
+    print(f"Response text: {response.text}")
+    
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+
+
 @pytest.mark.parametrize("auth_enabled", ["true", "false"])
 def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
     """Test memory endpoints behave correctly with and without authentication.
@@ -258,8 +353,47 @@ def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
     print(f"\n✓ Auth {'disabled' if auth_enabled == 'false' else 'enabled'} tests passed!")
 
 
+def test_debug_rate_limiting_disabled(reload_app_with_env):
+    """Debug test to understand why rate limiting headers are still present when disabled."""
+    rate_limiting = "false"
+    print(f"Testing rate limiting headers with rate_limiting={rate_limiting}")
+    
+    test_env = {
+        "MEMORY_API_ENABLE_RATE_LIMITING": rate_limiting,
+        "MEMORY_API_ENABLE_AUTH": "false",
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_KEY": TEST_ADMIN_API_KEY
+    }
+    
+    import sys
+    print(f"\nBefore fixture - sys.modules['api.rate_limit']: {id(sys.modules['api.rate_limit']) if 'api.rate_limit' in sys.modules else 'Not imported'}")
+    
+    client = reload_app_with_env(test_env)
+    
+    # Check rate limit module state
+    import api.rate_limit
+    print(f"\nAfter fixture - api.rate_limit module id: {id(api.rate_limit)}")
+    print(f"After fixture - api.rate_limit.ENABLE_RATE_LIMITING: {api.rate_limit.ENABLE_RATE_LIMITING}")
+    print(f"After fixture - os.environ['MEMORY_API_ENABLE_RATE_LIMITING']: {os.getenv('MEMORY_API_ENABLE_RATE_LIMITING')}")
+    
+    # Test endpoint
+    print(f"\nCalling /api/v1/memory/stats")
+    response = client.get("/api/v1/memory/stats")
+    print(f"Response status: {response.status_code}")
+    print(f"Response headers: {list(response.headers.keys())}")
+    print(f"Response body: {response.text}")
+    
+    # Check module state again after client call
+    import sys
+    if 'api.rate_limit' in sys.modules:
+        print(f"\nAfter client call - api.rate_limit module id: {id(sys.modules['api.rate_limit'])}")
+        print(f"After client call - api.rate_limit.ENABLE_RATE_LIMITING: {sys.modules['api.rate_limit'].ENABLE_RATE_LIMITING}")
+    
+    assert "X-RateLimit-Limit" not in response.headers, "Rate limiting headers should be absent when rate limiting is disabled"
+
+
 @pytest.mark.parametrize("rate_limiting", ["true", "false"])
-def test_rate_limiting_headers(rate_limiting):
+def test_rate_limiting_headers(reload_app_with_env, rate_limiting):
     """Test rate limiting headers presence."""
     print(f"Testing rate limiting headers with rate limiting {rate_limiting}...")
 
@@ -268,16 +402,27 @@ def test_rate_limiting_headers(rate_limiting):
         "MEMORY_API_ENABLE_RATE_LIMITING": rate_limiting,
         "MEMORY_API_ENABLE_AUTH": "false",
         "MEMORY_API_JWT_SECRET": "test-secret-key",
-        "MEMORY_API_KEY": TEST_ADMIN_API_KEY
+        "MEMORY_API_KEY": TEST_ADMIN_API_KEY,
+        "MEMORY_API_READ_RATE_LIMIT": "100"  # Set explicit value to distinguish from default
     }
 
     client = reload_app_with_env(test_env)
+    
+    # Debug module state
+    import api.rate_limit
+    import os
+    print(f"DEBUG: api.rate_limit.ENABLE_RATE_LIMITING = {api.rate_limit.ENABLE_RATE_LIMITING}")
+    print(f"DEBUG: os.environ['MEMORY_API_ENABLE_RATE_LIMITING'] = {os.getenv('MEMORY_API_ENABLE_RATE_LIMITING')}")
+    print(f"DEBUG: api.rate_limit.RATE_LIMITS['read'] = {api.rate_limit.RATE_LIMITS['read']}")
 
     # Test rate limiting headers
     response = client.get("/api/v1/memory/stats")
+    print(f"DEBUG: Response headers = {list(response.headers.keys())}")
+    
     if rate_limiting == "true":
         assert "X-RateLimit-Limit" in response.headers, "Rate limiting headers should be present"
         assert "X-RateLimit-Remaining" in response.headers, "Rate limit remaining should be present"
+        assert response.headers["X-RateLimit-Limit"] == "100", "Rate limit should be 100"
     else:
         assert "X-RateLimit-Limit" not in response.headers, "Rate limiting headers should be absent"
         assert "X-RateLimit-Remaining" not in response.headers, "Rate limit remaining should be absent"

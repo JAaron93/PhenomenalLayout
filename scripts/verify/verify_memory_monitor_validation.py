@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from utils.memory_monitor import MemoryMonitor, start_memory_monitoring
 
 
-def expect_value_error(description: str, func: Callable[..., Any]) -> bool:
+def expect_value_error(description: str, func: Callable[[], Any]) -> bool:
     """Helper function to test if a callable raises ValueError with appropriate error handling.
     
     Args:

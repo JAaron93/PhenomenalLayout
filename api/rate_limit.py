@@ -364,7 +364,13 @@ def add_rate_limit_headers(
         limit_type: Type of limit
         client_ip: Client IP address
     """
-    if not ENABLE_RATE_LIMITING or limit_type not in RATE_LIMITS:
+    import sys
+    current_module = sys.modules[__name__]
+    print(f"DEBUG: add_rate_limit_headers called with ENABLE_RATE_LIMITING = {current_module.ENABLE_RATE_LIMITING}")
+    print(f"DEBUG: Module id: {id(current_module)}")
+    
+    if not current_module.ENABLE_RATE_LIMITING or limit_type not in RATE_LIMITS:
+        print(f"DEBUG: Returning early - ENABLE_RATE_LIMITING is False")
         return
 
     max_tokens = RATE_LIMITS[limit_type]

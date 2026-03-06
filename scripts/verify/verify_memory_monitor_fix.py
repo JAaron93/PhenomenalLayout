@@ -163,6 +163,7 @@ def test_thread_safety():
 
     monitor = MemoryMonitor(check_interval=0.05)
     results = {"errors": [], "values": []}
+    results_lock = threading.Lock()
 
     def reader_thread():
         """Thread that reads properties concurrently."""
@@ -178,14 +179,16 @@ def test_thread_safety():
                 assert baseline is None or isinstance(baseline, float)
                 assert isinstance(peak, float)
 
-                results["values"].append({
-                    "is_monitoring": is_monitoring,
-                    "baseline": baseline,
-                    "peak": peak
-                })
+                with results_lock:
+                    results["values"].append({
+                        "is_monitoring": is_monitoring,
+                        "baseline": baseline,
+                        "peak": peak
+                    })
                 time.sleep(0.001)
         except Exception as e:
-            results["errors"].append(str(e))
+            with results_lock:
+                results["errors"].append(str(e))
 
     def writer_thread():
         """Thread that starts/stops monitoring concurrently."""
@@ -196,7 +199,8 @@ def test_thread_safety():
                 monitor.stop_monitoring()
                 time.sleep(0.01)
         except Exception as e:
-            results["errors"].append(str(e))
+            with results_lock:
+                results["errors"].append(str(e))
 
     # Start threads
     threads = [
@@ -214,8 +218,11 @@ def test_thread_safety():
         thread.join()
 
     # Check for errors
-    assert not results["errors"], f"Thread safety errors: {results['errors']}"
-    assert len(results["values"]) > 0, "Should have collected values"
+    with results_lock:
+        assert not results["errors"], (
+            f"Thread safety errors: {results['errors']}"
+        )
+        assert len(results["values"]) > 0, "Should have collected values"
 
     print("✓ Properties are thread-safe")
 

@@ -16,8 +16,57 @@ sys.path.insert(0, str(project_root))
 
 from fastapi import Request
 
-from api.auth import UserRole, create_jwt_token, verify_api_key, verify_jwt_token
-from api.rate_limit import RateLimiter, TokenBucket, get_client_ip
+
+@pytest.fixture
+def auth_module():
+    """Fixture that provides auth module components with patched environment.
+
+    This fixture imports and reloads api.auth with a patched environment,
+    yields the necessary imports, and then restores original module state
+    or removes the module so subsequent imports load with actual environment.
+    """
+    test_env = {
+        "MEMORY_API_ENABLE_AUTH": "true",
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_KEY": "test-admin-key"
+    }
+
+    # Store original module if it exists
+    original_auth_module = sys.modules.get('api.auth')
+    original_rate_limit_module = sys.modules.get('api.rate_limit')
+
+    with patch.dict('os.environ', test_env):
+        # Import and reload auth module to pick up patched environment
+        import api.auth
+        import api.rate_limit
+
+        importlib.reload(api.auth)
+        importlib.reload(api.rate_limit)
+
+        # Yield the needed components from the reloaded module
+        yield (
+            api.auth.UserRole,
+            api.auth.create_jwt_token,
+            api.auth.verify_api_key,
+            api.auth.verify_jwt_token,
+            api.auth.get_current_user,
+            api.rate_limit.RateLimiter,
+            api.rate_limit.TokenBucket,
+            api.rate_limit.get_client_ip
+        )
+
+    # Restore original module state if it was previously loaded
+    if original_auth_module is not None:
+        sys.modules['api.auth'] = original_auth_module
+    else:
+        # Remove so next import loads with actual environment
+        sys.modules.pop('api.auth', None)
+        
+    if original_rate_limit_module is not None:
+        sys.modules['api.rate_limit'] = original_rate_limit_module
+    else:
+        # Remove so next import loads with actual environment
+        sys.modules.pop('api.rate_limit', None)
 
 
 @pytest.fixture
@@ -36,9 +85,19 @@ def mock_api_key(monkeypatch):
     importlib.reload(api.auth)
 
 
-def test_jwt_authentication():
+def test_jwt_authentication(auth_module):
     """Test JWT token creation and verification."""
     print("Testing JWT authentication...")
+    (
+        UserRole,
+        create_jwt_token,
+        verify_api_key,
+        verify_jwt_token,
+        get_current_user,
+        RateLimiter,
+        TokenBucket,
+        get_client_ip
+    ) = auth_module
 
     # Create token
     token = create_jwt_token("test_user", UserRole.READ_ONLY)
@@ -58,12 +117,22 @@ def test_jwt_authentication():
     print("✓ JWT authentication test passed")
 
 
-def test_api_key_authentication(mock_api_key):
+def test_api_key_authentication(auth_module, mock_api_key):
     """Test API key authentication."""
     print("Testing API key authentication...")
+    (
+        UserRole,
+        create_jwt_token,
+        verify_api_key,
+        verify_jwt_token,
+        get_current_user,
+        RateLimiter,
+        TokenBucket,
+        get_client_ip
+    ) = auth_module
 
-    # Import verify_api_key from the reloaded auth module
-
+    # Test valid key
+    assert verify_api_key(mock_api_key) is True, "Valid API key should pass"
     # Test valid key
     assert verify_api_key(mock_api_key) is True, "Valid API key should pass"
 
@@ -73,9 +142,19 @@ def test_api_key_authentication(mock_api_key):
     print("✓ API key authentication test passed")
 
 
-def test_rate_limiting():
+def test_rate_limiting(auth_module):
     """Test rate limiting functionality."""
     print("Testing rate limiting...")
+    (
+        UserRole,
+        create_jwt_token,
+        verify_api_key,
+        verify_jwt_token,
+        get_current_user,
+        RateLimiter,
+        TokenBucket,
+        get_client_ip
+    ) = auth_module
 
     # Test token bucket
     bucket = TokenBucket(max_tokens=5, refill_rate=1.0)
@@ -112,22 +191,37 @@ def test_rate_limiting():
     print("✓ Rate limiting test passed")
 
 
-def test_client_ip_extraction():
+def test_client_ip_extraction(auth_module):
     """Test client IP extraction from request."""
     print("Testing client IP extraction...")
+    (
+        UserRole,
+        create_jwt_token,
+        verify_api_key,
+        verify_jwt_token,
+        get_current_user,
+        RateLimiter,
+        TokenBucket,
+        get_client_ip
+    ) = auth_module
 
-    # Mock request with X-Forwarded-For header
-    scope = {
-        "type": "http",
-        "method": "GET",
-        "path": "/test",
-        "headers": [(b"x-forwarded-for", b"192.168.1.100, 10.0.0.1")],
-        "client": ("127.0.0.1", 8000),
-    }
-    request = Request(scope)
+    # Set TRUST_FORWARDER_HEADERS to true for this test
+    with patch.dict(os.environ, {"TRUST_FORWARDER_HEADERS": "true"}):
+        import api.rate_limit
+        importlib.reload(api.rate_limit)
+        
+        # Mock request with X-Forwarded-For header
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": [(b"x-forwarded-for", b"192.168.1.100, 10.0.0.1")],
+            "client": ("127.0.0.1", 8000),
+        }
+        request = Request(scope)
 
-    ip = get_client_ip(request)
-    assert ip == "192.168.1.100", "Should extract IP from X-Forwarded-For"
+        ip = api.rate_limit.get_client_ip(request)
+        assert ip == "192.168.1.100", "Should extract IP from X-Forwarded-For"
 
     # Mock request with X-Real-IP header
     scope = {
@@ -158,39 +252,34 @@ def test_client_ip_extraction():
     print("✓ Client IP extraction test passed")
 
 
-def test_jwt_tokens_with_auth_enabled():
+def test_jwt_tokens_with_auth_enabled(auth_module):
     """Test JWT token creation and verification with auth enabled."""
     print("Testing JWT tokens with auth enabled...")
+    (
+        UserRole,
+        create_jwt_token,
+        verify_api_key,
+        verify_jwt_token,
+        get_current_user,
+        RateLimiter,
+        TokenBucket,
+        get_client_ip
+    ) = auth_module
 
-    # Set up environment for testing
-    test_env = {
-        "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
-        "MEMORY_API_KEY": "test-admin-key"
-    }
+    # Test JWT token creation
+    read_token = create_jwt_token("read_user", UserRole.READ_ONLY)
+    admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
 
-    with patch.dict(os.environ, test_env):
-        # Reload the auth module to pick up new environment variables
-        import api.auth
-        importlib.reload(api.auth)
+    assert read_token is not None, "Read token should be created"
+    assert admin_token is not None, "Admin token should be created"
 
-        # Import after reloading module
-        from api.auth import create_jwt_token, verify_jwt_token
+    # Verify tokens
 
-        # Test JWT token creation
-        read_token = create_jwt_token("read_user", UserRole.READ_ONLY)
-        admin_token = create_jwt_token("admin_user", UserRole.ADMIN)
+    read_payload = verify_jwt_token(read_token)
+    admin_payload = verify_jwt_token(admin_token)
 
-        assert read_token is not None, "Read token should be created"
-        assert admin_token is not None, "Admin token should be created"
-
-        # Verify tokens
-
-        read_payload = verify_jwt_token(read_token)
-        admin_payload = verify_jwt_token(admin_token)
-
-        assert read_payload["role"] == UserRole.READ_ONLY, "Read token should have read role"
-        assert admin_payload["role"] == UserRole.ADMIN, "Admin token should have admin role"
+    assert read_payload["role"] == UserRole.READ_ONLY, "Read token should have read role"
+    assert admin_payload["role"] == UserRole.ADMIN, "Admin token should have admin role"
 
     print("✓ JWT tokens with auth enabled test passed")
 
@@ -199,8 +288,12 @@ def test_authentication_disabled():
     """Test behavior when authentication is disabled."""
     print("Testing authentication disabled...")
 
-    # Set environment to disable auth
-    with patch.dict(os.environ, {"MEMORY_API_ENABLE_AUTH": "false"}):
+    # Set environment to disable auth, but also provide required secret to avoid error on reload
+    with patch.dict(os.environ, {
+        "MEMORY_API_ENABLE_AUTH": "false",
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_KEY": "test-admin-key"
+    }):
         # Reload the module to pick up new environment variable
         import api.auth
         importlib.reload(api.auth)
@@ -218,10 +311,15 @@ def test_authentication_disabled():
         # Should return anonymous user with admin role when auth disabled
         user = asyncio.run(api.auth.get_current_user(request, None, None))
         assert user["user_id"] == "anonymous", "Should return anonymous user"
-        assert user["role"] == UserRole.ADMIN, "Should have admin role when auth disabled"
+        assert user["role"] == api.auth.UserRole.ADMIN, "Should have admin role when auth disabled"
 
-    # Restore auth module to original state
-    importlib.reload(api.auth)
+    # Restore auth module to original state with proper environment variables
+    with patch.dict(os.environ, {
+        "MEMORY_API_ENABLE_AUTH": "true",
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_KEY": "test-admin-key"
+    }):
+        importlib.reload(api.auth)
 
     print("✓ Authentication disabled test passed")
 

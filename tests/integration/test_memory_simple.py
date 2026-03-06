@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Simple test to verify fixture is working."""
 
+import importlib
 import logging
 import sys
 from unittest.mock import patch
@@ -25,8 +26,6 @@ def test_client():
     original_app = sys.modules.get('app')
 
     with patch.dict('os.environ', test_env):
-        import importlib
-
         import api.auth
         import app
         importlib.reload(api.auth)

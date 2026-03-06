@@ -4,13 +4,11 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response
 
 from api.auth import (
-    UserRole,
     get_admin_user,
-    get_current_user_optional_dependency,
-    is_auth_enabled,
+    get_read_only_user,
 )
 from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
 from utils.memory_monitor import (
@@ -128,30 +126,11 @@ def get_monitoring_status_and_handle_errors(request: Request, response: Response
 async def get_memory_statistics(
     request: Request,
     response: Response,
-    current_user: dict = Depends(get_current_user_optional_dependency)
+    current_user: dict = Depends(get_read_only_user)
 ) -> dict[str, Any]:
     """Get current memory usage statistics."""
     # Check rate limit
     check_rate_limit(request, "read")
-
-    # If auth is disabled, current_user will be None, allow access
-    if current_user is None:
-        if not is_auth_enabled():
-            return fetch_memory_stats_and_handle_errors(request, response)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-
-    # Auth is enabled, check user role
-    if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for read-only access"
-        )
-
     return fetch_memory_stats_and_handle_errors(request, response)
 
 
@@ -265,27 +244,9 @@ async def stop_memory_monitoring_endpoint(
 async def get_monitoring_status(
     request: Request,
     response: Response,
-    current_user: dict = Depends(get_current_user_optional_dependency)
+    current_user: dict = Depends(get_read_only_user)
 ) -> dict[str, Any]:
     """Get current memory monitoring status."""
     # Check rate limit
     check_rate_limit(request, "read")
-
-    # If auth is disabled, current_user will be None, allow access
-    if current_user is None:
-        if not is_auth_enabled():
-            return get_monitoring_status_and_handle_errors(request, response)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required"
-            )
-
-    # Auth is enabled, check user role
-    if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for read-only access"
-        )
-
     return get_monitoring_status_and_handle_errors(request, response)

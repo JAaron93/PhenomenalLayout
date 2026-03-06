@@ -223,7 +223,7 @@ def demonstrate_lazy_loading(
     print("\n4. Testing multiple instantiations...")
 
     start_time = time.time()
-    [NeologismDetector() for _ in range(10)]
+    detectors = [NeologismDetector() for _ in range(10)]
 
     multi_init_time: float = time.time() - start_time
     print(f"   10 instantiations time: {multi_init_time:.4f}s")

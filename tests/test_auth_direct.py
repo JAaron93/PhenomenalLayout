@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Test auth dependencies directly."""
 
+import importlib
+import sys
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import jwt
+import pytest
 from fastapi.testclient import TestClient
-
-from api.auth import AuthConfig, UserRole, create_jwt_token
-from app import create_app
 
 # Shared test configuration for all auth tests
 TEST_CONFIG = {
@@ -16,8 +17,58 @@ TEST_CONFIG = {
     "MEMORY_API_KEY": "test-admin-key"
 }
 
-def test_auth_direct():
+
+@pytest.fixture
+def auth_module():
+    """Fixture that provides auth module components with patched environment.
+
+    This fixture imports and reloads api.auth with a patched environment,
+    yields the necessary imports, and then restores original module state
+    or removes the module so subsequent imports load with actual environment.
+    """
+    test_env = {
+        "MEMORY_API_ENABLE_AUTH": "true",
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_KEY": "test-admin-key"
+    }
+
+    # Store original module if it exists
+    original_auth_module = sys.modules.get('api.auth')
+    original_app_module = sys.modules.get('app')
+
+    with patch.dict('os.environ', test_env):
+        # Import and reload auth module to pick up patched environment
+        import api.auth
+        import app
+
+        importlib.reload(api.auth)
+        importlib.reload(app)
+
+        # Yield the needed components from the reloaded module
+        yield (
+            api.auth.AuthConfig,
+            api.auth.UserRole,
+            api.auth.create_jwt_token,
+            app.create_app
+        )
+
+    # Restore original module state if it was previously loaded
+    if original_auth_module is not None:
+        sys.modules['api.auth'] = original_auth_module
+    else:
+        # Remove so next import loads with actual environment
+        sys.modules.pop('api.auth', None)
+        
+    if original_app_module is not None:
+        sys.modules['app'] = original_app_module
+    else:
+        # Remove so next import loads with actual environment
+        sys.modules.pop('app', None)
+
+def test_auth_direct(auth_module):
     """Test auth dependencies directly."""
+    AuthConfig, UserRole, create_jwt_token, create_app = auth_module
+    
     # Create app with test configuration
     client = TestClient(create_app(TEST_CONFIG))
 
@@ -55,7 +106,7 @@ def test_auth_direct():
 
     data = response_json.get("data")
     assert data is not None, "Expected 'data' key in response"
-    assert isinstance(data, dict), f"Expected data to be dict, got {type(data)}"
+    assert isinstance(data, dict), "Expected data to be dict"
 
     message = response_json.get("message")
     assert message is not None, "Expected 'message' key in response"
@@ -76,8 +127,9 @@ def test_auth_direct():
     )
 
 
-def test_auth_no_header():
+def test_auth_no_header(auth_module):
     """Test that missing Authorization header returns 401."""
+    AuthConfig, UserRole, create_jwt_token, create_app = auth_module
     client = TestClient(create_app(TEST_CONFIG))
 
     response = client.post("/api/v1/memory/gc")
@@ -87,8 +139,9 @@ def test_auth_no_header():
     )
 
 
-def test_auth_malformed_jwt():
+def test_auth_malformed_jwt(auth_module):
     """Test that malformed/invalid JWT returns 401."""
+    AuthConfig, UserRole, create_jwt_token, create_app = auth_module
     client = TestClient(create_app(TEST_CONFIG))
 
     response = client.post(
@@ -101,8 +154,9 @@ def test_auth_malformed_jwt():
     )
 
 
-def test_auth_expired_token():
+def test_auth_expired_token(auth_module):
     """Test that expired JWT returns 401."""
+    AuthConfig, UserRole, create_jwt_token, create_app = auth_module
     client = TestClient(create_app(TEST_CONFIG))
     auth_config = AuthConfig(TEST_CONFIG)
 

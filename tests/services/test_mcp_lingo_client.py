@@ -104,7 +104,7 @@ async def test_both_text_and_texts_prefers_batch(make_client, caplog):
     for rec in calls:
         assert "texts" in rec.arguments
         assert "text" not in rec.arguments
-        assert rec.name == "translate"  # Add this assertion
+        assert rec.name == "translate"
     # Optionally verify debug log message occurred (not strict)
     # assert any("preferring batch" in m.message.lower() for m in caplog.records)
 

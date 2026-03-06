@@ -558,7 +558,7 @@ class TranslationService:
         translated_content: dict[str, Any] = copy.deepcopy(original_content)
 
         # Create a mapping of translated blocks by page and element
-        block_map: dict[int, dict[str | None, str]] = {}
+        block_map: dict[int, dict[str, str]] = {}
         for block in translated_blocks:
             page_num: int = block["page"]
             element_id: str | None = block.get("element_id")

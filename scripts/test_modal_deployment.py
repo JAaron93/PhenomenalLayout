@@ -41,9 +41,8 @@ def find_test_pdf() -> Path | None:
     existing path found, or None if no test PDF is available.
 
     Returns:
-        Optional[Path]: Path to the first existing test PDF file, or None
-                        if no test PDF is found in any of the predefined
-                        locations.
+        Path | None: Path to the first existing test PDF file, or None
+        if no test PDF is found in any of the predefined locations.
     """
     candidates = (Path(p) for p in TEST_PDF_PATHS)
     return next((p for p in candidates if p.exists()), None)

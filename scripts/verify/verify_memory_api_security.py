@@ -54,6 +54,7 @@ def test_security_configuration():
             os.environ["MEMORY_API_JWT_SECRET"] = original_jwt_secret
         else:
             os.environ.pop("MEMORY_API_JWT_SECRET", None)
+
     # Test rate limiting module
     from api.rate_limit import (
         RATE_LIMITS,
@@ -93,7 +94,7 @@ def test_memory_routes_security():
 
     # Check that memory routes file imports auth and rate limiting
     memory_routes_path = project_root / 'api' / 'memory_routes.py'
-    with open(memory_routes_path) as f:
+    with open(memory_routes_path, encoding='utf-8') as f:
         content = f.read()
 
     # Should import auth and rate limiting
@@ -119,7 +120,7 @@ def test_environment_variables():
 
     # Check .env.example has new variables
     env_example_path = project_root / '.env.example'
-    with open(env_example_path) as f:
+    with open(env_example_path, encoding='utf-8') as f:
         content = f.read()
 
     assert "MEMORY_API_ENABLE_AUTH" in content

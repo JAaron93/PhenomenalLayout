@@ -40,10 +40,7 @@ def auth_setup():
             'UserRole': api.auth.UserRole
         }
 
-    # Teardown: reload to restore original state after patch context has exited
-    importlib.reload(api.auth)
-
-    # Restore the original module in sys.modules if it existed
+    # Teardown: reload module with original environment to restore state
     if original_module is not None:
         sys.modules['api.auth'] = original_module
     elif 'api.auth' in sys.modules:

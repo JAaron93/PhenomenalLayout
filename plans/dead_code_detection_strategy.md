@@ -23,7 +23,7 @@ Based on the project's Python 3.12+ stack and existing tooling, we'll use the fo
     - Dead Code Detection Rules:
       - F401: Unused imports
       - F823: Undefined local with import *
-      - F841: Unused variables
+      - F841: Unused variables (assigned but never read)
     - Note: F821 (Undefined name) is about undefined names, not dead code
 
 2. **Mypy** (v1.17+)

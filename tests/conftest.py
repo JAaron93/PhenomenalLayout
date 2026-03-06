@@ -45,6 +45,10 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ.setdefault(
         "SECRET_KEY", "test-secret-key-for-testing-only!"
     )
+    # Set memory API security environment variables
+    os.environ.setdefault("MEMORY_API_ENABLE_AUTH", "true")
+    os.environ.setdefault("MEMORY_API_JWT_SECRET", "test-secret-key")
+    os.environ.setdefault("MEMORY_API_KEY", "test-admin-key")
     # When focusing, quiet output at runtime without relying on pre-parsed
     # addopts
     if os.getenv("FOCUSED"):
@@ -70,25 +74,26 @@ def test_client():
     with patch.dict('os.environ', test_env):
         # Reload modules to pick up environment
         import importlib
+        import sys
 
-        import api.auth
-        import api.memory_routes
-        import api.rate_limit
-        import app as app_module
-        importlib.reload(api.auth)
-        importlib.reload(api.memory_routes)
-        importlib.reload(api.rate_limit)
-        importlib.reload(app_module)
+        MODULE_NAMES = ["api.auth", "api.memory_routes", "api.rate_limit", "app"]
+        for name in MODULE_NAMES:
+            if name in sys.modules:
+                importlib.reload(sys.modules[name])
+            else:
+                __import__(name)
 
-        # Create test client with patched environment
+        app_module = sys.modules["app"]
         client = TestClient(app_module.create_app())
         yield client
 
         # Teardown: reload modules to restore state after patch context exits
-        importlib.reload(app_module)
-        importlib.reload(api.rate_limit)
-        importlib.reload(api.memory_routes)
-        importlib.reload(api.auth)
+        for name in MODULE_NAMES:
+            if name in sys.modules:
+                try:
+                    importlib.reload(sys.modules[name])
+                except Exception as e:
+                    pass
 
 
 @pytest.fixture

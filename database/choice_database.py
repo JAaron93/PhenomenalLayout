@@ -1354,6 +1354,9 @@ class ChoiceDatabase:
             Number of successfully imported choices in this batch
         """
         try:
+            # Start savepoint transaction for the batch
+            conn.execute("SAVEPOINT sp_batch")
+            
             # Prepare batch data for user_choices table
             choice_rows = []
             context_rows = []
@@ -1428,9 +1431,14 @@ class ChoiceDatabase:
                 context_rows,
             )
 
+            # Commit the batch transaction
+            conn.execute("RELEASE SAVEPOINT sp_batch")
             return len(batch)
 
         except Exception as e:
+            # Rollback to savepoint on error
+            conn.execute("ROLLBACK TO SAVEPOINT sp_batch")
+            conn.execute("RELEASE SAVEPOINT sp_batch")
             logger.error(f"Error importing choice batch: {e}")
             raise
 

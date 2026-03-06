@@ -552,7 +552,7 @@ class DynamicValidationEngine:
 
             # Check cache
             cached_results = self.result_cache.get(context.cache_key)
-            if cached_results:
+            if cached_results is not self.result_cache.MISS:
                 # Verify cached results are still valid (TTL check)
                 valid_cache = self._validate_cache_freshness(cached_results)
                 if valid_cache:
@@ -605,8 +605,6 @@ class DynamicValidationEngine:
         self, cached_results: dict[str, ValidationOutcome]
     ) -> bool:
         """Check if cached results are still fresh based on TTL."""
-        time.time()
-
         for outcome in cached_results.values():
             validator = self.graph.validators.get(outcome.validator_name)
             if validator and validator.cache_ttl_seconds:

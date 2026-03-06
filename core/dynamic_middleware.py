@@ -266,7 +266,7 @@ class SmartCachingMiddleware:
 
         # Check cache
         cached_result = cache.get(cache_key)
-        if cached_result is not None:
+        if cached_result is not cache.MISS:
             duration_ms = (time.perf_counter() - start_time) * 1000
             self.monitor.record_operation(cache_name, duration_ms, cache_hit=True)
             return cached_result
@@ -357,7 +357,6 @@ class SmartCachingMiddleware:
 
 def performance_tracking(
     operation_name: str | None = None,
-    cache_name: str | None = None,
     monitor: DynamicProgrammingMonitor | None = None,
 ) -> Callable[[F], F]:
     """Decorator for performance tracking."""

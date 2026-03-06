@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 # Migration note: Replaced legacy PDF engine with Dolphin OCR
 # for all PDF processing. Rationale: improved OCR accuracy, better layout
@@ -67,7 +67,7 @@ file_handler: FileHandler = FileHandler()
 file_validator: FileValidator = FileValidator()
 
 # Type aliases for better readability
-FileObject = Union[str, Any]  # Gradio file object can be str, FileData, or file-like
+FileObject = str | Any  # Gradio file object can be str, FileData, or file-like
 ProgressCallback = Callable[[int], None]
 ContentDict = dict[str, Any]
 TranslatedPageDict = dict[str, list[str]]

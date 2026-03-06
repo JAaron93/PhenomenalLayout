@@ -44,7 +44,7 @@ def setup_logging(
     fmt = logging.Formatter("[%(asctime)s] %(levelname)s %(name)s: %(message)s")
 
     # Console handler
-    if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+    if not any(type(h) is logging.StreamHandler for h in logger.handlers):
         console = logging.StreamHandler()
         console.setFormatter(fmt)
         logger.addHandler(console)
