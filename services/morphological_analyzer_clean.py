@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 from functools import lru_cache
-from typing import Optional
 
 from spacy.language import Language
 
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 class MorphologicalAnalyzer:
     """Analyze German terms including compound analysis."""
 
-    def __init__(self, spacy_model: Optional[Language] = None, cache_size: int = 1000):
+    def __init__(self, spacy_model: Language | None = None, cache_size: int = 1000):
         """Initialize the morphological analyzer.
 
         Args:

@@ -18,14 +18,13 @@ Based on the project's Python 3.12+ stack and existing tooling, we'll use the fo
 ### Primary Tools
 
 1. **Ruff** (v0.12+)
-   - Extremely fast Python linter written in Rust
-   - Already configured in pyproject.toml
-   - Rules:
-     - F841: Unused variables
-     - F821: Undefined name
-     - F834: Duplicate argument name
-     - E731: Do not assign a lambda expression, use a def
-     - RUF005: Unused import
+    - Extremely fast Python linter written in Rust
+    - Already configured in pyproject.toml
+    - Dead Code Detection Rules:
+      - F401: Unused imports
+      - F823: Undefined local with import *
+      - F841: Unused variables
+    - Note: F821 (Undefined name) is about undefined names, not dead code
 
 2. **Mypy** (v1.17+)
    - Static type checker

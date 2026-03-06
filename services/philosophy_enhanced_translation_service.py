@@ -5,17 +5,15 @@ from __future__ import annotations
 import asyncio
 import atexit
 import concurrent.futures
-import copy
 import functools
 import json
 import logging
-import math
 import re
 import time
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
 from models.neologism_models import DetectedNeologism, NeologismAnalysis
@@ -443,10 +441,8 @@ class PhilosophyEnhancedTranslationService:
         source_lang: str,
         target_lang: str,
         provider: str = "auto",
-        session_id: Optional[str] = None,
-        progress_callback: Optional[
-            Callable[[PhilosophyTranslationProgress], None]
-        ] = None,
+        session_id: str | None = None,
+        progress_callback: Callable[[PhilosophyTranslationProgress], None] | None = None,
     ) -> list[
         NeologismPreservationResult
     ]:
@@ -468,10 +464,8 @@ class PhilosophyEnhancedTranslationService:
         source_lang: str,
         target_lang: str,
         provider: str = "auto",
-        session_id: Optional[str] = None,
-        progress_callback: Optional[
-            Callable[[PhilosophyTranslationProgress], None]
-        ] = None,
+        session_id: str | None = None,
+        progress_callback: Callable[[PhilosophyTranslationProgress], None] | None = None,
     ) -> list[NeologismPreservationResult]:
         """Asynchronous batch translation."""
         return await self._translate_batch_with_neologism_handling_async(

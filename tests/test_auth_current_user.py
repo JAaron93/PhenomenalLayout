@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Test get_current_user function directly."""
 
+import importlib
 import sys
 from unittest.mock import patch
-import importlib
+
 import pytest
 from fastapi import HTTPException
 

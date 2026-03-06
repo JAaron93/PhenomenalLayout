@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 
 class NeologismType(Enum):
@@ -39,7 +39,7 @@ class MorphologicalAnalysis:
     # Compound analysis
     is_compound: bool = False
     compound_parts: list[str] = field(default_factory=list)
-    compound_pattern: Optional[str] = None
+    compound_pattern: str | None = None
 
     # Linguistic features
     word_length: int = 0
@@ -233,9 +233,9 @@ class DetectedNeologism:
     confidence_factors: ConfidenceFactors = field(default_factory=ConfidenceFactors)
 
     # Metadata
-    detection_timestamp: Optional[str] = None
-    source_text_id: Optional[str] = None
-    page_number: Optional[int] = None
+    detection_timestamp: str | None = None
+    source_text_id: str | None = None
+    page_number: int | None = None
 
     # Additional properties
     translation_suggestions: list[str] = field(default_factory=list)
@@ -401,7 +401,7 @@ class NeologismAnalysis:
 
     # Performance metrics
     processing_time: float = 0.0
-    memory_usage: Optional[float] = None
+    memory_usage: float | None = None
     cache_hits: int = 0
 
     # Quality indicators

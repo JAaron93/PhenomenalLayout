@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import math
 import re
-from typing import Any, Optional
+from typing import Any
 
 from models.neologism_models import (
     ConfidenceFactors,
@@ -66,10 +66,10 @@ class ConfidenceScorer:
 
     def __init__(
         self,
-        philosophical_indicators: Optional[set[str]] = None,
-        german_morphological_patterns: Optional[dict[str, list[str]]] = None,
-        corpus_frequencies: Optional[dict[str, int]] = None,
-        corpus_total_tokens: Optional[int] = None,
+        philosophical_indicators: set[str] | None = None,
+        german_morphological_patterns: dict[str, list[str]] | None = None,
+        corpus_frequencies: dict[str, int] | None = None,
+        corpus_total_tokens: int | None = None,
     ):
         """Initialize the confidence scorer.
 
@@ -180,7 +180,7 @@ class ConfidenceScorer:
     # ---------------- Frequency and syntax helpers -----------------
 
     def update_corpus_frequencies(
-        self, freq: dict[str, int], total_tokens: Optional[int] = None
+        self, freq: dict[str, int], total_tokens: int | None = None
     ) -> None:
         """Replace corpus frequency data used for frequency-based signals.
 

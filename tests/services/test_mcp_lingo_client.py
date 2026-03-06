@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -20,7 +20,7 @@ class CallRecord:
 
 class FakeSession:
     def __init__(
-        self, succeed_on_call: int = 1, result: Optional[FakeToolResult] = None
+        self, succeed_on_call: int = 1, result: FakeToolResult | None = None
     ):
         self.calls: list[CallRecord] = []
         self._succeed_on_call = succeed_on_call

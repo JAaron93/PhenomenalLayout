@@ -2,8 +2,13 @@
 """Test parameter validation for MemoryMonitor class."""
 
 import pytest
-from utils.memory_monitor import MemoryMonitor, start_memory_monitoring, stop_memory_monitoring, get_memory_monitor
 
+from utils.memory_monitor import (
+    MemoryMonitor,
+    get_memory_monitor,
+    start_memory_monitoring,
+    stop_memory_monitoring,
+)
 
 # Shared invalid parameter sets for value error testing (from tests/ version)
 INVALID_VALUE_PARAMS = [
@@ -197,17 +202,17 @@ class TestMemoryMonitorValidation:
     def test_configure_method_valid_parameters(self):
         """Test configure method with valid parameters."""
         monitor = MemoryMonitor()
-        
+
         # Test valid values
         monitor.configure(check_interval=30.0, alert_threshold_mb=50.0)
         assert monitor.check_interval == 30.0
         assert monitor.alert_threshold_mb == 50.0
-        
+
         # Test boundary values
         monitor.configure(check_interval=0.1, alert_threshold_mb=0.0)
         assert monitor.check_interval == 0.1
         assert monitor.alert_threshold_mb == 0.0
-        
+
         monitor.configure(check_interval=3600.0, alert_threshold_mb=10240.0)
         assert monitor.check_interval == 3600.0
         assert monitor.alert_threshold_mb == 10240.0
@@ -215,28 +220,28 @@ class TestMemoryMonitorValidation:
     def test_configure_method_invalid_parameters(self):
         """Test configure method with invalid parameters."""
         monitor = MemoryMonitor()
-        
+
         # Test invalid check_interval
         with pytest.raises(ValueError, match="check_interval must be > 0"):
             monitor.configure(check_interval=0.0, alert_threshold_mb=100.0)
-            
+
         with pytest.raises(ValueError, match="check_interval must be > 0"):
             monitor.configure(check_interval=-1.0, alert_threshold_mb=100.0)
-            
+
         with pytest.raises(ValueError, match="check_interval must be <= 3600"):
             monitor.configure(check_interval=3601.0, alert_threshold_mb=100.0)
-            
+
         # Test invalid alert_threshold_mb
         with pytest.raises(ValueError, match="alert_threshold_mb must be >= 0"):
             monitor.configure(check_interval=60.0, alert_threshold_mb=-1.0)
-            
+
         with pytest.raises(ValueError, match="alert_threshold_mb must be <= 10240"):
             monitor.configure(check_interval=60.0, alert_threshold_mb=10241.0)
-            
+
         # Test invalid types
         with pytest.raises(TypeError, match="check_interval must be a number"):
             monitor.configure(check_interval="invalid", alert_threshold_mb=100.0)
-            
+
         with pytest.raises(TypeError, match="alert_threshold_mb must be a number"):
             monitor.configure(check_interval=60.0, alert_threshold_mb="invalid")
 

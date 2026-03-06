@@ -1,7 +1,6 @@
 """Utility functions for language detection and text extraction."""
 
 import logging
-
 from typing import Any
 
 logger = logging.getLogger(__name__)

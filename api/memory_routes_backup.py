@@ -12,16 +12,17 @@ from fastapi import (
 )
 
 from api.auth import (
-    get_admin_user, get_current_user_optional_dependency, UserRole, ENABLE_AUTH
+    ENABLE_AUTH,
+    UserRole,
+    get_admin_user,
+    get_current_user_optional_dependency,
 )
-from api.rate_limit import (
-    add_rate_limit_headers, check_rate_limit, get_client_ip
-)
+from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
 from utils.memory_monitor import (
+    MemoryMonitoringError,
     force_garbage_collection,
     get_memory_monitor,
     get_memory_stats,
-    MemoryMonitoringError,
     start_memory_monitoring,
     stop_memory_monitoring,
 )
@@ -35,8 +36,7 @@ def _fetch_memory_stats_with_headers(
     request: Request,
     response: Response
 ) -> dict[str, Any]:
-    """
-    Helper to fetch memory stats and add rate-limit headers.
+    """Helper to fetch memory stats and add rate-limit headers.
 
     Handles all error cases and ensures rate-limit headers are added
     on all code paths (success and error).
@@ -84,8 +84,7 @@ def _fetch_monitor_status_with_headers(
     request: Request,
     response: Response
 ) -> dict[str, Any]:
-    """
-    Helper to fetch monitor status and add rate-limit headers.
+    """Helper to fetch monitor status and add rate-limit headers.
 
     Handles all error cases and ensures rate-limit headers are added
     on all code paths (success and error).
@@ -143,8 +142,7 @@ def _set_error_response_with_rate_limit_headers(
     error: str,
     message: str
 ) -> dict[str, Any]:
-    """
-    Helper to set error response with consistent rate-limit headers.
+    """Helper to set error response with consistent rate-limit headers.
 
     Ensures endpoints return the same rate-limit headers on error paths
     as they do on success paths, centralizing get_client_ip, response handling,
@@ -208,7 +206,7 @@ async def force_garbage_collection_endpoint(
 
         # Add rate limit headers
         add_rate_limit_headers(response, "admin", client_ip)
-        
+
         return {
             "success": True,
             "data": result,
@@ -324,7 +322,7 @@ async def get_monitoring_status(
     """Get current memory monitoring status."""
     # Check rate limit
     check_rate_limit(request, "read")
-    
+
     # If auth is disabled, current_user will be None, allow access
     if current_user is None:
         if not ENABLE_AUTH:
@@ -334,7 +332,7 @@ async def get_monitoring_status(
                 response, request, 401,
                 "Unauthorized", "Authentication required"
             )
-    
+
     # Auth is enabled, check user role
     if current_user.get("role") not in [UserRole.READ_ONLY, UserRole.ADMIN]:
         return _set_error_response_with_rate_limit_headers(

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Integration test for memory API endpoints with authentication."""
 
-import pytest
 import os
 from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
-from app import create_app
-from api.auth import create_jwt_token, verify_jwt_token, UserRole
 
 # Module-level constant for test admin API key
 TEST_ADMIN_API_KEY = "test-admin-key"
@@ -97,10 +96,10 @@ def reload_app_with_env():
 
 def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
     """Test memory endpoints with authentication."""
-    print(f"Testing memory endpoints with authentication...", flush=True)
+    print("Testing memory endpoints with authentication...", flush=True)
     print(f"Using test_client: {type(test_client)}", flush=True)
     print(f"ENABLE_AUTH env: {os.getenv('MEMORY_API_ENABLE_AUTH')}", flush=True)
-    
+
     # Test GET /memory/stats with read token
     response = test_client.get(
         "/api/v1/memory/stats",
@@ -109,7 +108,7 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
     print(f"Response status: {response.status_code}")
     print(f"Response body: {response.text}")
     assert response.status_code == 200, f"Stats endpoint should work with read token: {response.text}"
-    
+
     # Test GET /memory/stats with admin token
     response = test_client.get(
         "/api/v1/memory/stats",
@@ -123,25 +122,25 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
         headers={"Authorization": f"Bearer {admin_token}"}
     )
     assert response.status_code == 200, f"Start monitoring should work with admin token: {response.text}"
-    
+
     # Test POST /memory/monitoring/stop with admin token
     response = test_client.post(
         "/api/v1/memory/monitoring/stop",
         headers={"Authorization": f"Bearer {admin_token}"}
     )
     assert response.status_code == 200, f"Stop monitoring should work with admin token: {response.text}"
-    
+
     # Test admin endpoint with read token (should fail)
     response = test_client.post(
         "/api/v1/memory/gc",
         headers={"Authorization": f"Bearer {read_token}"}
     )
     assert response.status_code == 403, f"GC endpoint should fail with read token: {response.text}"
-    
+
     # Test endpoint without auth (should fail)
     response = test_client.get("/api/v1/memory/stats")
     assert response.status_code == 401, f"Stats endpoint should fail without auth: {response.text}"
-    
+
     # Test with API key
     response = test_client.get(
         "/api/v1/memory/stats",
@@ -155,21 +154,21 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
         headers={"X-API-Key": TEST_ADMIN_API_KEY}
     )
     assert response.status_code == 200, f"GC endpoint should work with API key: {response.text}"
-    
+
     # Test with invalid API key (should fail)
     response = test_client.get(
         "/api/v1/memory/stats",
         headers={"X-API-Key": "invalid-key"}
     )
     assert response.status_code == 401, f"Stats endpoint should fail with invalid API key: {response.text}"
-    
+
     # Test POST /memory/gc with admin token (should succeed)
     response = test_client.post(
         "/api/v1/memory/gc",
         headers={"Authorization": f"Bearer {admin_token}"}
     )
     assert response.status_code == 200, f"Force GC should work with admin token: {response.text}"
-    
+
     # Test POST /memory/monitoring/stop with read token (should fail)
     response = test_client.post(
         "/api/v1/memory/monitoring/stop",
@@ -183,14 +182,14 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
         headers={"Authorization": f"Bearer {read_token}"}
     )
     assert response.status_code == 200, f"Status endpoint should work with read token: {response.text}"
-    
+
     # Test GET /memory/monitoring/status with admin token
     response = test_client.get(
         "/api/v1/memory/monitoring/status",
         headers={"Authorization": f"Bearer {admin_token}"}
     )
     assert response.status_code == 200, f"Status endpoint should work with admin token: {response.text}"
-    
+
     # Test POST /memory/monitoring/start with read token (should fail)
     response = test_client.post(
         "/api/v1/memory/monitoring/start",
@@ -263,7 +262,7 @@ def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
 def test_rate_limiting_headers(rate_limiting):
     """Test rate limiting headers presence."""
     print(f"Testing rate limiting headers with rate limiting {rate_limiting}...")
-    
+
     # Set up environment for testing
     test_env = {
         "MEMORY_API_ENABLE_RATE_LIMITING": rate_limiting,

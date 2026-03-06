@@ -18,7 +18,7 @@ from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Generic, Optional, TypeVar, Union
+from typing import Any, Generic, TypeVar
 
 # Type variables for generic implementations
 T = TypeVar("T")
@@ -166,7 +166,7 @@ class SmartCache(Generic[K, V]):
         self,
         max_size: int = 256,
         policy: CachePolicy = CachePolicy.LRU,
-        ttl_seconds: Optional[float] = None,
+        ttl_seconds: float | None = None,
     ):
         self.max_size = max_size
         self.policy = policy
@@ -187,7 +187,7 @@ class SmartCache(Generic[K, V]):
         # For FIFO: OrderedDict for O(1) insert/delete
         self._fifo_order: OrderedDict[K, None] = OrderedDict()
 
-    def get(self, key: K) -> Optional[V]:
+    def get(self, key: K) -> V | None:
         """Get value from cache with policy-aware access tracking."""
         with self._lock:
             entry = self._cache.get(key)
@@ -329,7 +329,7 @@ class DynamicRegistry(Generic[T]):
         self,
         cache_size: int = 256,
         cache_policy: CachePolicy = CachePolicy.LRU,
-        ttl_seconds: Optional[float] = None,
+        ttl_seconds: float | None = None,
     ):
         self._registry: dict[str, Callable[..., T]] = {}
         self._cache: SmartCache[tuple, T] = SmartCache(
@@ -347,7 +347,7 @@ class DynamicRegistry(Generic[T]):
             if key not in self._metrics:
                 self._metrics[key] = PerformanceMetrics(key)
 
-    def get(self, key: str, *args, **kwargs) -> Optional[T]:
+    def get(self, key: str, *args, **kwargs) -> T | None:
         """Get or create instance with intelligent caching."""
         # Create cache key from arguments
         cache_key = self._create_cache_key(key, args, kwargs)
@@ -455,8 +455,8 @@ class DynamicRegistry(Generic[T]):
         self._cache.clear()
 
     def get_metrics(
-        self, key: Optional[str] = None
-    ) -> Union[PerformanceMetrics, dict[str, PerformanceMetrics]]:
+        self, key: str | None = None
+    ) -> PerformanceMetrics | dict[str, PerformanceMetrics]:
         """Get performance metrics for a specific key or all keys."""
         if key:
             return self._metrics.get(key, PerformanceMetrics(key))
@@ -471,7 +471,7 @@ class DynamicRegistry(Generic[T]):
 class DecisionTreeNode(Generic[T]):
     """Node in a dynamic decision tree for pattern matching."""
 
-    def __init__(self, condition: Callable[[Any], bool], result: Optional[T] = None):
+    def __init__(self, condition: Callable[[Any], bool], result: T | None = None):
         self.condition = condition
         self.result = result
         self.children: list[DecisionTreeNode[T]] = []
@@ -481,7 +481,7 @@ class DecisionTreeNode(Generic[T]):
         """Add a child node to the decision tree."""
         self.children.append(child)
 
-    def evaluate(self, context: Any) -> Optional[T]:
+    def evaluate(self, context: Any) -> T | None:
         """Evaluate the decision tree with caching."""
         # Create cache key from context
         context_key = self._create_context_key(context)
@@ -553,7 +553,7 @@ class StrategyRegistry(Generic[T]):
         # Sort by priority (highest first)
         self._strategies.sort(key=lambda s: s.priority, reverse=True)
 
-    def select_strategy(self, context: Any) -> Optional[StrategyPattern[T]]:
+    def select_strategy(self, context: Any) -> StrategyPattern[T] | None:
         """Select the best strategy for the given context."""
         start_time = time.perf_counter()
 
@@ -579,7 +579,7 @@ class StrategyRegistry(Generic[T]):
         self._metrics.record_operation(duration_ms, cache_hit=False)
         return None
 
-    def execute(self, context: Any) -> Optional[T]:
+    def execute(self, context: Any) -> T | None:
         """Select and execute the best strategy."""
         strategy = self.select_strategy(context)
         if strategy:
@@ -626,7 +626,7 @@ class StrategyRegistry(Generic[T]):
 # Decorators for dynamic programming patterns
 
 
-def memoize(cache_size: int = 128, ttl_seconds: Optional[float] = None):
+def memoize(cache_size: int = 128, ttl_seconds: float | None = None):
     """Memoization decorator with configurable cache policies."""
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
@@ -736,7 +736,7 @@ def memoize(cache_size: int = 128, ttl_seconds: Optional[float] = None):
     return decorator
 
 
-def performance_monitor(operation_name: Optional[str] = None):
+def performance_monitor(operation_name: str | None = None):
     """Decorator to monitor function performance."""
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
@@ -776,7 +776,7 @@ class DynamicFactory(Generic[T]):
         """Register a creator function for a type."""
         self._creators[type_name] = creator
 
-    def create(self, type_name: str, *args, **kwargs) -> Optional[T]:
+    def create(self, type_name: str, *args, **kwargs) -> T | None:
         """Create an instance of the specified type."""
         creator = self._creators.get(type_name)
         if creator:

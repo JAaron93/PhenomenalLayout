@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import UploadFile
 
@@ -70,7 +70,7 @@ class FileHandler:
 
     def save_upload_file(self, upload_file: UploadFile) -> str:
         """Save FastAPI UploadFile and ensure its underlying stream is closed."""
-        file_path: Optional[str] = None
+        file_path: str | None = None
         try:
             file_id = str(uuid.uuid4())
             file_ext = Path(upload_file.filename).suffix

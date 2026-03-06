@@ -16,12 +16,11 @@ from dolphin_ocr.layout import BoundingBox, FontInfo
 from dolphin_ocr.monitoring import MonitoringService
 from dolphin_ocr.pdf_to_image import PDFToImageConverter
 from services.dolphin_ocr_service import DolphinOCRService
-from services.ocr_utils import parse_ocr_result
 from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
-    LayoutContext,
     TextBlock,
 )
+from services.ocr_utils import parse_ocr_result
 from services.pdf_document_reconstructor import (
     PDFDocumentReconstructor,
     TranslatedElement,

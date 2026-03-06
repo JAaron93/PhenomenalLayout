@@ -8,7 +8,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Add the project root to the Python path
 project_root: Path = Path(__file__).parent.parent
@@ -34,7 +34,7 @@ TEST_PDF_PATHS: list[str] = [
 ]
 
 
-def find_test_pdf() -> Optional[Path]:
+def find_test_pdf() -> Path | None:
     """Find a test PDF file by checking multiple predefined paths.
 
     Checks common locations for test PDF files and returns the first
@@ -65,7 +65,7 @@ async def run_test_modal_endpoint() -> bool:
     print(f"📡 Testing endpoint: {endpoint}")
 
     # Look for a test PDF file using the reusable function
-    test_pdf: Optional[Path] = find_test_pdf()
+    test_pdf: Path | None = find_test_pdf()
     if not test_pdf:
         print("❌ No test PDF found. Please create a test PDF file.")
         print_test_pdf_locations()
@@ -108,12 +108,12 @@ async def run_test_local_fallback() -> bool:
     print("\n🧪 Testing local fallback endpoint...")
 
     # Temporarily override endpoint for local testing
-    original_endpoint: Optional[str] = os.getenv("DOLPHIN_ENDPOINT")
+    original_endpoint: str | None = os.getenv("DOLPHIN_ENDPOINT")
     os.environ["DOLPHIN_ENDPOINT"] = "http://localhost:8501/layout"
 
     try:
         # Look for a test PDF file using the reusable function
-        test_pdf: Optional[Path] = find_test_pdf()
+        test_pdf: Path | None = find_test_pdf()
         if not test_pdf:
             print("⚠️  No test PDF found for local testing")
             print_test_pdf_locations()
@@ -139,8 +139,8 @@ def check_modal_authentication() -> bool:
     """Check Modal authentication."""
     print("🔐 Checking Modal authentication...")
 
-    token_id: Optional[str] = os.getenv("MODAL_TOKEN_ID")
-    token_secret: Optional[str] = os.getenv("MODAL_TOKEN_SECRET")
+    token_id: str | None = os.getenv("MODAL_TOKEN_ID")
+    token_secret: str | None = os.getenv("MODAL_TOKEN_SECRET")
 
     if not token_id or not token_secret:
         print("❌ Modal authentication not configured")

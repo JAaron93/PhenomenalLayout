@@ -15,7 +15,7 @@ import logging
 import math
 import os
 import pathlib
-from typing import Any, Union
+from typing import Any
 
 import httpx
 
@@ -124,7 +124,7 @@ def validate_dolphin_layout_response(data: dict[str, Any]) -> dict[str, Any]:
                 )
 
             # Validate bbox format and bounds
-            bbox_coords: list[Union[int, float]] = block.get("bbox", [])
+            bbox_coords: list[int | float] = block.get("bbox", [])
             if not (
                 isinstance(bbox_coords, list)
                 and len(bbox_coords) == 4
@@ -185,7 +185,7 @@ def validate_dolphin_layout_response(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-async def get_layout(pdf_path: Union[str, os.PathLike[str]]) -> dict[str, Any]:
+async def get_layout(pdf_path: str | os.PathLike[str]) -> dict[str, Any]:
     """Send *pdf_path* to the Dolphin service and return the JSON payload.
 
     Parameters

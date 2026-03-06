@@ -14,7 +14,7 @@ import time
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 from core.dynamic_programming import (
     CachePolicy,
@@ -80,7 +80,7 @@ class MiddlewareMetrics:
 class DynamicProgrammingMonitor:
     """Monitor performance improvements from dynamic programming patterns."""
 
-    def __init__(self, cache_time_savings_factor: Optional[float] = None):
+    def __init__(self, cache_time_savings_factor: float | None = None):
         # Resolve cache time savings factor from argument or environment
         if cache_time_savings_factor is None:
             env_val = os.getenv("CACHE_TIME_SAVINGS_FACTOR", "0.9").strip()
@@ -109,7 +109,7 @@ class DynamicProgrammingMonitor:
         duration_ms: float,
         cache_hit: bool = False,
         error: bool = False,
-        pattern_type: Optional[str] = None,
+        pattern_type: str | None = None,
     ) -> None:
         """Record operation metrics."""
         with self._lock:
@@ -205,7 +205,7 @@ class SmartCachingMiddleware:
     def __init__(
         self,
         default_cache_size: int = 256,
-        default_ttl_seconds: Optional[float] = None,
+        default_ttl_seconds: float | None = None,
         adaptive_sizing: bool = True,
     ):
         self.default_cache_size = default_cache_size
@@ -225,8 +225,8 @@ class SmartCachingMiddleware:
     def get_cache(
         self,
         name: str,
-        size: Optional[int] = None,
-        ttl_seconds: Optional[float] = None,
+        size: int | None = None,
+        ttl_seconds: float | None = None,
         policy: CachePolicy = CachePolicy.LRU,
     ) -> SmartCache:
         """Get or create a cache with specified configuration."""
@@ -252,7 +252,7 @@ class SmartCachingMiddleware:
         cache_name: str,
         func: Callable,
         *args,
-        cache_key: Optional[str] = None,
+        cache_key: str | None = None,
         **kwargs,
     ) -> Any:
         """Execute function with caching."""
@@ -356,9 +356,9 @@ class SmartCachingMiddleware:
 
 
 def performance_tracking(
-    operation_name: Optional[str] = None,
-    cache_name: Optional[str] = None,
-    monitor: Optional[DynamicProgrammingMonitor] = None,
+    operation_name: str | None = None,
+    cache_name: str | None = None,
+    monitor: DynamicProgrammingMonitor | None = None,
 ) -> Callable[[F], F]:
     """Decorator for performance tracking."""
 
@@ -394,9 +394,9 @@ def performance_tracking(
 def smart_cache(
     cache_name: str,
     size: int = 256,
-    ttl_seconds: Optional[float] = None,
+    ttl_seconds: float | None = None,
     policy: CachePolicy = CachePolicy.LRU,
-    middleware: Optional[SmartCachingMiddleware] = None,
+    middleware: SmartCachingMiddleware | None = None,
 ) -> Callable[[F], F]:
     """Decorator for smart caching."""
 
@@ -417,9 +417,9 @@ def smart_cache(
 
 def hybrid_optimization(
     cache_name: str,
-    operation_name: Optional[str] = None,
+    operation_name: str | None = None,
     cache_size: int = 256,
-    ttl_seconds: Optional[float] = None,
+    ttl_seconds: float | None = None,
 ) -> Callable[[F], F]:
     """Combined decorator for caching and performance monitoring."""
 
@@ -467,13 +467,13 @@ def reset_all_metrics() -> None:
 # Export for use in other modules
 __all__ = [
     "DynamicProgrammingMonitor",
-    "SmartCachingMiddleware",
     "MiddlewareMetrics",
-    "performance_tracking",
-    "smart_cache",
-    "hybrid_optimization",
-    "get_global_monitor",
-    "get_global_cache_middleware",
+    "SmartCachingMiddleware",
     "generate_performance_report",
+    "get_global_cache_middleware",
+    "get_global_monitor",
+    "hybrid_optimization",
+    "performance_tracking",
     "reset_all_metrics",
+    "smart_cache",
 ]

@@ -10,10 +10,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from core.dynamic_choice_engine import (
     OptimizedUserChoiceManager as UserChoiceManager,
+)
+from core.dynamic_choice_engine import (
     create_session_for_document,
 )
 from models.neologism_models import NeologismAnalysis
@@ -114,7 +116,7 @@ class PhilosophyDocumentResult:
     page_neologism_analyses: list[NeologismAnalysis]
 
     # User choice information
-    session_id: Optional[str]
+    session_id: str | None
     total_choices_applied: int
 
     # Processing metadata
@@ -156,15 +158,13 @@ class PhilosophyEnhancedDocumentProcessor:
 
     def __init__(
         self,
-        base_processor: Optional[EnhancedDocumentProcessor] = None,
-        philosophy_translation_service: Optional[
-            PhilosophyEnhancedTranslationService
-        ] = None,
-        neologism_detector: Optional[NeologismDetector] = None,
-        user_choice_manager: Optional[UserChoiceManager] = None,
+        base_processor: EnhancedDocumentProcessor | None = None,
+        philosophy_translation_service: PhilosophyEnhancedTranslationService | None = None,
+        neologism_detector: NeologismDetector | None = None,
+        user_choice_manager: UserChoiceManager | None = None,
         dpi: int = 300,
         preserve_images: bool = True,
-        terminology_path: Optional[str] = None,
+        terminology_path: str | None = None,
         enable_batch_processing: bool = True,
         max_concurrent_pages: int = 5,
     ):
@@ -240,12 +240,10 @@ class PhilosophyEnhancedDocumentProcessor:
         source_lang: str,
         target_lang: str,
         provider: str = "auto",
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
         philosophy_mode: bool = True,
-        progress_callback: Optional[
-            Callable[[PhilosophyProcessingProgress], None]
-        ] = None,
+        progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> PhilosophyDocumentResult:
         """Process document with comprehensive philosophy-aware translation.
 
@@ -377,9 +375,7 @@ class PhilosophyEnhancedDocumentProcessor:
         self,
         file_path: str,
         progress: PhilosophyProcessingProgress,
-        progress_callback: Optional[
-            Callable[[PhilosophyProcessingProgress], None]
-        ] = None,
+        progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> dict[str, Any]:
         """Extract content asynchronously with progress tracking."""
         # Run extraction in thread to avoid blocking
@@ -406,11 +402,11 @@ class PhilosophyEnhancedDocumentProcessor:
         return content
 
     async def _create_session_async(
-        self, file_path: str, user_id: Optional[str], source_lang: str, target_lang: str
+        self, file_path: str, user_id: str | None, source_lang: str, target_lang: str
     ) -> str:
         """Create a new user session for document processing."""
         document_name = Path(file_path).name
-        
+
         session = await asyncio.to_thread(
             create_session_for_document,
             manager=self.user_choice_manager,
@@ -426,9 +422,7 @@ class PhilosophyEnhancedDocumentProcessor:
         self,
         content: dict[str, Any],
         progress: PhilosophyProcessingProgress,
-        progress_callback: Optional[
-            Callable[[PhilosophyProcessingProgress], None]
-        ] = None,
+        progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> dict[str, Any]:
         """Detect neologisms across the entire document."""
         detection_start_time = time.time()
@@ -501,9 +495,7 @@ class PhilosophyEnhancedDocumentProcessor:
         neologism_results: dict[str, Any],
         session_id: str,
         progress: PhilosophyProcessingProgress,
-        progress_callback: Optional[
-            Callable[[PhilosophyProcessingProgress], None]
-        ] = None,
+        progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> dict[str, Any]:
         """Apply user choices to detected neologisms."""
         document_analysis = neologism_results["document_analysis"]
@@ -544,9 +536,7 @@ class PhilosophyEnhancedDocumentProcessor:
         provider: str,
         session_id: str,
         progress: PhilosophyProcessingProgress,
-        progress_callback: Optional[
-            Callable[[PhilosophyProcessingProgress], None]
-        ] = None,
+        progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> dict[str, Any]:
         """Translate document with philosophy awareness."""
 
@@ -576,9 +566,7 @@ class PhilosophyEnhancedDocumentProcessor:
         neologism_results: dict[str, Any],
         choice_results: dict[str, Any],
         progress: PhilosophyProcessingProgress,
-        progress_callback: Optional[
-            Callable[[PhilosophyProcessingProgress], None]
-        ] = None,
+        progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> dict[str, Any]:
         """Reconstruct document with enhanced metadata."""
         # Add neologism analysis metadata to the translated content
@@ -688,7 +676,7 @@ class PhilosophyEnhancedDocumentProcessor:
 def create_philosophy_enhanced_document_processor(
     dpi: int = 300,
     preserve_images: bool = True,
-    terminology_path: Optional[str] = None,
+    terminology_path: str | None = None,
     db_path: str = "database/user_choices.db",
     **kwargs,
 ) -> PhilosophyEnhancedDocumentProcessor:
@@ -707,9 +695,9 @@ async def process_document_with_philosophy_awareness(
     source_lang: str,
     target_lang: str,
     provider: str = "auto",
-    user_id: Optional[str] = None,
-    terminology_path: Optional[str] = None,
-    output_filename: Optional[str] = None,
+    user_id: str | None = None,
+    terminology_path: str | None = None,
+    output_filename: str | None = None,
 ) -> tuple[PhilosophyDocumentResult, str]:
     """Process a document with philosophy awareness and create translated output."""
     processor = create_philosophy_enhanced_document_processor(

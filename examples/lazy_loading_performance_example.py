@@ -48,7 +48,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import psutil
 
@@ -80,7 +80,7 @@ def get_eager_loading_memory_estimate() -> float:
         float: Estimated memory usage in MB for eager loading
     """
     # Check environment variable first
-    env_memory: Optional[str] = os.environ.get("LAZY_LOADING_EAGER_MEMORY_MB")
+    env_memory: str | None = os.environ.get("LAZY_LOADING_EAGER_MEMORY_MB")
     if env_memory:
         try:
             return float(env_memory)
@@ -133,7 +133,7 @@ Examples:
 
 
 def demonstrate_lazy_loading(
-    eager_memory_override: Optional[float] = None,
+    eager_memory_override: float | None = None,
 ) -> dict[str, float]:
     """Demonstrate lazy loading performance benefits."""
     # Local import to avoid E402 after sys.path modification
@@ -223,7 +223,7 @@ def demonstrate_lazy_loading(
     print("\n4. Testing multiple instantiations...")
 
     start_time = time.time()
-    detectors: list[NeologismDetector] = [NeologismDetector() for _ in range(10)]
+    [NeologismDetector() for _ in range(10)]
 
     multi_init_time: float = time.time() - start_time
     print(f"   10 instantiations time: {multi_init_time:.4f}s")
@@ -321,7 +321,7 @@ def main() -> None:
     if args.eager_memory is not None:
         print(f"✓ Used command-line memory override: {args.eager_memory:.2f} MB")
     elif os.environ.get("LAZY_LOADING_EAGER_MEMORY_MB"):
-        env_val: Optional[str] = os.environ.get("LAZY_LOADING_EAGER_MEMORY_MB")
+        env_val: str | None = os.environ.get("LAZY_LOADING_EAGER_MEMORY_MB")
         print(f"✓ Used environment variable: {env_val} MB")
     else:
         default_mem: float = get_eager_loading_memory_estimate()

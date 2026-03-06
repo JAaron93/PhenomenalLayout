@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from database.choice_database import ChoiceDatabase
 from models.neologism_models import DetectedNeologism, NeologismAnalysis
@@ -78,9 +78,9 @@ class UserChoiceManager:
     def create_session(
         self,
         session_name: str = "",
-        document_id: Optional[str] = None,
+        document_id: str | None = None,
         document_name: str = "",
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         source_language: str = "de",
         target_language: str = "en",
     ) -> ChoiceSession:
@@ -108,7 +108,7 @@ class UserChoiceManager:
         else:
             raise RuntimeError(f"Failed to create session: {session_id}")
 
-    def get_session(self, session_id: str) -> Optional[ChoiceSession]:
+    def get_session(self, session_id: str) -> ChoiceSession | None:
         """Get a session by ID."""
         # Check cache first
         if session_id in self._active_sessions:
@@ -160,7 +160,7 @@ class UserChoiceManager:
         neologism: DetectedNeologism,
         choice_type: ChoiceType,
         translation_result: str = "",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         choice_scope: ChoiceScope = ChoiceScope.CONTEXTUAL,
         confidence_level: float = 1.0,
         user_notes: str = "",
@@ -221,8 +221,8 @@ class UserChoiceManager:
             raise RuntimeError(f"Failed to save choice: {choice_id}")
 
     def get_choice_for_neologism(
-        self, neologism: DetectedNeologism, session_id: Optional[str] = None
-    ) -> Optional[UserChoice]:
+        self, neologism: DetectedNeologism, session_id: str | None = None
+    ) -> UserChoice | None:
         """Get the best matching choice for a detected neologism.
 
         Args:
@@ -362,7 +362,7 @@ class UserChoiceManager:
         self,
         conflict_id: str,
         resolution_strategy: ConflictResolution,
-        resolved_choice_id: Optional[str] = None,
+        resolved_choice_id: str | None = None,
         notes: str = "",
     ) -> bool:
         """Manually resolve a conflict."""
@@ -412,9 +412,9 @@ class UserChoiceManager:
     def process_neologism_batch(
         self,
         neologisms: list[DetectedNeologism],
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         auto_apply_similar: bool = True,
-    ) -> list[tuple[DetectedNeologism, Optional[UserChoice]]]:
+    ) -> list[tuple[DetectedNeologism, UserChoice | None]]:
         """Process a batch of neologisms and return suggested choices.
 
         Args:
@@ -456,7 +456,7 @@ class UserChoiceManager:
         return results
 
     def apply_choices_to_analysis(
-        self, analysis: NeologismAnalysis, session_id: Optional[str] = None
+        self, analysis: NeologismAnalysis, session_id: str | None = None
     ) -> dict[str, Any]:
         """Apply user choices to a neologism analysis.
 
@@ -510,21 +510,21 @@ class UserChoiceManager:
     # Export/Import Operations
 
     def export_session_choices(
-        self, session_id: str, file_path: Optional[str] = None
-    ) -> Optional[str]:
+        self, session_id: str, file_path: str | None = None
+    ) -> str | None:
         """Export choices for a session."""
         return self.db.export_choices_to_json(session_id, file_path)
 
-    def export_all_choices(self, file_path: Optional[str] = None) -> Optional[str]:
+    def export_all_choices(self, file_path: str | None = None) -> str | None:
         """Export all choices."""
         return self.db.export_choices_to_json(None, file_path)
 
-    def import_choices(self, json_data: str, session_id: Optional[str] = None) -> int:
+    def import_choices(self, json_data: str, session_id: str | None = None) -> int:
         """Import choices from JSON data."""
         return self.db.import_choices_from_json(json_data, session_id)
 
     def import_choices_from_dict(
-        self, choices_dict: dict[str, Any], session_id: Optional[str] = None
+        self, choices_dict: dict[str, Any], session_id: str | None = None
     ) -> int:
         """Import choices from a dictionary.
 
@@ -557,7 +557,7 @@ class UserChoiceManager:
     def import_terminology_as_choices(
         self,
         terminology_dict: dict[str, str],
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         source_language: str = "de",
         target_language: str = "en",
     ) -> int:
@@ -930,7 +930,7 @@ class UserChoiceManager:
             return False
 
     def get_recommendation_for_neologism(
-        self, neologism: DetectedNeologism, session_id: Optional[str] = None
+        self, neologism: DetectedNeologism, session_id: str | None = None
     ) -> dict[str, Any]:
         """Get comprehensive recommendation for handling a neologism.
 
@@ -1028,7 +1028,7 @@ def create_choice_manager(db_path: str = "user_choices.db") -> UserChoiceManager
 def process_neologism_analysis(
     manager: UserChoiceManager,
     analysis: NeologismAnalysis,
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Process a neologism analysis with the choice manager."""
     return manager.apply_choices_to_analysis(analysis, session_id)

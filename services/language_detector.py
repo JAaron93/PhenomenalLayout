@@ -15,7 +15,7 @@ import os
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional, TypedDict
+from typing import Any, TypedDict
 
 # Optional dependency detection without importing at module import time
 LANGDETECT_AVAILABLE: bool = importlib.util.find_spec("langdetect") is not None
@@ -165,9 +165,9 @@ class LanguageDetector:
         self.language_map: dict[str, str] = LANGUAGE_MAP
         # Caches for optional langdetect dependency
         self._langdetect_initialized: bool = False
-        self._langdetect_mod: Optional[Any] = None
-        self._langdetect_exception: Optional[Any] = None
-        self._detect_func: Optional[Any] = None
+        self._langdetect_mod: Any | None = None
+        self._langdetect_exception: Any | None = None
+        self._detect_func: Any | None = None
 
     def _ensure_langdetect(self) -> None:
         """Lazily import and cache langdetect modules/functions.
@@ -198,7 +198,7 @@ class LanguageDetector:
                 )
                 # Get LangDetectException from the top-level module instead of importing submodule
                 exc: Any = getattr(mod, "LangDetectException", fallback_exc)
-                detect_func: Optional[Any] = getattr(mod, "detect", None)
+                detect_func: Any | None = getattr(mod, "detect", None)
                 self._langdetect_mod = mod
                 self._langdetect_exception = exc
                 self._detect_func = detect_func
@@ -211,8 +211,8 @@ class LanguageDetector:
     def detect_language(
         self,
         file_path: str,
-        text_extractor: Optional[Callable[[str], str]] = None,
-        pre_extracted_text: Optional[str] = None,
+        text_extractor: Callable[[str], str] | None = None,
+        pre_extracted_text: str | None = None,
     ) -> str:
         """Detect the language of a document from its file path.
 
@@ -464,8 +464,8 @@ class LanguageDetector:
 
         if LANGDETECT_AVAILABLE:
             self._ensure_langdetect()
-            detect_func: Optional[Any] = self._detect_func
-            lang_exc: Optional[Any] = self._langdetect_exception
+            detect_func: Any | None = self._detect_func
+            lang_exc: Any | None = self._langdetect_exception
             if detect_func is None or lang_exc is None:
                 return self._simple_language_detection(text)
             try:

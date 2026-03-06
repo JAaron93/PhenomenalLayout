@@ -9,10 +9,9 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 
-def find_project_root(start_path: Optional[Path] = None, max_depth: int = 10) -> Path:
+def find_project_root(start_path: Path | None = None, max_depth: int = 10) -> Path:
     """Find the project root by searching upward for known indicators.
 
     Args:
@@ -110,7 +109,7 @@ def find_project_root(start_path: Optional[Path] = None, max_depth: int = 10) ->
     return fallback_root
 
 
-def add_project_root_to_path(project_root: Optional[Path] = None) -> Path:
+def add_project_root_to_path(project_root: Path | None = None) -> Path:
     """Add project root to sys.path safely.
 
     Args:

@@ -8,7 +8,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from models.user_choice_models import (
     ChoiceConflict,
@@ -442,7 +442,7 @@ class ChoiceDatabase:
             ),
         )
 
-    def get_user_choice(self, choice_id: str) -> Optional[UserChoice]:
+    def get_user_choice(self, choice_id: str) -> UserChoice | None:
         """Get a user choice by ID."""
         try:
             with self._get_connection() as conn:
@@ -657,7 +657,7 @@ class ChoiceDatabase:
             logger.error(f"Error saving session: {e}")
             return False
 
-    def get_session(self, session_id: str) -> Optional[ChoiceSession]:
+    def get_session(self, session_id: str) -> ChoiceSession | None:
         """Get a choice session by ID."""
         try:
             with self._get_connection() as conn:
@@ -841,7 +841,7 @@ class ChoiceDatabase:
         self,
         conflict_id: str,
         resolution_strategy: ConflictResolution,
-        resolved_choice_id: Optional[str] = None,
+        resolved_choice_id: str | None = None,
         notes: str = "",
     ) -> bool:
         """Resolve a conflict."""
@@ -949,7 +949,7 @@ class ChoiceDatabase:
             session_tags=set(json.loads(row["session_tags"])),
         )
 
-    def _row_to_choice_conflict(self, row: sqlite3.Row) -> Optional[ChoiceConflict]:
+    def _row_to_choice_conflict(self, row: sqlite3.Row) -> ChoiceConflict | None:
         """Convert database row to ChoiceConflict object."""
         try:
             choice_a = self.get_user_choice(row["choice_a_id"])
@@ -1054,8 +1054,8 @@ class ChoiceDatabase:
             return {}
 
     def export_choices_to_json(
-        self, session_id: Optional[str] = None, file_path: Optional[str] = None
-    ) -> Optional[str]:
+        self, session_id: str | None = None, file_path: str | None = None
+    ) -> str | None:
         """Export choices to JSON format."""
         try:
             choices = []
@@ -1095,7 +1095,7 @@ class ChoiceDatabase:
             return None
 
     def import_choices_from_json(
-        self, json_data: str, session_id: Optional[str] = None
+        self, json_data: str, session_id: str | None = None
     ) -> int:
         """Import choices from JSON format using high-performance batch operations.
 
@@ -1166,7 +1166,7 @@ class ChoiceDatabase:
             return 0
 
     def _validate_and_reconstruct_choice(
-        self, choice_data: Mapping[str, Any], session_id: Optional[str] = None
+        self, choice_data: Mapping[str, Any], session_id: str | None = None
     ) -> UserChoice:
         """Validate and reconstruct a UserChoice object from JSON data.
 

@@ -5,7 +5,7 @@ import logging
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 try:
     import mcp.types as types
@@ -77,9 +77,9 @@ class McpLingoConfig:
     command: str = "npx"
     # npx -y lingo.dev mcp <api-key>
     args: Sequence[str] = ("-y", "lingo.dev", "mcp")
-    env: Optional[dict[str, str]] = None
+    env: dict[str, str] | None = None
     # Tool discovery/override
-    tool_name: Optional[str] = None
+    tool_name: str | None = None
     # Timeout for startup and calls
     startup_timeout_s: float = float(os.environ.get("LINGO_MCP_STARTUP_TIMEOUT", 20))
     call_timeout_s: float = float(os.environ.get("LINGO_MCP_CALL_TIMEOUT", 60))
@@ -105,11 +105,11 @@ class McpLingoClient:
 
     def __init__(self, config: McpLingoConfig):
         self._config = config
-        self._stdio_ctx: Optional[asyncio.AbstractAsyncContextManager] = None
-        self._session_ctx: Optional[asyncio.AbstractAsyncContextManager] = None
-        self._session: Optional[ClientSession] = None
-        self._tool_name: Optional[str] = None
-        self._tool_schema: Optional[dict[str, Any]] = None
+        self._stdio_ctx: asyncio.AbstractAsyncContextManager | None = None
+        self._session_ctx: asyncio.AbstractAsyncContextManager | None = None
+        self._session: ClientSession | None = None
+        self._tool_name: str | None = None
+        self._tool_schema: dict[str, Any] | None = None
 
     @property
     def config(self) -> McpLingoConfig:
@@ -275,7 +275,6 @@ class McpLingoClient:
         if not text:
             return ""
         # Try a few times in case of transient server errors
-        last_err: Optional[Exception] = None
         for attempt in range(3):
             try:
                 result = await self._call_translate_tool(
@@ -283,7 +282,6 @@ class McpLingoClient:
                 )
                 return self._extract_text(result, fallback=text)
             except Exception as e:
-                last_err = e
                 if attempt < 2:
                     await asyncio.sleep(0.5 * (attempt + 1))
                 else:
@@ -320,12 +318,12 @@ class McpLingoClient:
             out.append(translated)
         return out
 
-    def _normalize_lang(self, lang: Optional[str]) -> Optional[str]:
+    def _normalize_lang(self, lang: str | None) -> str | None:
         if lang is None:
             return None
         return lang.strip().lower()
 
-    def _normalize_locale(self, lang: Optional[str]) -> Optional[str]:
+    def _normalize_locale(self, lang: str | None) -> str | None:
         """Return a best-effort BCP-47 code for the MCP tool.
 
         Accepts inputs like 'english', 'en', 'en-us', 'EN_us', 'German', etc.
@@ -624,7 +622,7 @@ class McpLingoClient:
             # Never fail due to logging
             pass
 
-        last_err: Optional[Exception] = None
+        last_err: Exception | None = None
         errors: list[Exception] = []
         attempt_index = 0
         for args in arg_attempts:

@@ -1,7 +1,7 @@
 import os
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 pytest_plugins: tuple[str, ...] = ("pytest_asyncio",)
@@ -70,6 +70,7 @@ def test_client():
     with patch.dict('os.environ', test_env):
         # Reload modules to pick up environment
         import importlib
+
         import api.auth
         import api.memory_routes
         import api.rate_limit

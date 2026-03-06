@@ -13,6 +13,9 @@ The analysis focused on the main codebase:
 - `config/` - Configuration management
 - `services/` - External services and business logic
 - `models/` - Data models
+- `utils/` - Utility functions and helpers
+- `ui/` - User interface components
+- `tests/` - Test files
 - `app.py` - Main application entry point
 
 ## Tool 1: Ruff Analysis
@@ -40,7 +43,7 @@ Ruff detected **87 errors** in the codebase, primarily:
 ## Tool 2: MyPy Analysis
 **File:** reports/mypy_dead_code_report.txt
 
-MyPy detected **183 errors** in 35 files, with 7 unreachable code instances:
+MyPy detected **183 errors** in 35 files, with 15 unreachable code instances across 8 files:
 
 ### Unreachable Code Findings:
 - [`models/user_choice_models.py`](models/user_choice_models.py:96,237) - 2 instances

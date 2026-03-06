@@ -9,14 +9,13 @@ import contextlib
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Optional
 
 import gradio as gr
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
@@ -82,7 +81,7 @@ async def lifespan(_app: FastAPI):
     if os.getenv("ENABLE_MEMORY_MONITORING", "").lower() == "true":
         try:
             from utils.memory_monitor import start_memory_monitoring
-            
+
             # Parse and validate environment variables with fallbacks
             try:
                 check_interval = float(os.getenv("MEMORY_CHECK_INTERVAL", "60"))
@@ -92,7 +91,7 @@ async def lifespan(_app: FastAPI):
             except ValueError as e:
                 logger.warning("Invalid MEMORY_CHECK_INTERVAL format, using default 60: %s", e)
                 check_interval = 60.0
-            
+
             try:
                 alert_threshold = float(os.getenv("MEMORY_ALERT_THRESHOLD_MB", "100"))
                 if alert_threshold < 0:
@@ -101,7 +100,7 @@ async def lifespan(_app: FastAPI):
             except ValueError as e:
                 logger.warning("Invalid MEMORY_ALERT_THRESHOLD_MB format, using default 100: %s", e)
                 alert_threshold = 100.0
-            
+
             start_memory_monitoring(check_interval, alert_threshold)
             logger.info("Memory monitoring enabled (interval: %.1fs, threshold: %.1f MB)", check_interval, alert_threshold)
         except Exception as e:
@@ -127,7 +126,7 @@ async def lifespan(_app: FastAPI):
 
     # Stop memory monitoring
     try:
-        from utils.memory_monitor import stop_memory_monitoring, log_memory_usage
+        from utils.memory_monitor import log_memory_usage, stop_memory_monitoring
         log_memory_usage("shutdown")
         stop_memory_monitoring()
     except Exception:
@@ -175,13 +174,13 @@ def create_app(config: dict | None = None):
         version="2.0.0",
         lifespan=lifespan,
     )
-    
+
     # Store configuration in app.state for module access
     if config is not None:
         app.state._config = config
     else:
         app.state._config = {}
-    
+
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -190,30 +189,30 @@ def create_app(config: dict | None = None):
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Include routers
     app.include_router(app_router)  # Root and philosophy routes without prefix
     app.include_router(api_router, prefix="/api/v1")  # API routes with versioning
-    
+
     # Static files mount
     app.mount("/static", StaticFiles(directory="static"), name="static")
-    
+
     return app
 
 
 def main() -> None:
     """Main application entry point."""
     logger.info("Starting PhenomenalLayout - Advanced Layout Preservation Engine")
-    
+
     # Create app using factory for current environment
     app = create_app()
-    
+
     # Create Gradio interface
     gradio_app = create_gradio_interface()
-    
+
     # Mount Gradio app to FastAPI
     app_with_gradio = gr.mount_gradio_app(app, gradio_app, path="/ui")
-    
+
     # Start server with Uvicorn
     # Note: Default to localhost; override via HOST and PORT env vars
     host = os.getenv("HOST", "127.0.0.1")

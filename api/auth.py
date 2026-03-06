@@ -1,17 +1,15 @@
 """Authentication utilities for API endpoints."""
 
-import os
-import secrets
-import time
 import functools
+import os
 import random
-from datetime import datetime, timedelta, timezone
+import secrets
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import Optional, Union
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 logger = __import__("logging").getLogger(__name__)
 
@@ -48,16 +46,16 @@ def _parse_auth_log_level() -> str:
     """
     raw = os.getenv("AUTH_ACCESS_LOG_LEVEL", "DEBUG")
     normalized = raw.strip().upper()
-    
+
     valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-    
+
     if normalized not in valid_levels:
         logger.warning(
             f"Invalid AUTH_ACCESS_LOG_LEVEL '{raw}', using default 'DEBUG'. "
             f"Valid levels: {', '.join(sorted(valid_levels))}"
         )
         return "DEBUG"
-    
+
     return normalized
 
 
@@ -67,15 +65,15 @@ _AUTH_ACCESS_LOG_LEVEL = _parse_auth_log_level()
 
 class AuthConfig:
     """Configuration handler for authentication with environment fallback."""
-    
-    def __init__(self, config: Optional[dict] = None):
+
+    def __init__(self, config: dict | None = None):
         """Initialize auth configuration.
         
         Args:
             config: Optional configuration dict (for testing)
         """
         self._config = config or {}
-    
+
     def get(self, key: str, default=None):
         """Get configuration value from injected config or fallback to environment.
         
@@ -89,17 +87,17 @@ class AuthConfig:
         if key in self._config:
             return self._config[key]
         return os.getenv(key, default)
-    
+
     @property
-    def jwt_secret(self) -> Optional[str]:
+    def jwt_secret(self) -> str | None:
         """Get JWT secret from configuration."""
         return self.get("MEMORY_API_JWT_SECRET")
-    
+
     @property
-    def api_key(self) -> Optional[str]:
+    def api_key(self) -> str | None:
         """Get API key from configuration."""
         return self.get("MEMORY_API_KEY")
-    
+
     @property
     def enable_auth(self) -> bool:
         """Get auth enabled flag from configuration."""
@@ -178,7 +176,7 @@ ANONYMOUS_USER = MappingProxyType({
 })
 
 
-def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY, config: Optional[AuthConfig] = None) -> str:
+def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY, config: AuthConfig | None = None) -> str:
     """Create a JWT token for authentication.
     
     Args:
@@ -192,19 +190,19 @@ def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY, config: Optio
     auth_config = config or _default_config
     if not auth_config.jwt_secret:
         raise ValueError("JWT secret not configured")
-        
-    expiration = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+
+    expiration = datetime.now(UTC) + timedelta(hours=JWT_EXPIRATION_HOURS)
     payload = {
         "user_id": user_id,
         "role": role,
         "exp": expiration,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "type": "access"
     }
     return jwt.encode(payload, auth_config.jwt_secret, algorithm=JWT_ALGORITHM)
 
 
-def verify_jwt_token(token: str, config: Optional[AuthConfig] = None) -> dict:
+def verify_jwt_token(token: str, config: AuthConfig | None = None) -> dict:
     """Verify and decode a JWT token.
     
     Args:
@@ -220,7 +218,7 @@ def verify_jwt_token(token: str, config: Optional[AuthConfig] = None) -> dict:
     auth_config = config or _default_config
     if not auth_config.jwt_secret:
         raise ValueError("JWT secret not configured")
-        
+
     try:
         payload = jwt.decode(token, auth_config.jwt_secret, algorithms=[JWT_ALGORITHM])
         return payload
@@ -230,7 +228,7 @@ def verify_jwt_token(token: str, config: Optional[AuthConfig] = None) -> dict:
         raise AuthError("Invalid token") from e
 
 
-def verify_api_key(api_key: str, config: Optional[AuthConfig] = None) -> bool:
+def verify_api_key(api_key: str, config: AuthConfig | None = None) -> bool:
     """Verify API key against configured key.
     
     Args:
@@ -242,10 +240,10 @@ def verify_api_key(api_key: str, config: Optional[AuthConfig] = None) -> bool:
     """
     auth_config = config or _default_config
     configured_key = auth_config.api_key
-    
+
     if not configured_key:
         return False
-        
+
     try:
         return secrets.compare_digest(api_key, configured_key)
     except (TypeError, AttributeError):
@@ -255,8 +253,8 @@ def verify_api_key(api_key: str, config: Optional[AuthConfig] = None) -> bool:
 
 async def get_current_user(
     request: Request,
-    api_key: Optional[str] = None,
-    credentials: Optional[HTTPAuthorizationCredentials] = None
+    api_key: str | None = None,
+    credentials: HTTPAuthorizationCredentials | None = None
 ) -> dict:
     """Get current user from authentication credentials.
     
@@ -278,7 +276,7 @@ async def get_current_user(
 
     # Get dynamic security schemes
     bearer_scheme = get_bearer_scheme()
-    
+
     # Check API key first
     if api_key and verify_api_key(api_key):
         return {
@@ -287,7 +285,7 @@ async def get_current_user(
             "authenticated": True,
             "method": "api_key"
         }
-    
+
     # Check JWT token using dynamic scheme
     if bearer_scheme and hasattr(credentials, 'credentials'):
         try:
@@ -304,7 +302,7 @@ async def get_current_user(
                 detail=str(e),
                 headers={"WWW-Authenticate": "Bearer"},
             )
-    
+
     # No valid authentication provided
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -315,9 +313,9 @@ async def get_current_user(
 
 async def get_current_user_optional(
     request: Request,
-    api_key: Optional[str] = None,
-    credentials: Optional[HTTPAuthorizationCredentials] = None
-) -> Optional[dict]:
+    api_key: str | None = None,
+    credentials: HTTPAuthorizationCredentials | None = None
+) -> dict | None:
     """Get current user from authentication credentials (optional).
     
     Args:
@@ -332,7 +330,7 @@ async def get_current_user_optional(
         # Authentication disabled - return anonymous admin user
         # See module-level warning when ENABLE_AUTH is false
         return ANONYMOUS_USER
-    
+
     try:
         return await get_current_user(request, api_key, credentials)
     except HTTPException:
@@ -358,23 +356,23 @@ def require_role(required_role: str):
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Authentication required"
                 )
-            
+
             user_role = current_user.get("role", UserRole.READ_ONLY)
-            
+
             # Admin can access everything
             if user_role == UserRole.ADMIN:
                 return await func(*args, **kwargs)
-            
+
             # Read-only can only access read-only endpoints
             if required_role == UserRole.READ_ONLY and user_role == UserRole.READ_ONLY:
                 return await func(*args, **kwargs)
-            
+
             # Access denied
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions"
             )
-        
+
         return wrapper
     return decorator
 
@@ -395,12 +393,12 @@ def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
     message = f"Auth event: {event_type} - User: {user_id}"
     if details:
         message += f" - Details: {details}"
-    
+
     # Apply sampling to access events to prevent log flooding
     if event_type == "access":
         if random.random() >= _AUTH_ACCESS_SAMPLING_RATE:
             return  # Skip logging this access event based on sampling rate
-        
+
         # Log at configured level using module-level mapping
         log_method = _LOG_METHODS.get(_AUTH_ACCESS_LOG_LEVEL, logger.debug)
         log_method(message)
@@ -412,7 +410,7 @@ def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
 
 async def _extract_credentials(
     request: Request
-) -> tuple[Optional[str], Optional[HTTPAuthorizationCredentials]]:
+) -> tuple[str | None, HTTPAuthorizationCredentials | None]:
     """Extract API key and bearer token credentials from request.
     
     Helper function to avoid duplicating credential extraction logic.
@@ -426,18 +424,18 @@ async def _extract_credentials(
     """
     api_key = None
     credentials = None
-    
+
     if _default_config.enable_auth:
         # Extract API key
         api_key_header = get_api_key_header()
         if api_key_header:
             api_key = await api_key_header(request)
-        
+
         # Extract Bearer token
         bearer_scheme = get_bearer_scheme()
         if bearer_scheme:
             credentials = await bearer_scheme(request)
-    
+
     return api_key, credentials
 
 
@@ -458,7 +456,7 @@ async def get_current_user_dependency(
 
 async def get_current_user_optional_dependency(
     request: Request
-) -> Optional[dict]:
+) -> dict | None:
     """FastAPI dependency for getting current user (optional)."""
     api_key, credentials = await _extract_credentials(request)
     user = await get_current_user_optional(request, api_key, credentials)

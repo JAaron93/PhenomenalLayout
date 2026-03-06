@@ -8,7 +8,6 @@ that should trigger both Black formatting and Ruff linting rules.
 # Test imports (some unused, some unsorted)
 import builtins
 import contextlib
-from typing import Optional
 
 # Test long line that exceeds 88 characters (Black's default line length)
 really_long_variable_name_that_should_trigger_line_length_formatting = "This is a very long string that will definitely exceed the 88 character limit set by Black"
@@ -75,7 +74,7 @@ messy_dict = dict(zip(["a", "b", "c"], [1, 2, 3], strict=False))
 # Test type annotations with poor spacing
 def typed_function(
     _arg1: str, _arg2: int
-) -> Optional[dict[str, list[int]]]:  # Args unused to test ARG001
+) -> dict[str, list[int]] | None:  # Args unused to test ARG001
     """Function with type hints."""
     return None
 

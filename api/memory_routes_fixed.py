@@ -3,9 +3,9 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, Response, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from api.auth import get_current_user, UserRole
+from api.auth import UserRole, get_current_user
 from api.rate_limit import add_rate_limit_headers, check_rate_limit, get_client_ip
 from utils.memory_monitor import get_memory_monitor
 
@@ -35,7 +35,7 @@ def build_monitoring_response(
 
         # Get current stats using public method
         current_stats = monitor.get_current_stats()
-        
+
         return {
             "success": True,
             "data": {

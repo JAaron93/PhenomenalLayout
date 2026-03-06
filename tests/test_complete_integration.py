@@ -609,7 +609,7 @@ async def test_async_complete_integration():
             "PDF processing not available - "
             f"requires enhanced document processor: {e}"
         )
-    
+
     # Check if we can create test files
     try:
         with tempfile.NamedTemporaryFile(
@@ -631,7 +631,7 @@ async def test_async_complete_integration():
     try:
         # Instantiate EnhancedDocumentProcessor
         enhanced_processor = EnhancedDocumentProcessor()
-        
+
         # Note: EnhancedDocumentProcessor only supports PDF files,
         # but we have a text file. Test processor instantiation and
         # basic functionality.
@@ -647,7 +647,7 @@ async def test_async_complete_integration():
                 "✓ EnhancedDocumentProcessor correctly rejects "
                 "unsupported format"
             )
-        
+
         # Test processor metadata and basic functionality
         assert hasattr(enhanced_processor, 'dpi')
         assert hasattr(enhanced_processor, 'preserve_images')
@@ -663,7 +663,7 @@ async def test_async_complete_integration():
 
         logger.info("✓ Test file content verified")
         logger.info("✓ Async integration test completed successfully")
-        
+
     finally:
         # Cleanup test file
         if os.path.exists(test_file_path):

@@ -24,7 +24,7 @@ from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout
@@ -135,7 +135,7 @@ class TranslationResult:
     original_text: str
     translated_text: str
     success: bool
-    error: Optional[str] = None
+    error: str | None = None
     retry_count: int = 0
     processing_time: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -219,8 +219,8 @@ class ParallelLingoTranslator:
     def __init__(
         self,
         api_key: str,
-        config: Optional[ParallelTranslationConfig] = None,
-        base_url: Optional[str] = None,
+        config: ParallelTranslationConfig | None = None,
+        base_url: str | None = None,
     ):
         """Initialize parallel translator with API configuration and rate limiting."""
         if not api_key:
@@ -239,7 +239,7 @@ class ParallelLingoTranslator:
         self.semaphore = asyncio.Semaphore(self.config.max_concurrent_requests)
 
         # Session will be created when needed
-        self._session: Optional[ClientSession] = None
+        self._session: ClientSession | None = None
 
     async def __aenter__(self) -> "ParallelLingoTranslator":
         """Async context manager entry."""
@@ -250,7 +250,7 @@ class ParallelLingoTranslator:
         """Async context manager exit."""
         await self.close()
 
-    def _parse_retry_after(self, header_val: Optional[str]) -> float:
+    def _parse_retry_after(self, header_val: str | None) -> float:
         """Parse Retry-After header value and return seconds to wait.
 
         Handles both numeric seconds and RFC 7231 HTTP-date formats.
@@ -377,7 +377,7 @@ class ParallelLingoTranslator:
                         if 400 <= response.status < 500 and response.status != 429:
                             break
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = "Request timeout"
             except aiohttp.ClientError as e:
                 last_error = f"Client error: {e}"
@@ -422,7 +422,7 @@ class ParallelLingoTranslator:
     async def translate_batch_parallel(
         self,
         tasks: list[TranslationTask],
-        progress_callback: Optional[Callable[[BatchProgress], None]] = None,
+        progress_callback: Callable[[BatchProgress], None] | None = None,
     ) -> list[TranslationResult]:
         """Translate multiple tasks in parallel with bounded concurrency.
 
@@ -495,7 +495,7 @@ class ParallelLingoTranslator:
         texts: list[str],
         source_lang: str,
         target_lang: str,
-        progress_callback: Optional[Callable[[BatchProgress], None]] = None,
+        progress_callback: Callable[[BatchProgress], None] | None = None,
     ) -> list[str]:
         """Translate a list of texts in parallel (simplified interface)."""
         if not texts:
@@ -533,7 +533,7 @@ class ParallelLingoTranslator:
         content: dict[str, Any],
         source_lang: str,
         target_lang: str,
-        progress_callback: Optional[Callable[[BatchProgress], None]] = None,
+        progress_callback: Callable[[BatchProgress], None] | None = None,
     ) -> dict[str, Any]:
         """Translate document content in parallel."""
         # Extract text blocks for translation
@@ -659,12 +659,12 @@ class ParallelTranslationService:
     """High-level service for parallel document translation."""
 
     def __init__(
-        self, api_key: str, config: Optional[ParallelTranslationConfig] = None
+        self, api_key: str, config: ParallelTranslationConfig | None = None
     ):
         """Initialize parallel translation service with API key and configuration."""
         self.api_key = api_key
         self.config = config or ParallelTranslationConfig.from_config()
-        self._translator: Optional[ParallelLingoTranslator] = None
+        self._translator: ParallelLingoTranslator | None = None
 
     async def __aenter__(self) -> "ParallelTranslationService":
         """Async context manager entry."""
@@ -682,7 +682,7 @@ class ParallelTranslationService:
         content: dict[str, Any],
         source_lang: str,
         target_lang: str,
-        progress_callback: Optional[Callable[[BatchProgress], None]] = None,
+        progress_callback: Callable[[BatchProgress], None] | None = None,
     ) -> dict[str, Any]:
         """Translate large document with optimal parallel processing."""
         if not self._translator:
@@ -697,7 +697,7 @@ class ParallelTranslationService:
         texts: list[str],
         source_lang: str,
         target_lang: str,
-        progress_callback: Optional[Callable[[BatchProgress], None]] = None,
+        progress_callback: Callable[[BatchProgress], None] | None = None,
     ) -> list[str]:
         """Translate batch of texts with parallel processing."""
         if not self._translator:

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Test MemoryMonitor public properties for proper encapsulation."""
 
-import pytest
 import threading
 import time
 from unittest.mock import patch
+
+import pytest
+
 from utils.memory_monitor import MemoryMonitor, MemoryMonitoringError
 
 
@@ -32,11 +34,11 @@ class TestMemoryMonitorProperties:
         """Test is_monitoring property reflects start/stop state."""
         # Initially not monitoring
         assert not memory_monitor.is_monitoring
-        
+
         # Start monitoring
         memory_monitor.start_monitoring()
         assert memory_monitor.is_monitoring, "Should be True after start_monitoring"
-        
+
         # Stop monitoring
         memory_monitor.stop_monitoring()
         assert not memory_monitor.is_monitoring, "Should be False after stop_monitoring"
@@ -77,7 +79,7 @@ class TestMemoryMonitorProperties:
     def test_properties_thread_safety(self, memory_monitor):
         """Test that properties are thread-safe."""
         results = {"errors": [], "values": []}
-        
+
         def reader_thread():
             """Thread that reads properties concurrently."""
             try:
@@ -86,12 +88,12 @@ class TestMemoryMonitorProperties:
                     is_monitoring = memory_monitor.is_monitoring
                     baseline = memory_monitor.baseline_memory_mb
                     peak = memory_monitor.peak_memory_mb
-                    
+
                     # Validate types
                     assert isinstance(is_monitoring, bool)
                     assert baseline is None or isinstance(baseline, float)
                     assert isinstance(peak, float)
-                    
+
                     results["values"].append({
                         "is_monitoring": is_monitoring,
                         "baseline": baseline,
@@ -100,7 +102,7 @@ class TestMemoryMonitorProperties:
                     time.sleep(0.001)
             except Exception as e:
                 results["errors"].append(str(e))
-        
+
         def writer_thread():
             """Thread that starts/stops monitoring concurrently.
 
@@ -117,20 +119,20 @@ class TestMemoryMonitorProperties:
                     time.sleep(0.01)
             except Exception as e:
                 results["errors"].append(str(e))
-        
+
         # Start threads
         threads = [
             threading.Thread(target=reader_thread),
             threading.Thread(target=reader_thread),
             threading.Thread(target=writer_thread)
         ]
-        
+
         for thread in threads:
             thread.start()
-        
+
         for thread in threads:
             thread.join()
-        
+
         # Check for errors
         assert not results["errors"], f"Thread safety errors: {results['errors']}"
         assert len(results["values"]) > 0, "Should have collected values"
@@ -169,11 +171,11 @@ class TestMemoryMonitorProperties:
     def test_properties_with_memory_monitoring_error(self):
         """Test properties handle MemoryMonitoringError gracefully."""
         monitor = MemoryMonitor()
-        
+
         # Mock _get_memory_usage_mb to raise error
         with patch.object(monitor, '_get_memory_usage_mb') as mock_get_memory:
             mock_get_memory.side_effect = MemoryMonitoringError("Test error")
-            
+
             # Properties should still work (they don't call _get_memory_usage_mb)
             assert not monitor.is_monitoring
             assert monitor.baseline_memory_mb is None
@@ -182,47 +184,47 @@ class TestMemoryMonitorProperties:
     def test_properties_docstrings(self):
         """Test that properties have proper docstrings."""
         monitor = MemoryMonitor()
-        
+
         # Check property descriptors have docstrings
         is_monitoring_prop = type(monitor).is_monitoring
         baseline_prop = type(monitor).baseline_memory_mb
         peak_prop = type(monitor).peak_memory_mb
-        
+
         assert is_monitoring_prop.__doc__ is not None
         assert "monitoring" in is_monitoring_prop.__doc__.lower()
-        
+
         assert baseline_prop.__doc__ is not None
         assert "baseline" in baseline_prop.__doc__.lower()
-        
+
         assert peak_prop.__doc__ is not None
         assert "peak" in peak_prop.__doc__.lower()
 
     def test_properties_are_readonly(self):
         """Test that properties are read-only."""
         monitor = MemoryMonitor()
-        
+
         # Should not be able to set properties
         with pytest.raises(AttributeError):
             monitor.is_monitoring = True
-        
+
         with pytest.raises(AttributeError):
             monitor.baseline_memory_mb = 100.0
-        
+
         with pytest.raises(AttributeError):
             monitor.peak_memory_mb = 200.0
 
     def test_api_integration_with_properties(self):
         """Test that API can use properties instead of private attributes."""
         from utils.memory_monitor import get_memory_monitor
-        
+
         # Get global monitor
         monitor = get_memory_monitor()
-        
+
         # Test all properties are accessible
         is_monitoring = monitor.is_monitoring
         baseline = monitor.baseline_memory_mb
         peak = monitor.peak_memory_mb
-        
+
         # Validate types
         assert isinstance(is_monitoring, bool)
         assert baseline is None or isinstance(baseline, float)

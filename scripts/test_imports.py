@@ -3,10 +3,9 @@
 
 import importlib
 import traceback
-from typing import Optional
 
 
-def run_import_check(module_name: str, from_module: Optional[str] = None) -> bool:
+def run_import_check(module_name: str, from_module: str | None = None) -> bool:
     """Test importing a module or symbol with explicit import verification.
 
     This function performs actual import operations to verify importability,

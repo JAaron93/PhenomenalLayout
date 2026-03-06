@@ -3,9 +3,11 @@
 
 import sys
 from datetime import datetime
+
 from fastapi.testclient import TestClient
+
+from api.auth import AuthConfig, UserRole, create_jwt_token
 from app import create_app
-from api.auth import create_jwt_token, UserRole, AuthConfig
 
 
 def validate_response_structure(response_json):
@@ -13,7 +15,7 @@ def validate_response_structure(response_json):
     assert isinstance(response_json, dict), (
         f"Expected dict response, got {type(response_json)}"
     )
-    
+
     # Validate top-level keys
     assert response_json.get("success") is True, (
         f"Expected success=True, got {response_json.get('success')}"
@@ -23,7 +25,7 @@ def validate_response_structure(response_json):
     assert isinstance(response_json.get("message"), str), (
         f"Expected message to be str, got {type(response_json.get('message'))}"
     )
-    
+
     # Validate data structure
     data = response_json.get("data")
     assert isinstance(data, dict), (
@@ -95,38 +97,38 @@ def create_test_client_and_token():
     """Create test client and admin token for testing."""
     test_config = {
         "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key", 
+        "MEMORY_API_JWT_SECRET": "test-secret-key",
         "MEMORY_API_KEY": "test-admin-key"
     }
-    
+
     # Create app with test configuration
     client = TestClient(create_app(test_config))
-    
+
     # Create auth config for token generation
     auth_config = AuthConfig(test_config)
-    
+
     # Create admin token
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN, auth_config)
-    
+
     return client, admin_token
 
 def test_gc_direct():
     """Test GC endpoint directly."""
     client, admin_token = create_test_client_and_token()
-    
+
     # Test GC endpoint
     response = client.post(
         "/api/v1/memory/gc",
         headers={"Authorization": f"Bearer {admin_token}"}
     )
-    
+
     assert response.status_code == 200, (
         f"Expected 200, got {response.status_code}: {response.text}"
     )
 
     # Validate response structure
     data = validate_response_structure(response.json())
-    
+
     # Validate GC-specific data
     assert "collected_objects" in data, (
         "Expected 'collected_objects' in data"
@@ -146,7 +148,7 @@ def test_gc_direct():
     assert isinstance(timestamp_value, str), (
         f"Expected timestamp to be str, got {type(timestamp_value)}"
     )
-    
+
     # Validate timestamp format by attempting to parse it
     try:
         # Python 3.11+ has native 'Z' support; 3.10 and below need workaround
@@ -165,7 +167,7 @@ def test_gc_direct():
 def test_monitoring_status():
     """Test monitoring status endpoint directly."""
     client, admin_token = create_test_client_and_token()
-    
+
     # Test monitoring status endpoint
     response = client.get(
         "/api/v1/memory/monitoring/status",
@@ -178,7 +180,7 @@ def test_monitoring_status():
 
     # Validate response structure and get data
     status_data = validate_response_structure(response.json())
-    
+
     # Validate monitoring-specific data
     validate_monitoring_data(status_data)
 

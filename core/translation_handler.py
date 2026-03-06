@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 # Migration note: Replaced legacy PDF engine with Dolphin OCR
 # for all PDF processing. Rationale: improved OCR accuracy, better layout
@@ -330,10 +330,10 @@ async def translate_content(
     content: ContentDict,
     source_language: str,
     target_language: str,
-    max_pages: Optional[int] = None,
-    progress_callback: Optional[ProgressCallback] = None,
+    max_pages: int | None = None,
+    progress_callback: ProgressCallback | None = None,
     philosophy_mode: bool = False,
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> tuple[TranslatedPageDict, str]:
     """Core translation function that handles text extraction and translation.
 
@@ -394,7 +394,7 @@ async def translate_content(
             else:
                 # Batch translate text elements for efficiency
                 batch_size: int = 20
-                translated_texts: list[Optional[str]] = [None] * len(page_texts)
+                translated_texts: list[str | None] = [None] * len(page_texts)
 
                 # Identify non-empty text indices to translate
                 indices_to_translate: list[int] = [
@@ -541,7 +541,7 @@ async def perform_advanced_translation() -> None:
             state.translation_progress = progress
 
         # Use the centralized translate_content function
-        max_pages: Optional[int] = state.max_pages if state.max_pages > 0 else None
+        max_pages: int | None = state.max_pages if state.max_pages > 0 else None
         translated_by_page: TranslatedPageDict
         output_filename: str
         translated_by_page, output_filename = await translate_content(

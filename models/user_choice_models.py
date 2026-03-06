@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 
 class ChoiceType(Enum):
@@ -63,9 +63,9 @@ class TranslationContext:
     target_language: str = ""
 
     # Positional context
-    page_number: Optional[int] = None
-    chapter: Optional[str] = None
-    section: Optional[str] = None
+    page_number: int | None = None
+    chapter: str | None = None
+    section: str | None = None
 
     # Related terms
     surrounding_terms: list[str] = field(default_factory=list)
@@ -185,16 +185,16 @@ class UserChoice:
     # Temporal information
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    last_used_at: Optional[str] = None
+    last_used_at: str | None = None
 
     # Usage tracking
     usage_count: int = 0
     success_rate: float = 1.0
 
     # Relationship data
-    session_id: Optional[str] = None
-    document_id: Optional[str] = None
-    parent_choice_id: Optional[str] = None
+    session_id: str | None = None
+    document_id: str | None = None
+    parent_choice_id: str | None = None
 
     # Validation and quality
     is_validated: bool = False
@@ -277,18 +277,18 @@ class ChoiceSession:
 
     # Session metadata
     status: SessionStatus = SessionStatus.ACTIVE
-    document_id: Optional[str] = None
+    document_id: str | None = None
     document_name: str = ""
 
     # User and context
-    user_id: Optional[str] = None
+    user_id: str | None = None
     source_language: str = ""
     target_language: str = ""
 
     # Temporal information
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
 
     # Session statistics
     total_choices: int = 0
@@ -426,15 +426,15 @@ class ChoiceConflict:
 
     # Resolution information
     resolution_strategy: ConflictResolution = ConflictResolution.LATEST_WINS
-    resolved_choice_id: Optional[str] = None
+    resolved_choice_id: str | None = None
     resolution_notes: str = ""
 
     # Temporal information
     detected_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    resolved_at: Optional[str] = None
+    resolved_at: str | None = None
 
     # Metadata
-    session_id: Optional[str] = None
+    session_id: str | None = None
     auto_resolved: bool = False
 
     def analyze_conflict(self) -> None:
@@ -461,7 +461,7 @@ class ChoiceConflict:
 
     def resolve_conflict(
         self, resolution_strategy: ConflictResolution
-    ) -> Optional[str]:
+    ) -> str | None:
         """Resolve conflict and return winning choice ID."""
         self.resolution_strategy = resolution_strategy
 
@@ -519,7 +519,7 @@ class TranslationPreference:
 
     # Identification
     preference_id: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
     # Translation preferences
     default_choice_scope: ChoiceScope = ChoiceScope.CONTEXTUAL
@@ -633,7 +633,7 @@ def filter_choices_by_context(
 
 def find_best_matching_choice(
     choices: list[UserChoice], target_context: TranslationContext
-) -> Optional[UserChoice]:
+) -> UserChoice | None:
     """Find the best matching choice for a given context."""
     applicable_choices = filter_choices_by_context(choices, target_context)
 

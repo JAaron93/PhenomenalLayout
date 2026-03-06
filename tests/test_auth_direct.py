@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Test auth dependencies directly."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 import jwt
 from fastapi.testclient import TestClient
+
+from api.auth import AuthConfig, UserRole, create_jwt_token
 from app import create_app
-from api.auth import create_jwt_token, UserRole, AuthConfig
 
 # Shared test configuration for all auth tests
 TEST_CONFIG = {
@@ -18,13 +20,13 @@ def test_auth_direct():
     """Test auth dependencies directly."""
     # Create app with test configuration
     client = TestClient(create_app(TEST_CONFIG))
-    
+
     # Create auth config for token generation
     auth_config = AuthConfig(TEST_CONFIG)
-    
+
     # Create admin token
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN, auth_config)
-    
+
     # Test the actual endpoint instead of dependency directly
     response = client.post(
         "/api/v1/memory/gc",
@@ -105,7 +107,7 @@ def test_auth_expired_token():
     auth_config = AuthConfig(TEST_CONFIG)
 
     # Create an expired token (expired 1 hour ago)
-    expiration = datetime.now(timezone.utc) - timedelta(hours=1)
+    expiration = datetime.now(UTC) - timedelta(hours=1)
     payload = {
         "user_id": "test_user",
         "role": UserRole.ADMIN,

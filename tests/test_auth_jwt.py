@@ -23,15 +23,15 @@ def auth_setup():
         "MEMORY_API_JWT_SECRET": "test-secret-key",
         "MEMORY_API_KEY": "test-admin-key"
     }
-    
+
     # Save original module if it exists
     original_module = sys.modules.get('api.auth')
-    
+
     with patch.dict('os.environ', test_env):
         # Reload to pick up patched environment
         import api.auth
         importlib.reload(api.auth)
-        
+
         # Yield module and its exports for tests
         yield {
             'module': api.auth,
@@ -39,10 +39,10 @@ def auth_setup():
             'verify_jwt_token': api.auth.verify_jwt_token,
             'UserRole': api.auth.UserRole
         }
-    
+
     # Teardown: reload to restore original state after patch context has exited
     importlib.reload(api.auth)
-    
+
     # Restore the original module in sys.modules if it existed
     if original_module is not None:
         sys.modules['api.auth'] = original_module
@@ -57,15 +57,15 @@ def test_jwt_verification(auth_setup):
     create_jwt_token = auth_setup['create_jwt_token']
     verify_jwt_token = auth_setup['verify_jwt_token']
     UserRole = auth_setup['UserRole']
-    
+
     # Create admin token
     user_id = "admin_user"
     role = UserRole.ADMIN
     admin_token = create_jwt_token(user_id, role)
-    
+
     # Test verification directly
     payload = verify_jwt_token(admin_token)
-    
+
     # Proper assertions
     assert payload["user_id"] == user_id
     assert payload["role"] == role

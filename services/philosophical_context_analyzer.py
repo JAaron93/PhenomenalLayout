@@ -6,7 +6,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from models.neologism_models import PhilosophicalContext
 
@@ -18,8 +18,8 @@ class PhilosophicalContextAnalyzer:
 
     def __init__(
         self,
-        spacy_model: Optional[Any] = None,
-        terminology_map: Optional[dict[str, str]] = None,
+        spacy_model: Any | None = None,
+        terminology_map: dict[str, str] | None = None,
     ):
         """Initialize the philosophical context analyzer.
 

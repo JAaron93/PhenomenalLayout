@@ -70,7 +70,7 @@ class ResolutionStrategy:
     auto_resolve: bool = True
     explanation: str = ""
 
-    def apply(self, conflict: ChoiceConflict) -> Optional[str]:
+    def apply(self, conflict: ChoiceConflict) -> str | None:
         """Apply resolution strategy to conflict."""
         if self.strategy_type == ConflictResolution.LATEST_WINS:
             return self._resolve_latest_wins(conflict)
@@ -129,7 +129,7 @@ class DynamicConflictStrategy(StrategyPattern[Optional[str]]):
         self.resolution_strategy = resolution_strategy
         self._priority = priority
 
-    def execute(self, context: ConflictContext) -> Optional[str]:
+    def execute(self, context: ConflictContext) -> str | None:
         """Execute resolution strategy."""
         return self.resolution_strategy.apply(context.conflict)
 
@@ -155,10 +155,10 @@ class DynamicConflictResolutionEngine:
     def __init__(self, cache_size: int = 512):
         # Core components
         self.resolution_table: dict[int, ResolutionStrategy] = {}
-        self.strategy_registry: StrategyRegistry[Optional[str]] = StrategyRegistry()
+        self.strategy_registry: StrategyRegistry[str | None] = StrategyRegistry()
 
         # Caching systems
-        self.resolution_cache: SmartCache[str, Optional[str]] = SmartCache(
+        self.resolution_cache: SmartCache[str, str | None] = SmartCache(
             max_size=cache_size, ttl_seconds=1800
         )
 
@@ -214,7 +214,7 @@ class DynamicConflictResolutionEngine:
     @memoize(cache_size=256, ttl_seconds=600)
     def resolve_conflict_optimized(
         self, conflict: ChoiceConflict, **context_kwargs
-    ) -> Optional[str]:
+    ) -> str | None:
         """Optimized conflict resolution with caching and pre-computed strategies."""
         start_time = time.perf_counter()
 
@@ -267,7 +267,7 @@ class DynamicConflictResolutionEngine:
     @performance_monitor("batch_conflict_resolution")
     def resolve_conflicts_batch(
         self, conflicts: list[ChoiceConflict]
-    ) -> dict[str, Optional[str]]:
+    ) -> dict[str, str | None]:
         """Batch conflict resolution for improved throughput."""
         results = {}
 
@@ -346,7 +346,7 @@ class OptimizedUserChoiceManager:
 
         self.dynamic_engine = DynamicConflictResolutionEngine()
 
-    def resolve_conflict(self, conflict: ChoiceConflict) -> Optional[str]:
+    def resolve_conflict(self, conflict: ChoiceConflict) -> str | None:
         """Use optimized conflict resolution."""
         return self.dynamic_engine.resolve_conflict_optimized(conflict)
 
@@ -386,7 +386,7 @@ def get_conflict_resolver(
 def create_session_for_document(
     manager,  # UserChoiceManager or OptimizedUserChoiceManager
     document_name: str,
-    user_id: Optional[str] = None,
+    user_id: str | None = None,
     source_lang: str = "de",
     target_lang: str = "en",
 ):
@@ -416,12 +416,12 @@ def create_session_for_document(
 
 # Export for backward compatibility
 __all__ = [
+    "ConflictContext",
+    "ConflictKey",
     "DynamicConflictResolutionEngine",
     "OptimizedUserChoiceManager",
-    "ConflictKey",
     "ResolutionStrategy",
-    "ConflictContext",
-    "register_conflict_resolver",
-    "get_conflict_resolver",
     "create_session_for_document",
+    "get_conflict_resolver",
+    "register_conflict_resolver",
 ]

@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Import spaCy for German linguistic analysis
 try:
@@ -44,13 +44,13 @@ class NeologismDetector:
 
     def __init__(
         self,
-        terminology_path: Optional[str] = None,
+        terminology_path: str | None = None,
         spacy_model: str = "de_core_news_sm",
         cache_size: int = 1000,
         philosophical_threshold: float = 0.3,
-        morphological_analyzer: Optional[MorphologicalAnalyzer] = None,
-        philosophical_context_analyzer: Optional[PhilosophicalContextAnalyzer] = None,
-        confidence_scorer: Optional[ConfidenceScorer] = None,
+        morphological_analyzer: MorphologicalAnalyzer | None = None,
+        philosophical_context_analyzer: PhilosophicalContextAnalyzer | None = None,
+        confidence_scorer: ConfidenceScorer | None = None,
     ):
         """Initialize the neologism detector.
 
@@ -91,7 +91,7 @@ class NeologismDetector:
         )
 
     @property
-    def nlp(self) -> Optional[Any]:
+    def nlp(self) -> Any | None:
         """Lazy loading property for spaCy model with thread safety."""
         if self._nlp is None:
             with self._nlp_lock:
@@ -149,7 +149,7 @@ class NeologismDetector:
             )
         return self._confidence_scorer
 
-    def _initialize_spacy_model(self) -> Optional[Any]:
+    def _initialize_spacy_model(self) -> Any | None:
         """Initialize spaCy German model for linguistic analysis."""
         if not SPACY_AVAILABLE:
             logger.warning(
@@ -1012,7 +1012,7 @@ class NeologismDetector:
 
 
 def analyze_document_batch(
-    detector: NeologismDetector, texts: list[str], text_ids: Optional[list[str]] = None
+    detector: NeologismDetector, texts: list[str], text_ids: list[str] | None = None
 ) -> list[NeologismAnalysis]:
     """Analyze multiple documents for neologisms."""
     if text_ids is None:

@@ -9,7 +9,7 @@ with significant performance improvements for large documents.
 import logging
 import time
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 
 from services.parallel_translation_service import (
     BatchProgress,
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class EnhancedTranslationService(TranslationService):
     """Enhanced translation service with parallel processing capabilities."""
 
-    def __init__(self, terminology_path: Optional[str] = None):
+    def __init__(self, terminology_path: str | None = None):
         """Initialize enhanced translation service with parallel processing.
 
         Args:
@@ -51,7 +51,7 @@ class EnhancedTranslationService(TranslationService):
 
         # Parallel processing configuration
         self.parallel_config = ParallelTranslationConfig.from_config()
-        self._parallel_service: Optional[ParallelTranslationService] = None
+        self._parallel_service: ParallelTranslationService | None = None
 
         # Performance tracking
         self.performance_stats = {
@@ -92,7 +92,7 @@ class EnhancedTranslationService(TranslationService):
         texts: list[str],
         source_lang: str,
         target_lang: str,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[str]:
         """Translate texts using parallel processing."""
         parallel_service = await self._get_parallel_service()
@@ -113,7 +113,7 @@ class EnhancedTranslationService(TranslationService):
         source_lang: str,
         target_lang: str,
         provider: str = "auto",
-        progress_callback: Optional[Callable[[int], None]] = None,
+        progress_callback: Callable[[int], None] | None = None,
     ) -> dict[str, Any]:
         """Enhanced document translation with parallel processing."""
         start_time = time.time()
@@ -157,7 +157,7 @@ class EnhancedTranslationService(TranslationService):
         content: dict[str, Any],
         source_lang: str,
         target_lang: str,
-        progress_callback: Optional[Callable[[int], None]] = None,
+        progress_callback: Callable[[int], None] | None = None,
     ) -> dict[str, Any]:
         """Translate document using parallel processing."""
         parallel_service = await self._get_parallel_service()
@@ -234,7 +234,7 @@ class EnhancedTranslationService(TranslationService):
 
 # Convenience function for easy integration
 async def create_enhanced_translation_service(
-    terminology_path: Optional[str] = None,
+    terminology_path: str | None = None,
 ) -> EnhancedTranslationService:
     """Create and initialize an enhanced translation service."""
     service = EnhancedTranslationService(terminology_path)

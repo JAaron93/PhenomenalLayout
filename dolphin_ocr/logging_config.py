@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 DEFAULT_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 _log_env = os.getenv("LOG_FILE", "").strip()
@@ -31,7 +30,7 @@ def _handler_matches_path(handler: logging.Handler, resolved_path: Path) -> bool
 def setup_logging(
     *,
     level: str = DEFAULT_LOG_LEVEL,
-    log_file: Optional[str | Path] = DEFAULT_LOG_FILE,
+    log_file: str | Path | None = DEFAULT_LOG_FILE,
     logger_name: str = DEFAULT_LOGGER_NAME,
 ) -> logging.Logger:
     """Configure root logger for the Dolphin OCR system.

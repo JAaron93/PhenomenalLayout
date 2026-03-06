@@ -5,7 +5,6 @@ import time
 from collections import defaultdict, deque
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Deque
 
 
 @dataclass
@@ -29,9 +28,9 @@ class MonitoringService:
     ) -> None:
         self.window_seconds = window_seconds
         self.logger = logger or logging.getLogger("dolphin_ocr.monitoring")
-        self._events: Deque[tuple[float, str, bool, float, str | None]] = deque()
+        self._events: deque[tuple[float, str, bool, float, str | None]] = deque()
         self._op_stats: dict[str, OpStats] = defaultdict(OpStats)
-        self._op_latencies: dict[str, Deque[tuple[float, float]]] = defaultdict(deque)
+        self._op_latencies: dict[str, deque[tuple[float, float]]] = defaultdict(deque)
 
     # --------------------------- Recording ---------------------------
     def record_operation(

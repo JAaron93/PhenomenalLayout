@@ -16,7 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from core.dynamic_programming import (
     DynamicRegistry,
@@ -162,7 +162,7 @@ class ValidatorProtocol(ABC):
 
     @property
     @abstractmethod
-    def cache_ttl_seconds(self) -> Optional[float]:
+    def cache_ttl_seconds(self) -> float | None:
         """Cache TTL for this validator's results."""
         pass
 
@@ -197,7 +197,7 @@ class FileExtensionValidator(ValidatorProtocol):
         return []
 
     @property
-    def cache_ttl_seconds(self) -> Optional[float]:
+    def cache_ttl_seconds(self) -> float | None:
         return 3600  # 1 hour
 
     def can_validate(self, context: ValidationContext) -> bool:
@@ -250,7 +250,7 @@ class FileSizeValidator(ValidatorProtocol):
         return ["extension"]
 
     @property
-    def cache_ttl_seconds(self) -> Optional[float]:
+    def cache_ttl_seconds(self) -> float | None:
         return 1800  # 30 minutes
 
     def can_validate(self, context: ValidationContext) -> bool:
@@ -300,7 +300,7 @@ class PDFHeaderValidator(ValidatorProtocol):
         return ["extension", "file_size"]
 
     @property
-    def cache_ttl_seconds(self) -> Optional[float]:
+    def cache_ttl_seconds(self) -> float | None:
         return 3600  # 1 hour
 
     def can_validate(self, context: ValidationContext) -> bool:
@@ -359,7 +359,7 @@ class PDFStructureValidator(ValidatorProtocol):
         return ["pdf_header"]
 
     @property
-    def cache_ttl_seconds(self) -> Optional[float]:
+    def cache_ttl_seconds(self) -> float | None:
         return 1800  # 30 minutes
 
     def can_validate(self, context: ValidationContext) -> bool:
@@ -413,7 +413,7 @@ class ValidationGraph:
         self.validators: dict[str, ValidatorProtocol] = {}
         self.dependencies: dict[str, set[str]] = defaultdict(set)
         self.dependents: dict[str, set[str]] = defaultdict(set)
-        self._execution_order: Optional[list[str]] = None
+        self._execution_order: list[str] | None = None
 
     def add_validator(self, validator: ValidatorProtocol) -> None:
         """Add a validator to the graph."""
@@ -605,7 +605,7 @@ class DynamicValidationEngine:
         self, cached_results: dict[str, ValidationOutcome]
     ) -> bool:
         """Check if cached results are still fresh based on TTL."""
-        current_time = time.time()
+        time.time()
 
         for outcome in cached_results.values():
             validator = self.graph.validators.get(outcome.validator_name)

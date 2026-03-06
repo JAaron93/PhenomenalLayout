@@ -10,7 +10,7 @@ import os
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -61,7 +61,7 @@ class BaseTranslator(ABC):
 class LingoTranslator(BaseTranslator):
     """Lingo.dev translation implementation."""
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         """Initialize Lingo translator with API key and session configuration.
 
         If api_key is not provided, read from the LINGO_API_KEY environment variable.
@@ -286,7 +286,7 @@ def _parse_positive_float_env(name: str, default: float) -> float:
 class TranslationService:
     """Main translation service with Lingo.dev provider."""
 
-    def __init__(self, terminology_map: Optional[dict[str, str]] = None) -> None:
+    def __init__(self, terminology_map: dict[str, str] | None = None) -> None:
         """Initialize translation service with optional terminology mapping."""
         # Mapping of provider name to translator instance
         self.providers: dict[str, BaseTranslator] = {}
@@ -297,7 +297,7 @@ class TranslationService:
     def _initialize_providers(self) -> None:
         """Initialize Lingo.dev translation provider (REST or MCP)."""
         try:
-            lingo_key: Optional[str] = os.getenv("LINGO_API_KEY")
+            lingo_key: str | None = os.getenv("LINGO_API_KEY")
             use_mcp: bool = os.getenv("LINGO_USE_MCP", "false").lower() == "true"
             # Startup diagnostics to make provider selection explicit in logs
             logger.info(
@@ -309,7 +309,7 @@ class TranslationService:
             if lingo_key:
                 if use_mcp:
                     # Read MCP config from environment at runtime
-                    tool_name: Optional[str] = os.getenv("LINGO_MCP_TOOL_NAME") or None
+                    tool_name: str | None = os.getenv("LINGO_MCP_TOOL_NAME") or None
                     startup_timeout: float = _parse_positive_float_env(
                         "LINGO_MCP_STARTUP_TIMEOUT", 20.0
                     )
@@ -462,7 +462,7 @@ class TranslationService:
         source_lang: str,
         target_lang: str,
         provider: str = "auto",
-        progress_callback: Optional[Callable[[int], None]] = None,
+        progress_callback: Callable[[int], None] | None = None,
     ) -> dict[str, Any]:
         """Translate document content."""
         # Select provider
@@ -558,10 +558,10 @@ class TranslationService:
         translated_content: dict[str, Any] = copy.deepcopy(original_content)
 
         # Create a mapping of translated blocks by page and element
-        block_map: dict[int, dict[Optional[str], str]] = {}
+        block_map: dict[int, dict[str | None, str]] = {}
         for block in translated_blocks:
             page_num: int = block["page"]
-            element_id: Optional[str] = block.get("element_id")
+            element_id: str | None = block.get("element_id")
             if page_num not in block_map:
                 block_map[page_num] = {}
             # Only index valid element IDs
@@ -576,7 +576,7 @@ class TranslationService:
                     for element in page["text_elements"]:
                         # Skip any null entries
                         if element:
-                            element_id: Optional[str] = element.get("id")
+                            element_id: str | None = element.get("id")
                             if (
                                 element_id is not None
                                 and element_id in block_map[page_num]

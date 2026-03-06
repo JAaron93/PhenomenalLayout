@@ -3,7 +3,7 @@
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -110,7 +110,7 @@ async def save_user_choice(choice_data: ChoiceData) -> dict[str, Any]:
         custom_translation: str = str(choice_data.get("custom_translation", ""))
         notes: str = str(choice_data.get("notes", ""))
 
-        session_id: Optional[str] = choice_data.get("session_id")
+        session_id: str | None = choice_data.get("session_id")
 
         # Create a simple neologism representation
         neologism: DetectedNeologism = DetectedNeologism(
@@ -171,7 +171,7 @@ async def save_user_choice(choice_data: ChoiceData) -> dict[str, Any]:
 
 @api_router.get("/philosophy/neologisms")
 async def get_detected_neologisms(
-    _session_id: Optional[str] = None,
+    _session_id: str | None = None,
 ) -> NeologismResponse:
     """Get detected neologisms for the current session.
 
@@ -226,17 +226,15 @@ async def get_philosophy_progress() -> ProgressResponse:
 @api_router.post("/philosophy/export-choices", response_model=None)
 async def export_user_choices(
     export_data: ExportData,
-) -> Union[FileResponse, dict[str, Any]]:
+) -> FileResponse | dict[str, Any]:
     """Export user choices to JSON."""
     try:
-        session_id: Optional[str] = export_data.get("session_id")
+        session_id: str | None = export_data.get("session_id")
 
         if session_id:
-            export_file_path: Optional[
-                str
-            ] = user_choice_manager.export_session_choices(session_id)
+            export_file_path: str | None = user_choice_manager.export_session_choices(session_id)
         else:
-            export_file_path: Optional[str] = user_choice_manager.export_all_choices()
+            export_file_path: str | None = user_choice_manager.export_all_choices()
 
         if export_file_path:
             return FileResponse(
@@ -261,7 +259,7 @@ async def import_user_choices(import_data: ImportData) -> dict[str, Any]:
     """Import user choices from dictionary."""
     try:
         choices: dict[str, Any] = import_data.get("choices", {})
-        session_id: Optional[str] = import_data.get("session_id")
+        session_id: str | None = import_data.get("session_id")
 
         # Validate that choices is a dictionary
         if not isinstance(choices, dict):
@@ -339,7 +337,7 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
         sample_text: str = (
             extract_text_sample_for_language_detection(content) or ""
         ).strip()
-        detected_lang: Optional[str] = (
+        detected_lang: str | None = (
             language_detector.detect_language_from_text(sample_text)
             if sample_text
             else None

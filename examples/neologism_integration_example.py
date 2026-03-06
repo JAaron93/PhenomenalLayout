@@ -9,7 +9,7 @@ import json
 import logging
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Project imports - now work with installable package
 from models.neologism_models import DetectedNeologism, NeologismAnalysis
@@ -42,7 +42,7 @@ class PhilosophyEnhancedTranslator:
 
     def __init__(
         self,
-        terminology_path: Optional[str] = None,
+        terminology_path: str | None = None,
         min_confidence: float = 0.6,
         preserve_neologisms: bool = True,
     ) -> None:

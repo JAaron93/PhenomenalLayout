@@ -3,8 +3,9 @@
 
 import logging
 import sys
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 logger = logging.getLogger(__name__)
@@ -25,13 +26,13 @@ def test_client():
 
     with patch.dict('os.environ', test_env):
         import importlib
+
         import api.auth
-        from app import create_app
         import app
         importlib.reload(api.auth)
         importlib.reload(app)
 
-        client = TestClient(create_app())
+        client = TestClient(app.create_app())
         logger.debug("Created test client for testing")
         yield client
 

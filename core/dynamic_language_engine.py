@@ -15,7 +15,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from re import Pattern
-from typing import Any, Optional
+from typing import Any
 
 from core.dynamic_programming import (
     DynamicRegistry,
@@ -41,8 +41,8 @@ class CompiledPattern:
     """Pre-compiled language patterns for efficient matching."""
 
     language: str
-    words_regex: Optional[Pattern[str]]
-    chars_regex: Optional[Pattern[str]]
+    words_regex: Pattern[str] | None
+    chars_regex: Pattern[str] | None
     word_weight: float
     char_weight: float
     word_list: tuple[str, ...]
@@ -342,7 +342,7 @@ class DynamicLanguageDetector:
 
     @memoize(cache_size=256, ttl_seconds=300)
     def detect_language_optimized(
-        self, text: str, min_length: Optional[int] = None
+        self, text: str, min_length: int | None = None
     ) -> str:
         """Optimized language detection with caching and pre-computed patterns.
 
@@ -477,7 +477,7 @@ class DynamicLanguageDetector:
             self.result_cache.put(cache_key, best_language)
 
     def detect_language_with_confidence(
-        self, text: str, min_length: Optional[int] = None
+        self, text: str, min_length: int | None = None
     ) -> tuple[str, float]:
         """Detect language and return confidence score.
 
@@ -514,7 +514,7 @@ class DynamicLanguageDetector:
         return best_language, best_confidence
 
     def get_language_scores(
-        self, text: str, min_length: Optional[int] = None
+        self, text: str, min_length: int | None = None
     ) -> dict[str, LanguageScore]:
         """Get detailed scores for all languages.
 
@@ -750,11 +750,11 @@ def get_language_detector(name: str = "default", **kwargs) -> DynamicLanguageDet
 
 # Export for backward compatibility
 __all__ = [
-    "DynamicLanguageDetector",
-    "OptimizedLanguageDetector",
     "CompiledPattern",
+    "DynamicLanguageDetector",
     "LanguageScore",
+    "OptimizedLanguageDetector",
     "TextFingerprint",
-    "register_language_detector",
     "get_language_detector",
+    "register_language_detector",
 ]

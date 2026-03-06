@@ -13,7 +13,7 @@ import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from core.dynamic_programming import (
     PerformanceMetrics,
@@ -80,7 +80,7 @@ except ImportError:
 
         def __init__(
             self,
-            type: Optional[str] = None,
+            type: str | None = None,
             font_scale: float = 1.0,
             wrap_lines: int = 1,
         ) -> None:
@@ -152,9 +152,9 @@ class StrategyBuilder:
     """Builder for creating layout strategies with parameters."""
 
     strategy_type: StrategyType
-    scale_calculation: Optional[str] = None
-    lines_calculation: Optional[str] = None
-    fallback_strategy: Optional[StrategyType] = None
+    scale_calculation: str | None = None
+    lines_calculation: str | None = None
+    fallback_strategy: StrategyType | None = None
 
     def build(
         self, analysis: FitAnalysis, engine_config: dict[str, Any]
@@ -238,8 +238,8 @@ class LayoutContext:
     engine_config: dict[str, Any] = field(default_factory=dict)
     original_text: str = ""
     translated_text: str = ""
-    bbox: Optional[BoundingBox] = None
-    font: Optional[FontInfo] = None
+    bbox: BoundingBox | None = None
+    font: FontInfo | None = None
 
 
 class DynamicLayoutEngine:
@@ -316,7 +316,6 @@ class DynamicLayoutEngine:
         registry = StrategyRegistry[LayoutStrategy]()
 
         # Register strategies in priority order
-        priority = 100
         for conditions in itertools.product([True, False], repeat=4):
             can_fit, can_scale, can_wrap, sufficient_lines = conditions
             key = StrategyKey(can_fit, can_scale, can_wrap, sufficient_lines)
@@ -382,8 +381,8 @@ class DynamicLayoutEngine:
         analysis: FitAnalysis,
         original_text: str = "",
         translated_text: str = "",
-        bbox: Optional[BoundingBox] = None,
-        font: Optional[FontInfo] = None,
+        bbox: BoundingBox | None = None,
+        font: FontInfo | None = None,
     ) -> LayoutStrategy:
         """Advanced strategy selection with full context analysis."""
         context = LayoutContext(
@@ -617,7 +616,7 @@ def register_layout_strategy(
     LAYOUT_STRATEGY_REGISTRY.register(name, strategy_factory)
 
 
-def get_layout_strategy(name: str, *args, **kwargs) -> Optional[LayoutStrategy]:
+def get_layout_strategy(name: str, *args, **kwargs) -> LayoutStrategy | None:
     """Get a registered layout strategy."""
     return LAYOUT_STRATEGY_REGISTRY.get(name, *args, **kwargs)
 
@@ -625,9 +624,9 @@ def get_layout_strategy(name: str, *args, **kwargs) -> Optional[LayoutStrategy]:
 # Export for backward compatibility
 __all__ = [
     "DynamicLayoutEngine",
-    "OptimizedLayoutPreservationEngine",
     "LayoutContext",
+    "OptimizedLayoutPreservationEngine",
     "StrategyKey",
-    "register_layout_strategy",
     "get_layout_strategy",
+    "register_layout_strategy",
 ]

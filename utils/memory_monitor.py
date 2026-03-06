@@ -4,12 +4,13 @@ import atexit
 import gc
 import logging
 import os
-import psutil
 import threading
 import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
+
+import psutil
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class MemoryMonitor:
         """
         # Validate parameters
         _validate_monitoring_params(check_interval, alert_threshold_mb)
-            
+
         self.check_interval = check_interval
         self.alert_threshold_mb = alert_threshold_mb
         self._monitoring = False
@@ -106,7 +107,7 @@ class MemoryMonitor:
             try:
                 self._baseline_memory = self._get_memory_usage_mb()
                 self._peak_memory = self._baseline_memory
-                
+
                 self._monitoring = True
                 self._monitor_thread = threading.Thread(
                     target=self._monitor_loop,
@@ -114,7 +115,7 @@ class MemoryMonitor:
                     name="MemoryMonitor"
                 )
                 self._monitor_thread.start()
-                
+
                 logger.info(
                     "Memory monitoring started (baseline: %.1f MB, interval: %.1fs)",
                     self._baseline_memory, self.check_interval
@@ -164,7 +165,7 @@ class MemoryMonitor:
             except MemoryMonitoringError as e:
                 logger.warning("Failed to get final memory stats: %s", e)
                 final_memory = "unknown"
-                
+
             logger.info(
                 "Memory monitoring stopped (peak: %.1f MB, final: %s MB)",
                 self._peak_memory, final_memory
@@ -190,7 +191,7 @@ class MemoryMonitor:
             except MemoryMonitoringError as e:
                 logger.error("Failed to get current memory stats: %s", e)
                 raise MemoryMonitoringError(f"Cannot retrieve memory statistics: {e}") from e
-                
+
             growth = current_memory - (self._baseline_memory or current_memory)
 
             return {
@@ -213,15 +214,15 @@ class MemoryMonitor:
             try:
                 stats = self.get_current_stats()
                 current_memory = stats["current_memory_mb"]
-                
+
                 # Read monitoring parameters under lock for thread safety
                 with self._lock:
                     check_interval = self.check_interval
                     alert_threshold_mb = self.alert_threshold_mb
-                    
+
                     if current_memory > self._peak_memory:
                         self._peak_memory = current_memory
-                    
+
                     # Check for memory growth alert
                     if (stats["growth_mb"] > alert_threshold_mb and
                         self._baseline_memory is not None):
@@ -430,7 +431,7 @@ def cleanup_memory_monitor() -> None:
         with _memory_monitor_lock:
             monitor_to_cleanup = _memory_monitor
             _memory_monitor = None
-        
+
         # Call cleanup outside the lock to avoid deadlock from thread.join()
         if monitor_to_cleanup is not None:
             monitor_to_cleanup.cleanup()

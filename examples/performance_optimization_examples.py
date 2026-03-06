@@ -18,7 +18,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import psutil
 
@@ -307,7 +307,7 @@ class PerformanceOptimizer:
 
         return metrics
 
-    def log_performance_status(self, stage: str, additional_info: Optional[str] = None):
+    def log_performance_status(self, stage: str, additional_info: str | None = None):
         """Log current performance status."""
         metrics = self.get_current_metrics()
         info_str = f" - {additional_info}" if additional_info else ""
@@ -368,7 +368,7 @@ class LargeDocumentProcessor:
         source_lang: str,
         target_lang: str,
         provider: str = "auto",
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """
         Process large document with streaming approach for memory efficiency.
@@ -459,7 +459,7 @@ class LargeDocumentProcessor:
         source_lang: str,
         target_lang: str,
         provider: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> dict[str, Any]:
         """Process a chunk of pages concurrently."""
         # Extract texts from pages

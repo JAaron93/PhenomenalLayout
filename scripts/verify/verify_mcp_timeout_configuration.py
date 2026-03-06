@@ -19,34 +19,34 @@ sys.path.insert(0, str(project_root))
 def test_timeout_configuration():
     """Test that timeout configuration is properly read from environment variables."""
     print("Testing MCP Lingo client timeout configuration...")
-    
+
     # Test 1: Default values
     print("Testing default timeout values...")
     os.environ.pop('LINGO_MCP_SESSION_CLEANUP_TIMEOUT', None)
     os.environ.pop('LINGO_MCP_STDIO_CLEANUP_TIMEOUT', None)
-    
+
     from services.mcp_lingo_client import McpLingoConfig
-    
+
     config = McpLingoConfig(api_key="test-key")
     assert config.session_cleanup_timeout_s == 10.0, f"Expected 10.0, got {config.session_cleanup_timeout_s}"
     assert config.stdio_cleanup_timeout_s == 10.0, f"Expected 10.0, got {config.stdio_cleanup_timeout_s}"
     print("✓ Default values correct")
-    
+
     # Test 2: Environment variable override
     print("Testing environment variable override...")
     os.environ['LINGO_MCP_SESSION_CLEANUP_TIMEOUT'] = '25.5'
     os.environ['LINGO_MCP_STDIO_CLEANUP_TIMEOUT'] = '30.0'
-    
+
     # Force reimport to pick up new environment values
     import services.mcp_lingo_client
     importlib.reload(services.mcp_lingo_client)
     from services.mcp_lingo_client import McpLingoConfig
-    
+
     config = McpLingoConfig(api_key="test-key")
     assert config.session_cleanup_timeout_s == 25.5, f"Expected 25.5, got {config.session_cleanup_timeout_s}"
     assert config.stdio_cleanup_timeout_s == 30.0, f"Expected 30.0, got {config.stdio_cleanup_timeout_s}"
     print("✓ Environment variable override working")
-    
+
     # Test 3: Constructor parameter override
     print("Testing constructor parameter override...")
     config = McpLingoConfig(
@@ -57,18 +57,18 @@ def test_timeout_configuration():
     assert config.session_cleanup_timeout_s == 45.0, f"Expected 45.0, got {config.session_cleanup_timeout_s}"
     assert config.stdio_cleanup_timeout_s == 50.0, f"Expected 50.0, got {config.stdio_cleanup_timeout_s}"
     print("✓ Constructor parameter override working")
-    
+
     # Test 4: TranslationService integration
     print("Testing TranslationService integration...")
     os.environ['LINGO_API_KEY'] = 'test-api-key'
     os.environ['LINGO_USE_MCP'] = 'true'
     os.environ['LINGO_MCP_SESSION_CLEANUP_TIMEOUT'] = '35.0'
     os.environ['LINGO_MCP_STDIO_CLEANUP_TIMEOUT'] = '40.0'
-    
+
     import services.translation_service
     importlib.reload(services.translation_service)
     from services.translation_service import TranslationService
-    
+
     # Create a new service instance to pick up environment
     service = TranslationService()
 
@@ -107,11 +107,11 @@ def test_cleanup_timeout_configuration():
     # Set custom timeouts
     os.environ['LINGO_MCP_SESSION_CLEANUP_TIMEOUT'] = '15.0'
     os.environ['LINGO_MCP_STDIO_CLEANUP_TIMEOUT'] = '20.0'
-    
+
     # Reimport to pick up environment
     import services.mcp_lingo_client
     importlib.reload(services.mcp_lingo_client)
-    from services.mcp_lingo_client import McpLingoConfig, McpLingoClient
+    from services.mcp_lingo_client import McpLingoClient, McpLingoConfig
 
     config = McpLingoConfig(api_key="test-key")
     client = McpLingoClient(config)
@@ -146,7 +146,7 @@ if __name__ == "__main__":
         else:
             print("\n❌ Timeout configuration tests failed!")
             sys.exit(1)
-            
+
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")
         import traceback
