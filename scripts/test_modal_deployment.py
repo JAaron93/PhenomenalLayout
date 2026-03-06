@@ -220,11 +220,6 @@ async def main() -> None:
             print("❌ Both Modal deployment and local fallback failed.")
             print("   Check both Modal deployment and local service configuration.")
             sys.exit(1)
-        case _:
-            print(
-                f"⚠️  Unexpected result combination: modal={modal_success}, local={local_fallback_success}"
-            )
-            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -12,11 +12,12 @@ test_env1 = {
     'MEMORY_API_KEY': 'test-key'
 }
 with patch.dict('os.environ', test_env1):
+    sys.modules.pop('api', None)
     sys.modules.pop('api.auth', None)
     from api.auth import _default_config
     print(f"Env: MEMORY_API_ENABLE_AUTH={os.getenv('MEMORY_API_ENABLE_AUTH')}")
     print(f"Config: enable_auth={_default_config.enable_auth}")
-    assert _default_config.enable_auth == True, "Expected enable_auth=True"
+    assert _default_config.enable_auth is True, "Expected enable_auth=True"
 
 print("\n=== Changing environment ===")
 test_env2 = {
@@ -25,10 +26,11 @@ test_env2 = {
     'MEMORY_API_KEY': 'test-key'
 }
 with patch.dict('os.environ', test_env2):
+    sys.modules.pop('api', None)
     sys.modules.pop('api.auth', None)
     from api.auth import _default_config as config2
     print(f"Env: MEMORY_API_ENABLE_AUTH={os.getenv('MEMORY_API_ENABLE_AUTH')}")
     print(f"Config: enable_auth={config2.enable_auth}")
-    assert config2.enable_auth == False, "Expected enable_auth=False"
+    assert config2.enable_auth is False, "Expected enable_auth=False"
 
 print("\n✓ Configuration is correctly updating!")

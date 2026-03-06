@@ -16,7 +16,7 @@ def auth_setup():
     1. Patches os.environ with required environment variables
     2. Reloads api.auth to pick up the patched environment
     3. Yields the module and necessary functions/classes
-    4. Reloads api.auth again in teardown to restore original state
+    4. Restores original api.auth module reference in sys.modules in teardown
     """
     test_env = {
         "MEMORY_API_ENABLE_AUTH": "true",
@@ -40,11 +40,11 @@ def auth_setup():
             'UserRole': api.auth.UserRole
         }
 
-    # Teardown: reload module with original environment to restore state
+    # Teardown: restore original api.auth module reference in sys.modules
     if original_module is not None:
         sys.modules['api.auth'] = original_module
     elif 'api.auth' in sys.modules:
-        # Remove if it didn't exist before
+        # Remove if it didn't exist before test
         del sys.modules['api.auth']
 
 

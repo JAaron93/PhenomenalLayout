@@ -1436,9 +1436,12 @@ class ChoiceDatabase:
             return len(batch)
 
         except Exception as e:
-            # Rollback to savepoint on error
-            conn.execute("ROLLBACK TO SAVEPOINT sp_batch")
-            conn.execute("RELEASE SAVEPOINT sp_batch")
+            # Rollback to savepoint on error - wrap in try to avoid masking original exception
+            try:
+                conn.execute("ROLLBACK TO SAVEPOINT sp_batch")
+                conn.execute("RELEASE SAVEPOINT sp_batch")
+            except Exception:
+                pass  # Ignore cleanup errors; original exception takes precedence
             logger.error(f"Error importing choice batch: {e}")
             raise
 

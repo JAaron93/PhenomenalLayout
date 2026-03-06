@@ -286,7 +286,7 @@ class SmartCachingMiddleware:
             self.monitor.record_operation(
                 cache_name, duration_ms, cache_hit=False, error=True
             )
-            raise e
+            raise
 
     def _generate_cache_key(self, func_name: str, args: tuple, kwargs: dict) -> str:
         """Generate cache key from function arguments."""
@@ -375,7 +375,7 @@ def performance_tracking(
                 return result
             except Exception as e:
                 error_occurred = True
-                raise e
+                raise
             finally:
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 global_monitor.record_operation(

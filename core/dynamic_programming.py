@@ -53,7 +53,16 @@ def _normalize_value(value: Any) -> Hashable:
         elif isinstance(value, dict):
             # Convert to tuple of sorted (key, value) pairs with recursive normalization
             normalized_items = []
-            for k, v in sorted(value.items()):
+            try:
+                # First attempt normal sort
+                sorted_items = sorted(value.items())
+            except TypeError:
+                # Fallback to stable sort with type and string representation
+                sorted_items = sorted(
+                    value.items(), 
+                    key=lambda kv: (type(kv[0]).__name__, str(kv[0]))
+                )
+            for k, v in sorted_items:
                 normalized_items.append(
                     (_normalize_value(k), _normalize_value(v))
                 )
@@ -78,11 +87,8 @@ def _normalize_value(value: Any) -> Hashable:
             for k, v in sorted(value.__dict__.items()):
                 normalized_attrs.append((k, _normalize_value(v)))
             return (value.__class__.__name__, tuple(normalized_attrs))
-        elif hasattr(value, "_name") and hasattr(value, "_value"):
+        elif isinstance(value, Enum):
             # Handle enum objects
-            return (value.__class__.__name__, value._name, value._value)
-        elif hasattr(value, "name") and hasattr(value, "value"):
-            # Handle enum objects (alternative pattern)
             return (value.__class__.__name__, value.name, value.value)
         else:
             # For any other unhashable type, use repr as stable string representation
@@ -227,7 +233,7 @@ class SmartCache(Generic[K, V]):
     Uses efficient auxiliary structures:
     - LFU: Min-heap for O(log n) eviction
     - FIFO: OrderedDict for O(1) eviction
-    - LRU: List for O(1) eviction (existing)
+    - LRU: OrderedDict for O(1) move_to_end and eviction
     """
     
     # Sentinel object to distinguish between miss and cached None
@@ -246,9 +252,9 @@ class SmartCache(Generic[K, V]):
         self._lock = threading.RLock()
 
         # Policy-specific auxiliary structures
-        from collections import deque
 
-        self._access_order: deque[K] = deque()  # For LRU
+        # For LRU: OrderedDict for O(1) move_to_end operations
+        self._access_order: OrderedDict[K, None] = OrderedDict()
 
         # For LFU: min-heap of (access_count, insertion_order, key)
         self._lfu_heap: list[tuple[int, int, K]] = []
@@ -272,9 +278,11 @@ class SmartCache(Generic[K, V]):
 
             # Update access patterns based on policy
             if self.policy == CachePolicy.LRU:
+                # O(1) using OrderedDict.move_to_end
                 if key in self._access_order:
-                    self._access_order.remove(key)
-                self._access_order.append(key)
+                    self._access_order.move_to_end(key)
+                else:
+                    self._access_order[key] = None
                 return entry.access()
             elif self.policy == CachePolicy.LFU:
                 # LFU: Update heap with new access count
@@ -303,9 +311,11 @@ class SmartCache(Generic[K, V]):
 
             # Update auxiliary structures based on policy
             if self.policy == CachePolicy.LRU:
+                # O(1) using OrderedDict.move_to_end
                 if key in self._access_order:
-                    self._access_order.remove(key)
-                self._access_order.append(key)
+                    self._access_order.move_to_end(key)
+                else:
+                    self._access_order[key] = None
             elif self.policy == CachePolicy.LFU:
                 # LFU: Add to heap with access count 0 (will be 1 after first access)
                 heapq.heappush(self._lfu_heap, (0, self._lfu_insertion_counter, key))
@@ -324,8 +334,7 @@ class SmartCache(Generic[K, V]):
         del self._cache[key]
 
         # Clean up auxiliary structures
-        if key in self._access_order:
-            self._access_order.remove(key)
+        self._access_order.pop(key, None)
 
         if key in self._fifo_order:
             del self._fifo_order[key]
@@ -339,9 +348,9 @@ class SmartCache(Generic[K, V]):
             return
 
         if self.policy == CachePolicy.LRU:
-            # O(1) eviction
+            # O(1) eviction using OrderedDict
             if self._access_order:
-                oldest_key = self._access_order.popleft()
+                oldest_key, _ = self._access_order.popitem(last=False)
                 del self._cache[oldest_key]
 
         elif self.policy == CachePolicy.LFU:
@@ -448,7 +457,7 @@ class DynamicRegistry(Generic[T]):
             except Exception as e:
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self._metrics[key].record_operation(duration_ms, cache_hit=False)
-                raise e
+                raise
 
     def _create_cache_key(self, key: str, args: tuple, kwargs: dict) -> tuple:
         """Create a hashable cache key from arguments."""
@@ -491,7 +500,15 @@ class DecisionTreeNode(Generic[T]):
         self.cache: SmartCache[str, T] | None = cache
 
     def add_child(self, child: DecisionTreeNode[T]) -> None:
-        """Add a child node to the decision tree."""
+        """Add a child node to the decision tree.
+        
+        The child inherits the parent's cache for shared caching across
+        the entire decision tree. This ensures evaluation results are
+        cached at the appropriate level and shared among all descendants.
+        """
+        # Propagate parent's cache to child for shared caching
+        if self.cache is not None:
+            child.cache = self.cache
         self.children.append(child)
 
     def evaluate(self, context: Any) -> T | None:

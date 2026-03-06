@@ -195,51 +195,49 @@ class TestTranslationServiceMemoryLeaks:
         # Note: requests.Session doesn't have a 'closed' attribute, so we verify
         # through the close() call completion
 
-    def test_translation_service_cleanup_logging(self, translation_service):
+    def test_translation_service_cleanup_logging(self, translation_service, monkeypatch):
         """Test translation service cleanup logging."""
         # Mock logger to capture log messages
-        with pytest.MonkeyPatch().context() as monkeypatch:
-            log_messages = []
+        log_messages = []
 
-            def mock_info(msg, *args):
-                log_messages.append(msg % args if args else msg)
+        def mock_info(msg, *args):
+            log_messages.append(msg % args if args else msg)
 
-            def mock_debug(msg, *args):
-                log_messages.append(msg % args if args else msg)
+        def mock_debug(msg, *args):
+            log_messages.append(msg % args if args else msg)
 
-            import services.translation_service
-            monkeypatch.setattr(services.translation_service.logger, "info", mock_info)
-            monkeypatch.setattr(services.translation_service.logger, "debug", mock_debug)
+        import services.translation_service
+        monkeypatch.setattr(services.translation_service.logger, "info", mock_info)
+        monkeypatch.setattr(services.translation_service.logger, "debug", mock_debug)
 
-            # Test synchronous cleanup
-            translation_service.close()
+        # Test synchronous cleanup
+        translation_service.close()
 
-            # Verify cleanup was logged
-            cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
-            assert len(cleanup_messages) > 0
+        # Verify cleanup was logged
+        cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
+        assert len(cleanup_messages) > 0
 
     @pytest.mark.asyncio
-    async def test_translation_service_async_cleanup_logging(self, translation_service):
+    async def test_translation_service_async_cleanup_logging(self, translation_service, monkeypatch):
         """Test translation service async cleanup logging."""
-        with pytest.MonkeyPatch().context() as monkeypatch:
-            log_messages = []
+        log_messages = []
 
-            def mock_info(msg, *args):
-                log_messages.append(msg % args if args else msg)
+        def mock_info(msg, *args):
+            log_messages.append(msg % args if args else msg)
 
-            def mock_debug(msg, *args):
-                log_messages.append(msg % args if args else msg)
+        def mock_debug(msg, *args):
+            log_messages.append(msg % args if args else msg)
 
-            import services.translation_service
-            monkeypatch.setattr(services.translation_service.logger, "info", mock_info)
-            monkeypatch.setattr(services.translation_service.logger, "debug", mock_debug)
+        import services.translation_service
+        monkeypatch.setattr(services.translation_service.logger, "info", mock_info)
+        monkeypatch.setattr(services.translation_service.logger, "debug", mock_debug)
 
-            # Test async cleanup
-            await translation_service.aclose()
+        # Test async cleanup
+        await translation_service.aclose()
 
-            # Verify cleanup was logged
-            cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
-            assert len(cleanup_messages) > 0
+        # Verify cleanup was logged
+        cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
+        assert len(cleanup_messages) > 0
 
 
 class TestMcpClientMemoryLeaks:

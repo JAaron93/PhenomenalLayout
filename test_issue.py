@@ -18,10 +18,14 @@ def test_authentication_disabled():
         "MEMORY_API_ADMIN_RATE_LIMIT": "100",
     }
 
-    # Clear and reload modules to test with the new environment
-    for module in list(sys.modules.keys()):
-        if module.startswith("api.") or module == "app":
-            del sys.modules[module]
+    # Explicit list of modules to reload for testing
+    MODULES_TO_RELOAD = ["app", "api", "api.auth", "api.routes", "api.memory_routes"]
+
+    # Clear specific modules before reloading to test with new environment
+    for module_name in MODULES_TO_RELOAD:
+        if module_name in sys.modules:
+            print(f"Removing module from sys.modules: {module_name}")
+            del sys.modules[module_name]
 
     with patch.dict("os.environ", test_env):
         # Import modules after environment is patched
@@ -51,12 +55,15 @@ def test_authentication_disabled():
             ("/api/v1/memory/monitoring/stop", "POST"),
         ]
         
+        # Dispatch map for handling mixed HTTP methods
+        method_map = {
+            "GET": client.get,
+            "POST": client.post,
+        }
+
         for url, method in admin_endpoints:
-            if method == "POST":
-                response = client.post(url)
-            else:
-                response = client.get(url)
-                
+            response = method_map[method](url)
+            
             print(f"\n{method} {url}")
             print(f"Status: {response.status_code}")
             print(f"Response: {response.text}")

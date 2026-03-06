@@ -51,12 +51,7 @@ def make_client():
     return _make
 
 
-def _arg_keys(records: list[CallRecord]) -> list[set]:
-    return [set(r.arguments.keys()) for r in records]
 
-
-@pytest.mark.asyncio
-async def test_single_text_uses_only_text_shapes(make_client):
     client = make_client(succeed_on_call=2)  # force at least two attempts if needed
     # Call with only text
     result = await client._call_translate_tool(

@@ -65,6 +65,7 @@ def auth_module():
         # Remove so next import loads with actual environment
         sys.modules.pop('app', None)
 
+
 def test_auth_direct(auth_module):
     """Test auth dependencies directly."""
     AuthConfig, UserRole, create_jwt_token, create_app = auth_module
@@ -129,7 +130,7 @@ def test_auth_direct(auth_module):
 
 def test_auth_no_header(auth_module):
     """Test that missing Authorization header returns 401."""
-    AuthConfig, UserRole, create_jwt_token, create_app = auth_module
+    _, _, _, create_app = auth_module
     client = TestClient(create_app(TEST_CONFIG))
 
     response = client.post("/api/v1/memory/gc")
@@ -141,7 +142,7 @@ def test_auth_no_header(auth_module):
 
 def test_auth_malformed_jwt(auth_module):
     """Test that malformed/invalid JWT returns 401."""
-    AuthConfig, UserRole, create_jwt_token, create_app = auth_module
+    create_app = auth_module[3]
     client = TestClient(create_app(TEST_CONFIG))
 
     response = client.post(

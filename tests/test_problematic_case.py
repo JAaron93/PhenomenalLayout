@@ -1,10 +1,16 @@
 """Test focusing on the problematic test case with proper fixture usage."""
+import logging
 
-def test_problematic_case_fixed(reload_app_with_env):
-    """Test the problematic scenario from the failing test with proper fixture usage."""
+import pytest
+
+
+def test_problematic_case_fixed(
+    reload_app_with_env,
+    caplog,
+):
+    """Test the problematic scenario from the failing test."""
     auth_enabled = "false"
-    print(f"Testing with auth_enabled={auth_enabled}")
-    
+
     test_env = {
         "MEMORY_API_ENABLE_AUTH": auth_enabled,
         "MEMORY_API_JWT_SECRET": "test-secret-key",
@@ -13,21 +19,59 @@ def test_problematic_case_fixed(reload_app_with_env):
         "MEMORY_API_WRITE_RATE_LIMIT": "100",
         "MEMORY_API_ADMIN_RATE_LIMIT": "100",
     }
-    
+
     client = reload_app_with_env(test_env)
-    
-    # Check imported modules
-    import api.auth
-    print(f"\napi.auth module id: {id(api.auth)}")
-    print(f"_default_config: {id(api.auth._default_config)}")
-    print(f"enable_auth: {api.auth._default_config.enable_auth}")
-    print(f"ANONYMOUS_USER: {api.auth.ANONYMOUS_USER}")
-    
-    # Test endpoint
-    print(f"\nCalling /api/v1/memory/stats")
+
+    # Test endpoint - verify auth is disabled (public access)
     response = client.get('/api/v1/memory/stats')
-    
-    print(f"Response status: {response.status_code}")
-    print(f"Response text: {response.text}")
-    
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+
+    # Use caplog for diagnostics only on failure
+    if response.status_code != 200:
+        caplog.set_level(logging.DEBUG)
+        caplog.debug(f"Response status: {response.status_code}")
+        caplog.debug(f"Response text: {response.text}")
+
+    assert response.status_code == 200, (
+        f"Expected 200, got {response.status_code}"
+    )
+
+    # Parse and validate response JSON content
+    try:
+        json_data = response.json()
+    except Exception as e:
+        pytest.fail(
+            f"Failed to parse response as JSON: {e}. "
+            f"Response text: {response.text}"
+        )
+
+    # Validate response is a dict
+    assert isinstance(json_data, dict), (
+        f"Expected response to be a dict, got {type(json_data).__name__}"
+    )
+
+    # Validate required keys exist
+    assert "success" in json_data, (
+        f"Response missing 'success' key: {json_data}"
+    )
+    assert "data" in json_data, (
+        f"Response missing 'data' key: {json_data}"
+    )
+    assert "message" in json_data, (
+        f"Response missing 'message' key: {json_data}"
+    )
+
+    # Validate expected types and values
+    assert isinstance(json_data["success"], bool), (
+        f"Expected 'success' to be bool, got "
+        f"{type(json_data['success']).__name__}"
+    )
+    assert json_data["success"] is True, (
+        f"Expected 'success' to be True, got {json_data['success']}"
+    )
+    assert isinstance(json_data["data"], dict), (
+        f"Expected 'data' to be dict, got {type(json_data['data']).__name__}"
+    )
+    assert isinstance(json_data["message"], str), (
+        f"Expected 'message' to be str, got "
+        f"{type(json_data['message']).__name__}"
+    )

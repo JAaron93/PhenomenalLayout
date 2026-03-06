@@ -133,8 +133,6 @@ def test_api_key_authentication(auth_module, mock_api_key):
 
     # Test valid key
     assert verify_api_key(mock_api_key) is True, "Valid API key should pass"
-    # Test valid key
-    assert verify_api_key(mock_api_key) is True, "Valid API key should pass"
 
     # Test invalid key
     assert verify_api_key("invalid-key") is False, "Invalid API key should fail"

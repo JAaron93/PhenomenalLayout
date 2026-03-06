@@ -1,50 +1,82 @@
 #!/usr/bin/env python3
-"""Debug test to inspect what's happening inside endpoints."""
+"""Test to verify endpoint behavior with authentication disabled."""
 
-import os
+import importlib
 import sys
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
+
 def test_endpoint_debugging():
-    """Debug test to see what's happening inside the endpoint handler."""
+    """Test that endpoints are accessible when authentication is disabled."""
     test_env = {
         'MEMORY_API_ENABLE_AUTH': 'false',
         'MEMORY_API_JWT_SECRET': 'test-secret',
         'MEMORY_API_KEY': 'test-key'
     }
-    
+
     with patch.dict('os.environ', test_env):
-        # Remove modules to ensure fresh import
-        for module in list(sys.modules.keys()):
-            if module.startswith('api.') or module == 'app':
-                del sys.modules[module]
-        
+        # Use importlib.reload() for specific modules instead of deleting
+        # all matching sys.modules
+        MODULES_TO_RELOAD = [
+            "api.auth",
+            "api.memory_routes",
+            "api.rate_limit",
+            "app"
+        ]
+        for mod_name in MODULES_TO_RELOAD:
+            if mod_name in sys.modules:
+                importlib.reload(sys.modules[mod_name])
+            else:
+                # Import if not yet loaded
+                __import__(mod_name)
+
         from app import create_app
         client = TestClient(create_app())
-        
+
         # Import the auth module after app creation
         import api.auth
-        print(f"DEBUG: api.auth module id: {id(api.auth)}")
-        print(f"DEBUG: api.auth._default_config: {id(api.auth._default_config)}")
-        print(f"DEBUG: api.auth._default_config.enable_auth: {api.auth._default_config.enable_auth}")
-        print(f"DEBUG: api.auth.ANONYMOUS_USER: {api.auth.ANONYMOUS_USER}")
-        
+        assert not api.auth.is_auth_enabled(), (
+            "Authentication should be disabled"
+        )
+
         # Try to access the endpoint
-        print("\n=== Making API request ===")
         try:
             response = client.get('/api/v1/memory/stats')
-            print(f"DEBUG: Response status: {response.status_code}")
-            print(f"DEBUG: Response text: {response.text}")
-            
+            assert response.status_code == 200, (
+                f"Expected status 200, got {response.status_code}"
+            )
+
+            # Verify response contains expected fields
+            # (adjust based on actual API response)
+            json_response = response.json()
+            assert json_response['success'] is True, (
+                "Response should indicate success"
+            )
+            assert 'data' in json_response, (
+                "Response should contain data field"
+            )
+            data = json_response['data']
+            assert 'current_memory_mb' in data, (
+                "Response should contain current_memory_mb"
+            )
+            assert 'gc_stats' in data, (
+                "Response should contain gc_stats"
+            )
+
             # Check what's in sys.modules after request
-            print(f"\nDEBUG: After request - api.auth module id: {id(sys.modules['api.auth'])}")
-            print(f"DEBUG: After request - enable_auth: {sys.modules['api.auth']._default_config.enable_auth}")
-            
+            assert sys.modules['api.auth'] is api.auth, (
+                "Module reference should be consistent"
+            )
+            assert not sys.modules['api.auth'].is_auth_enabled(), (
+                "Authentication should still be disabled after request"
+            )
+
         except Exception as e:
-            print(f"ERROR: {type(e).__name__}: {e}")
-            import traceback
-            print(traceback.format_exc())
+            assert False, (
+                f"Unexpected exception: {type(e).__name__}: {e}"
+            )
+
 
 if __name__ == "__main__":
     test_endpoint_debugging()

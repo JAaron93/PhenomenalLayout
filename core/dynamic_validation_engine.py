@@ -8,6 +8,7 @@ minimize redundant validations and improve performance.
 from __future__ import annotations
 
 import hashlib
+import heapq
 import os
 import time
 from abc import ABC, abstractmethod
@@ -432,23 +433,24 @@ class ValidationGraph:
         if self._execution_order is not None:
             return self._execution_order
 
-        # Topological sort with priority ordering
+        # Topological sort with priority ordering using heap
         in_degree = defaultdict(int)
         for validator_name in self.validators:
             in_degree[validator_name] = len(self.dependencies[validator_name])
 
-        # Use priority queue to handle priorities
+        # Use heap-based priority queue for O(n log n) performance
         available = []
         for validator_name, degree in in_degree.items():
             if degree == 0:
                 validator = self.validators[validator_name]
-                available.append((validator.priority, validator_name))
+                # Use negative priority since heappop returns smallest
+                heapq.heappush(available, (-validator.priority, validator_name))
 
-        available.sort(reverse=True)  # Higher priority first
         execution_order = []
 
         while available:
-            _, current = available.pop(0)
+            # Pop highest priority (most negative priority value)
+            _, current = heapq.heappop(available)
             execution_order.append(current)
 
             # Update dependencies
@@ -456,8 +458,7 @@ class ValidationGraph:
                 in_degree[dependent] -= 1
                 if in_degree[dependent] == 0:
                     validator = self.validators[dependent]
-                    available.append((validator.priority, dependent))
-                    available.sort(reverse=True)
+                    heapq.heappush(available, (-validator.priority, dependent))
 
         # Check for cycles
         if len(execution_order) != len(self.validators):
@@ -553,12 +554,10 @@ class DynamicValidationEngine:
             # Check cache
             cached_results = self.result_cache.get(context.cache_key)
             if cached_results is not self.result_cache.MISS:
-                # Verify cached results are still valid (TTL check)
-                valid_cache = self._validate_cache_freshness(cached_results)
-                if valid_cache:
-                    duration_ms = (time.perf_counter() - start_time) * 1000
-                    self.metrics.record_operation(duration_ms, cache_hit=True)
-                    return cached_results
+                # SmartCache handles TTL internally
+                duration_ms = (time.perf_counter() - start_time) * 1000
+                self.metrics.record_operation(duration_ms, cache_hit=True)
+                return cached_results
 
             # Execute validations
             results = self._execute_validation_pipeline(context)
@@ -601,18 +600,6 @@ class DynamicValidationEngine:
             **kwargs,
         )
 
-    def _validate_cache_freshness(
-        self, cached_results: dict[str, ValidationOutcome]
-    ) -> bool:
-        """Check if cached results are still fresh based on TTL."""
-        for outcome in cached_results.values():
-            validator = self.graph.validators.get(outcome.validator_name)
-            if validator and validator.cache_ttl_seconds:
-                # Would need timestamp in cached results for proper TTL check
-                # For now, assume cache is managed by SmartCache TTL
-                pass
-
-        return True  # SmartCache handles TTL
 
     def _execute_validation_pipeline(
         self, context: ValidationContext

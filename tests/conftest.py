@@ -1,3 +1,4 @@
+import logging
 import os
 from unittest.mock import patch
 
@@ -5,6 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 pytest_plugins: tuple[str, ...] = ("pytest_asyncio",)
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(autouse=True)
@@ -92,8 +95,8 @@ def test_client():
             if name in sys.modules:
                 try:
                     importlib.reload(sys.modules[name])
-                except Exception as e:
-                    pass
+                except Exception:
+                    logger.debug("Failed to reload %s during teardown", name, exc_info=True)
 
 
 @pytest.fixture
@@ -108,3 +111,63 @@ def admin_token(test_client):
     """Pytest fixture providing an admin token."""
     import api.auth
     return api.auth.create_jwt_token("admin_user", api.auth.UserRole.ADMIN)
+
+
+@pytest.fixture
+def reload_app_with_env():
+    """Fixture to reload modules with patched environment and cleanup after.
+
+    Isolates environment changes by patching os.environ, reloading affected
+    modules in dependency order, and restoring original modules after test.
+    Yields a factory function that returns a fresh TestClient.
+    """
+    import sys
+
+    # Modules to reload in dependency order (base → dependent)
+    # Order matters: auth → rate_limit → memory_routes → app
+    MODULE_NAMES = [
+        "api.auth",
+        "api.rate_limit",
+        "api.memory_routes",
+        "app",
+    ]
+
+    # Save original module objects before any reloads
+    original_modules = {}
+    for name in MODULE_NAMES:
+        if name in sys.modules:
+            original_modules[name] = sys.modules[name]
+
+    # Track active patches
+    active_patches = []
+
+    def _factory(test_env: dict) -> TestClient:
+        """Create TestClient with patched environment and fresh module imports."""
+        from unittest.mock import patch
+
+        # Create a long-lived patch that stays active
+        patch_obj = patch.dict("os.environ", test_env)
+        patch_obj.start()
+        active_patches.append(patch_obj)
+
+        # Remove modules from sys.modules to ensure fresh imports
+        for name in MODULE_NAMES:
+            if name in sys.modules:
+                del sys.modules[name]
+
+        # Import fresh modules
+        for name in MODULE_NAMES:
+            __import__(name)
+
+        app_module = sys.modules["app"]
+        return TestClient(app_module.create_app())
+
+    try:
+        yield _factory
+    finally:
+        # Stop all active patches
+        for patch_obj in active_patches:
+            patch_obj.stop()
+        # Restore original modules to prevent state leakage between tests
+        for name in original_modules:
+            sys.modules[name] = original_modules[name]

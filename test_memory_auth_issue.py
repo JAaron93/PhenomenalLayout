@@ -17,25 +17,40 @@ def test_endpoints_with_auth_disabled():
     print("=== Test 1: Direct import with auth disabled ===")
     
     with patch.dict('os.environ', test_env):
-        # Remove all relevant modules from sys.modules to ensure fresh import
+        # Preserve and remove relevant modules from sys.modules to ensure fresh import
+        saved_modules = {}
         for module in list(sys.modules.keys()):
             if module.startswith('api.') or module == 'app':
-                del sys.modules[module]
+                saved_modules[module] = sys.modules.pop(module)
         
-        # Import fresh modules with the patched environment
-        from app import create_app
-        client = TestClient(create_app())
-        
-        print(f"os.getenv('MEMORY_API_ENABLE_AUTH') = '{os.getenv('MEMORY_API_ENABLE_AUTH')}'")
-        print(f"sys.modules['api.auth']._default_config.enable_auth = {sys.modules['api.auth']._default_config.enable_auth}")
-        
-        # Test the endpoint
-        response = client.get('/api/v1/memory/stats')
-        print(f"\nGET /api/v1/memory/stats response: {response.status_code}")
-        print(f"Response body: {response.text}")
-        
-        assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
-        
+        try:
+            # Import fresh modules with the patched environment
+            from app import create_app
+            client = TestClient(create_app())
+            
+            print(f"os.getenv('MEMORY_API_ENABLE_AUTH') = '{os.getenv('MEMORY_API_ENABLE_AUTH')}'")
+            # Defensive access to internal attribute
+            enable_auth = None
+            try:
+                auth_module = sys.modules.get('api.auth')
+                if auth_module is not None:
+                    default_config = getattr(auth_module, '_default_config', None)
+                    if default_config is not None:
+                        enable_auth = getattr(default_config, 'enable_auth', None)
+            except (KeyError, AttributeError):
+                pass
+            print(f"sys.modules.get('api.auth')._default_config.enable_auth = {enable_auth}")
+            
+            # Test the endpoint
+            response = client.get('/api/v1/memory/stats')
+            print(f"\nGET /api/v1/memory/stats response: {response.status_code}")
+            print(f"Response body: {response.text}")
+            
+            assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
+        finally:
+            # Restore saved modules
+            sys.modules.update(saved_modules)
+
 def test_endpoints_with_auth_enabled():
     """Test endpoints with authentication enabled."""
     test_env = {
@@ -47,24 +62,39 @@ def test_endpoints_with_auth_enabled():
     print("\n=== Test 2: Direct import with auth enabled ===")
     
     with patch.dict('os.environ', test_env):
-        # Remove all relevant modules from sys.modules to ensure fresh import
+        # Preserve and remove relevant modules from sys.modules to ensure fresh import
+        saved_modules = {}
         for module in list(sys.modules.keys()):
             if module.startswith('api.') or module == 'app':
-                del sys.modules[module]
+                saved_modules[module] = sys.modules.pop(module)
         
-        # Import fresh modules with the patched environment
-        from app import create_app
-        client = TestClient(create_app())
-        
-        print(f"os.getenv('MEMORY_API_ENABLE_AUTH') = '{os.getenv('MEMORY_API_ENABLE_AUTH')}'")
-        print(f"sys.modules['api.auth']._default_config.enable_auth = {sys.modules['api.auth']._default_config.enable_auth}")
-        
-        # Test the endpoint - should require authentication
-        response = client.get('/api/v1/memory/stats')
-        print(f"\nGET /api/v1/memory/stats response: {response.status_code}")
-        print(f"Response body: {response.text}")
-        
-        assert response.status_code == 401, f"Expected status code 401, got {response.status_code}"
+        try:
+            # Import fresh modules with the patched environment
+            from app import create_app
+            client = TestClient(create_app())
+            
+            print(f"os.getenv('MEMORY_API_ENABLE_AUTH') = '{os.getenv('MEMORY_API_ENABLE_AUTH')}'")
+            # Defensive access to internal attribute
+            enable_auth = None
+            try:
+                auth_module = sys.modules.get('api.auth')
+                if auth_module is not None:
+                    default_config = getattr(auth_module, '_default_config', None)
+                    if default_config is not None:
+                        enable_auth = getattr(default_config, 'enable_auth', None)
+            except (KeyError, AttributeError):
+                pass
+            print(f"sys.modules.get('api.auth')._default_config.enable_auth = {enable_auth}")
+            
+            # Test the endpoint - should require authentication
+            response = client.get('/api/v1/memory/stats')
+            print(f"\nGET /api/v1/memory/stats response: {response.status_code}")
+            print(f"Response body: {response.text}")
+            
+            assert response.status_code == 401, f"Expected status code 401, got {response.status_code}"
+        finally:
+            # Restore saved modules
+            sys.modules.update(saved_modules)
 
 if __name__ == "__main__":
     try:

@@ -38,6 +38,23 @@ def monitor_with_long_interval():
     monitor.stop_monitoring()
 
 
+@pytest.fixture
+def reset_memory_monitor_singleton():
+    """Pytest fixture to reset the memory monitor singleton state.
+    
+    This fixture ensures that each test gets a clean memory monitor instance
+    by resetting the global singleton before and after each test.
+    """
+    # Clean up any existing monitor before the test
+    cleanup_memory_monitor()
+    
+    # Yield to let the test run
+    yield
+    
+    # Clean up after the test
+    cleanup_memory_monitor()
+
+
 def test_non_daemon_thread_creation(monitor):
     """Test that monitoring thread is created as non-daemon."""
     print("Testing non-daemon thread creation...")
@@ -67,7 +84,7 @@ def test_improved_shutdown_handling(monitor):
     monitor.stop_monitoring()
     shutdown_time = time.time() - start_time
 
-    assert shutdown_time < 11.0, f"Shutdown should complete within timeout (10s + buffer), took {shutdown_time}"
+    assert shutdown_time < 2.0, f"Shutdown should complete quickly with 0.1s interval, took {shutdown_time}"
     assert monitor._monitor_thread is None, "Thread reference should be cleared"
 
     print("✓ Improved shutdown handling working correctly")
@@ -118,7 +135,7 @@ def test_cleanup_method(monitor):
 
     print("✓ Cleanup method working correctly")
 
-def test_cleanup_memory_monitor_function():
+def test_cleanup_memory_monitor_function(reset_memory_monitor_singleton):
     """Test that cleanup_memory_monitor function works correctly."""
     print("\nTesting cleanup_memory_monitor function...")
 
@@ -130,21 +147,18 @@ def test_cleanup_memory_monitor_function():
     # Start global monitoring
     start_memory_monitoring(check_interval=0.1)
     monitor = get_memory_monitor()
-    assert monitor._monitoring, "Should be monitoring"
+    assert monitor.is_monitoring, "Should be monitoring"
 
     # Call cleanup directly
     cleanup_memory_monitor()
 
     # Monitor should be cleaned up and global reference reset
-    assert not monitor._monitoring, "Should not be monitoring after cleanup"
+    assert not monitor.is_monitoring, "Should not be monitoring after cleanup"
 
     # Verify global state is reset by checking that get_memory_monitor returns a new instance
     new_monitor = get_memory_monitor()
     assert new_monitor is not monitor, "Should get a new monitor instance after cleanup"
-    assert not new_monitor._monitoring, "New monitor should not be monitoring"
-
-    # Clean up the new monitor to leave no global state behind
-    cleanup_memory_monitor()
+    assert not new_monitor.is_monitoring, "New monitor should not be monitoring"
 
     print("✓ cleanup_memory_monitor function working correctly")
 

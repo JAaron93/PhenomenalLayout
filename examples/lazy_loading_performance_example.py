@@ -223,12 +223,13 @@ def demonstrate_lazy_loading(
     print("\n4. Testing multiple instantiations...")
 
     start_time = time.time()
-    detectors = [NeologismDetector() for _ in range(10)]
+    detectors = [NeologismDetector() for _ in range(10)]  # keep detectors to prevent GC during timing
 
     multi_init_time: float = time.time() - start_time
     print(f"   10 instantiations time: {multi_init_time:.4f}s")
     avg_per_init = multi_init_time / 10
     print(f"   Average per instantiation: {avg_per_init:.4f}s")
+    del detectors  # discard reference to avoid unused variable warning
 
     # Test 5: Memory efficiency
     print("\n5. Memory efficiency comparison...")

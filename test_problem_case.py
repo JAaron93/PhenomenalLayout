@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Test focusing on the problematic test case."""
 
-import os
-import sys
+import logging
+
 import pytest
-from unittest.mock import patch
-from fastapi.testclient import TestClient
 
 from tests.test_memory_api_integration import reload_app_with_env
+
+# Get logger for test
+logger = logging.getLogger(__name__)
+
 
 def test_problematic_case():
     """Test the problematic scenario from the failing test."""
     auth_enabled = "false"
-    print(f"Testing with auth_enabled={auth_enabled}")
+    logger.debug("Testing with auth_enabled=%s", auth_enabled)
     
     test_env = {
         "MEMORY_API_ENABLE_AUTH": auth_enabled,
@@ -27,19 +29,22 @@ def test_problematic_case():
     
     # Check imported modules
     import api.auth
-    print(f"\napi.auth module id: {id(api.auth)}")
-    print(f"_default_config: {id(api.auth._default_config)}")
-    print(f"enable_auth: {api.auth._default_config.enable_auth}")
-    print(f"ANONYMOUS_USER: {api.auth.ANONYMOUS_USER}")
+    # Verify auth is disabled via public API
+    assert not api.auth.is_auth_enabled(), \
+        "Auth should be disabled with MEMORY_API_ENABLE_AUTH=false"
+    # Assert ANONYMOUS_USER is accessible (public symbol)
+    assert api.auth.ANONYMOUS_USER is not None
     
     # Test endpoint
-    print(f"\nCalling /api/v1/memory/stats")
+    logger.debug("Calling /api/v1/memory/stats")
     response = client.get('/api/v1/memory/stats')
     
-    print(f"Response status: {response.status_code}")
-    print(f"Response text: {response.text}")
+    logger.debug("Response status: %s", response.status_code)
+    logger.debug("Response text: %s", response.text)
     
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert response.status_code == 200, \
+        f"Expected 200, got {response.status_code}"
+
 
 if __name__ == "__main__":
     # Run with pytest
