@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Integration test for memory API endpoints with authentication."""
 
-import os
 from unittest.mock import patch
 
 import pytest
@@ -108,17 +107,12 @@ def reload_app_with_env():
 
 def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
     """Test memory endpoints with authentication."""
-    print("Testing memory endpoints with authentication...", flush=True)
-    print(f"Using test_client: {type(test_client)}", flush=True)
-    print(f"ENABLE_AUTH env: {os.getenv('MEMORY_API_ENABLE_AUTH')}", flush=True)
 
     # Test GET /memory/stats with read token
     response = test_client.get(
         "/api/v1/memory/stats",
         headers={"Authorization": f"Bearer {read_token}"}
     )
-    print(f"Response status: {response.status_code}")
-    print(f"Response body: {response.text}")
     assert response.status_code == 200, f"Stats endpoint should work with read token: {response.text}"
 
     # Test GET /memory/stats with admin token
@@ -209,7 +203,7 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
     )
     assert response.status_code == 403, f"Start monitoring should fail with read token: {response.text}"
 
-    print("\n✓ All authentication tests passed!")
+
 
 
 
@@ -224,7 +218,6 @@ def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
     When auth is enabled (``auth_enabled="true"``), unauthenticated requests
     should be rejected with 401.
     """
-    print(f"Testing memory endpoints with auth={auth_enabled}...")
 
     # Set environment for the desired auth mode
     test_env = {
@@ -270,14 +263,13 @@ def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
                 f"no credentials: status={resp.status_code}, body={resp.text}"
             )
 
-    print(f"\n✓ Auth {'disabled' if auth_enabled == 'false' else 'enabled'} tests passed!")
+
 
 
 
 @pytest.mark.parametrize("rate_limiting", ["true", "false"])
 def test_rate_limiting_headers(reload_app_with_env, rate_limiting):
     """Test rate limiting headers presence."""
-    print(f"Testing rate limiting headers with rate limiting {rate_limiting}...")
 
     # Set up environment for testing
     test_env = {
@@ -301,4 +293,4 @@ def test_rate_limiting_headers(reload_app_with_env, rate_limiting):
         assert "X-RateLimit-Limit" not in response.headers, "Rate limiting headers should be absent"
         assert "X-RateLimit-Remaining" not in response.headers, "Rate limit remaining should be absent"
 
-    print("\n✓ Rate limiting tests passed!")
+

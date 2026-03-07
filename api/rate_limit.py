@@ -322,7 +322,9 @@ def check_rate_limit(
     Raises:
         HTTPException: If rate limit exceeded
     """
-    if not ENABLE_RATE_LIMITING:
+    # Read from environment dynamically for testability
+    enable_rate_limiting = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() in ("true", "enabled")
+    if not enable_rate_limiting:
         return True, 0.0
 
     if limit_type not in RATE_LIMITS_PER_SECOND:
@@ -364,7 +366,9 @@ def add_rate_limit_headers(
         limit_type: Type of limit
         client_ip: Client IP address
     """
-    if not ENABLE_RATE_LIMITING or limit_type not in RATE_LIMITS:
+    # Read from environment dynamically for testability
+    enable_rate_limiting = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() in ("true", "enabled")
+    if not enable_rate_limiting or limit_type not in RATE_LIMITS:
         return
 
     max_tokens = RATE_LIMITS[limit_type]
