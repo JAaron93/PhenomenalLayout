@@ -6,7 +6,6 @@ import pytest
 
 def test_problematic_case_fixed(
     reload_app_with_env,
-    caplog,
 ):
     """Test the problematic scenario from the failing test."""
     auth_enabled = "false"
@@ -25,11 +24,12 @@ def test_problematic_case_fixed(
     # Test endpoint - verify auth is disabled (public access)
     response = client.get('/api/v1/memory/stats')
 
-    # Use caplog for diagnostics only on failure
+    # Use logger for diagnostics only on failure
+    logger = logging.getLogger(__name__)
     if response.status_code != 200:
-        caplog.set_level(logging.DEBUG)
-        caplog.debug(f"Response status: {response.status_code}")
-        caplog.debug(f"Response text: {response.text}")
+        logger.setLevel(logging.DEBUG)
+        logger.debug(f"Response status: {response.status_code}")
+        logger.debug(f"Response text: {response.text}")
 
     assert response.status_code == 200, (
         f"Expected 200, got {response.status_code}"

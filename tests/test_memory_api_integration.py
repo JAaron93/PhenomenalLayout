@@ -204,11 +204,6 @@ def test_memory_endpoints_with_auth(test_client, read_token, admin_token):
     assert response.status_code == 403, f"Start monitoring should fail with read token: {response.text}"
 
 
-
-
-
-
-
 @pytest.mark.parametrize("auth_enabled", ["true", "false"])
 def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
     """Test memory endpoints behave correctly with and without authentication.
@@ -264,9 +259,6 @@ def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
             )
 
 
-
-
-
 @pytest.mark.parametrize("rate_limiting", ["true", "false"])
 def test_rate_limiting_headers(reload_app_with_env, rate_limiting):
     """Test rate limiting headers presence."""
@@ -284,7 +276,7 @@ def test_rate_limiting_headers(reload_app_with_env, rate_limiting):
 
     # Test rate limiting headers
     response = client.get("/api/v1/memory/stats")
-    
+
     if rate_limiting == "true":
         assert "X-RateLimit-Limit" in response.headers, "Rate limiting headers should be present"
         assert "X-RateLimit-Remaining" in response.headers, "Rate limit remaining should be present"
@@ -292,5 +284,3 @@ def test_rate_limiting_headers(reload_app_with_env, rate_limiting):
     else:
         assert "X-RateLimit-Limit" not in response.headers, "Rate limiting headers should be absent"
         assert "X-RateLimit-Remaining" not in response.headers, "Rate limit remaining should be absent"
-
-

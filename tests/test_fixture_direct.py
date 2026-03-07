@@ -22,8 +22,10 @@ def test_fixture_module_reloading(reload_app_with_env):
         client1 = reload_app_with_env(test_env1)
 
         # Get the imported module
-        auth_module1 = sys.modules['api.auth']
+        auth_module1 = sys.modules.get('api.auth')
+        assert auth_module1 is not None, "api.auth module not found in sys.modules"
         print(f"Module id: {id(auth_module1)}")
+        assert hasattr(auth_module1, "_default_config"), "api.auth module missing _default_config attribute"
         config1 = auth_module1._default_config
         print(f"Config enable_auth: {config1.enable_auth}")
 
@@ -45,8 +47,10 @@ def test_fixture_module_reloading(reload_app_with_env):
         client2 = reload_app_with_env(test_env2)
 
         # Check if module is different
-        auth_module2 = sys.modules['api.auth']
+        auth_module2 = sys.modules.get('api.auth')
+        assert auth_module2 is not None, "api.auth module not found in sys.modules"
         print(f"Module id: {id(auth_module2)}")
+        assert hasattr(auth_module2, "_default_config"), "api.auth module missing _default_config attribute"
         config2 = auth_module2._default_config
         print(f"Config enable_auth: {config2.enable_auth}")
 
@@ -59,17 +63,18 @@ def test_fixture_module_reloading(reload_app_with_env):
 
         print("\n✓ Fixture module reloading tested successfully!")
     finally:
-        # Restore sys.modules to original state to prevent affecting other
-        # tests
-        sys.modules.clear()
-        sys.modules.update(original_modules)
+        # Restore sys.modules to original state: remove only modules added
+        # during test and restore any mutated originals
+        # Skip problematic modules that can't be reloaded (like numpy)
+        added = set(sys.modules) - set(original_modules)
+        for name in added:
+            if "numpy" in name or "gradio" in name:
+                continue
+            sys.modules.pop(name, None)
+        for name in original_modules:
+            if "numpy" in name or "gradio" in name:
+                continue
+            sys.modules[name] = original_modules[name]
 
 
-if __name__ == "__main__":
-    try:
-        test_fixture_module_reloading()
-    except Exception as e:
-        print(f"\n❌ Test failed: {type(e).__name__}: {e}")
-        import traceback
-        print(traceback.format_exc())
-        sys.exit(1)
+

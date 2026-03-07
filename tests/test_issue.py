@@ -2,10 +2,16 @@
 """Test script to reproduce the issue with authentication disabled."""
 
 import os
+import sys
+from pathlib import Path
 from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
-import sys
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 
 def test_authentication_disabled():
     """Test that endpoints work without authentication when MEMORY_API_ENABLE_AUTH is 'false'."""
@@ -30,47 +36,53 @@ def test_authentication_disabled():
     with patch.dict("os.environ", test_env):
         # Import modules after environment is patched
         from app import create_app
+
         client = TestClient(create_app())
 
         # Test endpoints without authentication
         print("Testing without authentication...")
-        
-        # Test read endpoints
-        read_endpoints = [
-            ("/api/v1/memory/stats", "GET"),
-            ("/api/v1/memory/monitoring/status", "GET"),
-        ]
-        
-        for url, method in read_endpoints:
-            response = client.get(url)
-            print(f"\n{method} {url}")
-            print(f"Status: {response.status_code}")
-            print(f"Response: {response.text}")
-            assert response.status_code == 200, f"Expected 200 for {url}, got {response.status_code}"
-        
-        # Test admin endpoints
-        admin_endpoints = [
-            ("/api/v1/memory/gc", "POST"),
-            ("/api/v1/memory/monitoring/start", "POST"),
-            ("/api/v1/memory/monitoring/stop", "POST"),
-        ]
-        
+
         # Dispatch map for handling mixed HTTP methods
         method_map = {
             "GET": client.get,
             "POST": client.post,
         }
 
-        for url, method in admin_endpoints:
+        # Test read endpoints
+        read_endpoints = [
+            ("/api/v1/memory/stats", "GET"),
+            ("/api/v1/memory/monitoring/status", "GET"),
+        ]
+
+        for url, method in read_endpoints:
             response = method_map[method](url)
-            
             print(f"\n{method} {url}")
             print(f"Status: {response.status_code}")
             print(f"Response: {response.text}")
-            assert response.status_code == 200, f"Expected 200 for {url}, got {response.status_code}"
-        
+            assert response.status_code == 200, (
+                f"Expected 200 for {url}, got {response.status_code}"
+            )
+
+        # Test admin endpoints
+        admin_endpoints = [
+            ("/api/v1/memory/gc", "POST"),
+            ("/api/v1/memory/monitoring/start", "POST"),
+            ("/api/v1/memory/monitoring/stop", "POST"),
+        ]
+
+        for url, method in admin_endpoints:
+            response = method_map[method](url)
+
+            print(f"\n{method} {url}")
+            print(f"Status: {response.status_code}")
+            print(f"Response: {response.text}")
+            assert response.status_code == 200, (
+                f"Expected 200 for {url}, got {response.status_code}"
+            )
+
         print("\n✓ All tests passed!")
         return True
+
 
 if __name__ == "__main__":
     try:
@@ -78,4 +90,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Test failed: {type(e).__name__}: {e}")
         import traceback
+
         print(traceback.format_exc())

@@ -30,7 +30,6 @@ def _normalize_value(value: Any) -> Hashable:
     - Dictionaries -> sorted tuple of key-value pairs (recursively normalized)
     - Dataclasses -> tuple of class name and sorted fields (recursively normalized)
     - Objects with __dict__ -> tuple of class name and sorted attributes (recursively normalized)
-    - Enums -> tuple of class name, name, and value
     - Other unhashable types -> repr string
     """
     try:
@@ -87,9 +86,7 @@ def _normalize_value(value: Any) -> Hashable:
             for k, v in sorted(value.__dict__.items()):
                 normalized_attrs.append((k, _normalize_value(v)))
             return (value.__class__.__name__, tuple(normalized_attrs))
-        elif isinstance(value, Enum):
-            # Handle enum objects
-            return (value.__class__.__name__, value.name, value.value)
+
         else:
             # For any other unhashable type, use repr as stable string representation
             return repr(value)
@@ -505,6 +502,9 @@ class DecisionTreeNode(Generic[T]):
         The child inherits the parent's cache for shared caching across
         the entire decision tree. This ensures evaluation results are
         cached at the appropriate level and shared among all descendants.
+        
+        Note: If the child already has a cache, it will be replaced with
+        the parent's cache. Nodes should not be shared across multiple trees.
         """
         # Propagate parent's cache to child for shared caching
         if self.cache is not None:
@@ -724,7 +724,7 @@ def performance_monitor(operation_name: str | None = None):
             except Exception as e:
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 metrics.record_operation(duration_ms)
-                raise e
+                raise
 
         wrapper.get_metrics = lambda: metrics
         return wrapper

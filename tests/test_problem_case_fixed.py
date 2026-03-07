@@ -30,6 +30,7 @@ def test_problematic_case_fixed(
     client = reload_app_with_env(test_env)
     
     # Check auth state via public API
+    # Import after reload to get the updated module state
     import api.auth
     if auth_enabled == "false":
         assert not api.auth.is_auth_enabled(), "Auth should be disabled"

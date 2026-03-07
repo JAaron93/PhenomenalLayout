@@ -9,6 +9,19 @@ pytest_plugins: tuple[str, ...] = ("pytest_asyncio",)
 
 logger = logging.getLogger(__name__)
 
+# Modules to reload in dependency order (base → dependent)
+# Order matters: auth → rate_limit → memory_routes → app
+# Exclude third-party modules that can't be reloaded (like numpy)
+_RELOAD_MODULE_NAMES = [
+    "api.auth",
+    "api.rate_limit",
+    "api.memory_routes",
+    "app",
+]
+
+# Modules to exclude from sys.modules operations
+_EXCLUDE_MODULES = {"numpy", "gradio"}
+
 
 @pytest.fixture(autouse=True)
 def dolphin_env_defaults(monkeypatch):
@@ -79,8 +92,7 @@ def test_client():
         import importlib
         import sys
 
-        MODULE_NAMES = ["api.auth", "api.memory_routes", "api.rate_limit", "app"]
-        for name in MODULE_NAMES:
+        for name in _RELOAD_MODULE_NAMES:
             if name in sys.modules:
                 importlib.reload(sys.modules[name])
             else:
@@ -91,7 +103,7 @@ def test_client():
         yield client
 
         # Teardown: reload modules to restore state after patch context exits
-        for name in MODULE_NAMES:
+        for name in _RELOAD_MODULE_NAMES:
             if name in sys.modules:
                 try:
                     importlib.reload(sys.modules[name])
@@ -123,23 +135,15 @@ def reload_app_with_env():
     """
     import sys
 
-    # Modules to reload in dependency order (base → dependent)
-    # Order matters: auth → rate_limit → memory_routes → app
-    MODULE_NAMES = [
-        "api.auth",
-        "api.rate_limit",
-        "api.memory_routes",
-        "app",
-    ]
-
     # Save original module objects before any reloads
     original_modules = {}
-    for name in MODULE_NAMES:
+    for name in _RELOAD_MODULE_NAMES:
         if name in sys.modules:
             original_modules[name] = sys.modules[name]
 
-    # Track active patches
+    # Track active patches and created test clients
     active_patches = []
+    created_clients = []
 
     def _factory(test_env: dict) -> TestClient:
         """Create TestClient with patched environment and fresh module imports."""
@@ -151,20 +155,26 @@ def reload_app_with_env():
         active_patches.append(patch_obj)
 
         # Remove modules from sys.modules to ensure fresh imports
-        for name in MODULE_NAMES:
-            if name in sys.modules:
+        # Exclude problematic modules that can't be reloaded
+        for name in _RELOAD_MODULE_NAMES:
+            if name in sys.modules and not any(excluded in name for excluded in _EXCLUDE_MODULES):
                 del sys.modules[name]
 
         # Import fresh modules
-        for name in MODULE_NAMES:
+        for name in _RELOAD_MODULE_NAMES:
             __import__(name)
 
         app_module = sys.modules["app"]
-        return TestClient(app_module.create_app())
+        client = TestClient(app_module.create_app())
+        created_clients.append(client)
+        return client
 
     try:
         yield _factory
     finally:
+        # Close all created test clients
+        for client in created_clients:
+            client.close()
         # Stop all active patches
         for patch_obj in active_patches:
             patch_obj.stop()

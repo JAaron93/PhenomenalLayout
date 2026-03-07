@@ -11,12 +11,22 @@ from fastapi import HTTPException, Request, Response, status
 
 logger = logging.getLogger(__name__)
 
+
+def is_rate_limiting_enabled() -> bool:
+    """Check if rate limiting is enabled via environment variable.
+    
+    Returns:
+        True if rate limiting is enabled (env var is "true" or "enabled"), False otherwise
+    """
+    return os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() in ("true", "enabled")
+
+
 # Configuration for trusted proxies and forwarded headers
 TRUST_FORWARDER_HEADERS = os.getenv("TRUST_FORWARDER_HEADERS", "false").lower() == "true"
 TRUSTED_PROXIES = [
     ip.strip() for ip in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",")
 ] if TRUST_FORWARDER_HEADERS else []
-ENABLE_RATE_LIMITING = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() in ("true", "enabled")
+ENABLE_RATE_LIMITING = is_rate_limiting_enabled()
 
 
 class TokenBucket:
@@ -323,7 +333,7 @@ def check_rate_limit(
         HTTPException: If rate limit exceeded
     """
     # Read from environment dynamically for testability
-    enable_rate_limiting = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() in ("true", "enabled")
+    enable_rate_limiting = is_rate_limiting_enabled()
     if not enable_rate_limiting:
         return True, 0.0
 
@@ -367,7 +377,7 @@ def add_rate_limit_headers(
         client_ip: Client IP address
     """
     # Read from environment dynamically for testability
-    enable_rate_limiting = os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() in ("true", "enabled")
+    enable_rate_limiting = is_rate_limiting_enabled()
     if not enable_rate_limiting or limit_type not in RATE_LIMITS:
         return
 

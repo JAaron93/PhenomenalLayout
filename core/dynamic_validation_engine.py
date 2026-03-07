@@ -439,18 +439,21 @@ class ValidationGraph:
             in_degree[validator_name] = len(self.dependencies[validator_name])
 
         # Use heap-based priority queue for O(n log n) performance
+        # Add monotonic tie-breaker counter for deterministic ordering when priorities tie
         available = []
+        tie_breaker = 0
         for validator_name, degree in in_degree.items():
             if degree == 0:
                 validator = self.validators[validator_name]
                 # Use negative priority since heappop returns smallest
-                heapq.heappush(available, (-validator.priority, validator_name))
+                heapq.heappush(available, (-validator.priority, tie_breaker, validator_name))
+                tie_breaker += 1
 
         execution_order = []
 
         while available:
             # Pop highest priority (most negative priority value)
-            _, current = heapq.heappop(available)
+            _, _, current = heapq.heappop(available)
             execution_order.append(current)
 
             # Update dependencies
@@ -458,7 +461,8 @@ class ValidationGraph:
                 in_degree[dependent] -= 1
                 if in_degree[dependent] == 0:
                     validator = self.validators[dependent]
-                    heapq.heappush(available, (-validator.priority, dependent))
+                    heapq.heappush(available, (-validator.priority, tie_breaker, dependent))
+                    tie_breaker += 1
 
         # Check for cycles
         if len(execution_order) != len(self.validators):
