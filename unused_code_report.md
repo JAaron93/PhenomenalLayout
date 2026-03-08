@@ -760,7 +760,7 @@ These live in production-used modules/classes, so removal risk is slightly highe
 
 ---
 
-### [ ]Phase 4 — Broader abstraction cleanup
+### [ ] Phase 4 — Broader abstraction cleanup
 These items are likely unused, but they are part of generic infrastructure and may have been added intentionally for future extension.
 
 #### Generic infrastructure
@@ -780,7 +780,7 @@ These items are likely unused, but they are part of generic infrastructure and m
 
 ---
 
-### [ ]Phase 5 — Future-facing but currently disconnected APIs
+### [x] Phase 5 — Future-facing but currently disconnected APIs
 These should only be removed if you explicitly decide they are no longer part of the product direction.
 
 - `services.philosophical_context_analyzer.update_terminology_map()`

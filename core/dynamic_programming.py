@@ -84,6 +84,30 @@ def _normalize_value(value: Any) -> Hashable:
             return repr(value)
 
 
+def _create_cache_key_from_args(key: str, args: tuple, kwargs: dict) -> tuple:
+    """Create a hashable cache key from arguments.
+    
+    Args:
+        key: Base key for the cache entry
+        args: Positional arguments to normalize and include in the cache key
+        kwargs: Keyword arguments to normalize and include in the cache key
+        
+    Returns:
+        Tuple containing the normalized cache key components:
+        (key, normalized_args, normalized_kwargs_tuple)
+    """
+    # Normalize args tuple recursively
+    normalized_args = tuple(_normalize_value(arg) for arg in args)
+
+    # Normalize kwargs dict recursively
+    normalized_kwargs_items = []
+    for k, v in sorted(kwargs.items()):
+        normalized_kwargs_items.append((_normalize_value(k), _normalize_value(v)))
+    normalized_kwargs = tuple(normalized_kwargs_items)
+
+    return (key, normalized_args, normalized_kwargs)
+
+
 # Type variables for generic implementations
 T = TypeVar("T")
 K = TypeVar("K", bound=Hashable)
@@ -417,19 +441,32 @@ class DynamicRegistry(Generic[T]):
             if key not in self._metrics:
                 self._metrics[key] = PerformanceMetrics(key)
 
-    def get(self, key: str, *args, **kwargs) -> T | None:
-        """Get or create instance with intelligent caching."""
-        # Create cache key from arguments
-        cache_key = self._create_cache_key(key, args, kwargs)
+    def get(self, key: str, *args, cache_enabled: bool | None = None, **kwargs) -> T | None:
+        """Get or create instance with intelligent caching (optional).
+        
+        Args:
+            key: Registry key for the factory
+            *args: Positional arguments to pass to the factory
+            cache_enabled: Whether to use caching (None = use default, True = enable, False = disable)
+            **kwargs: Keyword arguments to pass to the factory
+            
+        Returns:
+            Created instance or None if key not registered
+        """
+        # Only use cache if explicitly enabled or using default behavior
+        if cache_enabled or cache_enabled is None:
+            cache_key = self._create_cache_key(key, args, kwargs)
+            
+            # Try cache first
+            start_time = time.perf_counter()
+            cached_result = self._cache.get(cache_key)
 
-        # Try cache first
-        start_time = time.perf_counter()
-        cached_result = self._cache.get(cache_key)
-
-        if cached_result is not self._cache.MISS:
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            self._metrics[key].record_operation(duration_ms, cache_hit=True)
-            return cached_result
+            if cached_result is not self._cache.MISS:
+                duration_ms = (time.perf_counter() - start_time) * 1000
+                self._metrics[key].record_operation(duration_ms, cache_hit=True)
+                return cached_result
+        else:
+            start_time = time.perf_counter()
 
         # Create new instance
         with self._lock:
@@ -438,7 +475,11 @@ class DynamicRegistry(Generic[T]):
 
             try:
                 result = self._registry[key](*args, **kwargs)
-                self._cache.put(cache_key, result)
+                
+                # Only cache the result if explicitly enabled or using default behavior
+                if cache_enabled or cache_enabled is None:
+                    cache_key = self._create_cache_key(key, args, kwargs)
+                    self._cache.put(cache_key, result)
 
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self._metrics[key].record_operation(duration_ms, cache_hit=False)
@@ -451,16 +492,7 @@ class DynamicRegistry(Generic[T]):
 
     def _create_cache_key(self, key: str, args: tuple, kwargs: dict) -> tuple:
         """Create a hashable cache key from arguments."""
-        # Normalize args tuple recursively
-        normalized_args = tuple(_normalize_value(arg) for arg in args)
-
-        # Normalize kwargs dict recursively
-        normalized_kwargs_items = []
-        for k, v in sorted(kwargs.items()):
-            normalized_kwargs_items.append((_normalize_value(k), _normalize_value(v)))
-        normalized_kwargs = tuple(normalized_kwargs_items)
-
-        return (key, normalized_args, normalized_kwargs)
+        return _create_cache_key_from_args(key, args, kwargs)
 
     def clear_cache(self) -> None:
         """Clear all cached instances."""
@@ -712,35 +744,42 @@ class DynamicFactory(Generic[T]):
         """Register a creator function for a type."""
         self._creators[type_name] = creator
 
-    def create(self, type_name: str, *args, **kwargs) -> T | None:
-        """Create an instance of the specified type with caching."""
-        # Create cache key from arguments
-        cache_key = self._create_cache_key(type_name, args, kwargs)
+    def create(self, type_name: str, *args, cache_enabled: bool | None = None, **kwargs) -> T | None:
+        """Create an instance of the specified type with optional caching.
         
-        # Check cache first
-        cached_result = self._cache.get(cache_key)
-        if cached_result is not self._cache.MISS:
-            return cached_result
+        Args:
+            type_name: Name of the type to create
+            *args: Positional arguments to pass to the creator
+            cache_enabled: Whether to use caching (None = use default, True = enable, False = disable)
+            **kwargs: Keyword arguments to pass to the creator
+            
+        Returns:
+            Created instance or None if type not registered
+        """
+        # Only use cache if explicitly enabled or using default behavior
+        if cache_enabled or cache_enabled is None:
+            cache_key = self._create_cache_key(type_name, args, kwargs)
+            
+            # Check cache first
+            cached_result = self._cache.get(cache_key)
+            if cached_result is not self._cache.MISS:
+                return cached_result
             
         creator = self._creators.get(type_name)
         if creator:
             result = creator(*args, **kwargs)
-            self._cache.put(cache_key, result)
+            
+            # Only cache the result if explicitly enabled or using default behavior
+            if cache_enabled or cache_enabled is None:
+                cache_key = self._create_cache_key(type_name, args, kwargs)
+                self._cache.put(cache_key, result)
+                
             return result
         return None
         
     def _create_cache_key(self, type_name: str, args: tuple, kwargs: dict) -> tuple:
         """Create a hashable cache key from arguments."""
-        # Normalize args tuple recursively
-        normalized_args = tuple(_normalize_value(arg) for arg in args)
-        
-        # Normalize kwargs dict recursively
-        normalized_kwargs_items = []
-        for k, v in sorted(kwargs.items()):
-            normalized_kwargs_items.append((_normalize_value(k), _normalize_value(v)))
-        normalized_kwargs = tuple(normalized_kwargs_items)
-        
-        return (type_name, normalized_args, normalized_kwargs)
+        return _create_cache_key_from_args(type_name, args, kwargs)
         
     def clear_cache(self) -> None:
         """Clear all cached instances."""

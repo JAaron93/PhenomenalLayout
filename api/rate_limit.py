@@ -409,6 +409,37 @@ def add_rate_limit_headers(response: Response, limit_type: str, client_ip: str) 
     response.headers["X-RateLimit-Reset"] = str(reset_time)
 
 
+# Helper function to extract request from function arguments
+def _extract_request(args: tuple, kwargs: dict) -> Request:
+    """Extract Request object from function arguments.
+
+    Args:
+        args: Positional arguments passed to the decorated function
+        kwargs: Keyword arguments passed to the decorated function
+
+    Returns:
+        The Request object extracted from arguments
+
+    Raises:
+        ValueError: If Request object cannot be found in arguments
+    """
+    # Extract request from kwargs
+    request = kwargs.get("request")
+    if not request:
+        # Try to get request from first positional argument
+        if args:
+            # Case 1: args[0] has a request attribute
+            if hasattr(args[0], "request"):
+                request = args[0].request
+            # Case 2: args[0] is a Request object (check by type or duck typing)
+            elif (isinstance(args[0], Request) or
+                  (hasattr(args[0], "scope") and hasattr(args[0], "method"))):
+                request = args[0]
+    if not request:
+        raise ValueError("Request object not found in function arguments")
+    return request
+
+
 # Decorator for rate limiting endpoints
 def rate_limit(limit_type: str, tokens: float = 1.0):
     """Decorator for rate limiting endpoints.
@@ -426,14 +457,8 @@ def rate_limit(limit_type: str, tokens: float = 1.0):
             # Async function handler
             @functools.wraps(func)
             async def wrapper(*args, **kwargs):
-                # Extract request from kwargs
-                request = kwargs.get("request")
-                if not request:
-                    # Try to get request from first positional argument
-                    if args and hasattr(args[0], "request"):
-                        request = args[0].request
-                    else:
-                        raise ValueError("Request object not found in function arguments")
+                # Extract request from arguments
+                request = _extract_request(args, kwargs)
 
                 # Check rate limit
                 check_rate_limit(request, limit_type, tokens)
@@ -447,14 +472,8 @@ def rate_limit(limit_type: str, tokens: float = 1.0):
             # Sync function handler
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                # Extract request from kwargs
-                request = kwargs.get("request")
-                if not request:
-                    # Try to get request from first positional argument
-                    if args and hasattr(args[0], "request"):
-                        request = args[0].request
-                    else:
-                        raise ValueError("Request object not found in function arguments")
+                # Extract request from arguments
+                request = _extract_request(args, kwargs)
 
                 # Check rate limit
                 check_rate_limit(request, limit_type, tokens)

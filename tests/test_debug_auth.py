@@ -60,5 +60,5 @@ def test_endpoint_debugging():
             )
 
 
-if __name__ == "__main__":
-    test_endpoint_debugging()
+# Note: This test must be run via pytest to ensure proper @pytest.mark.forked behavior
+# and avoid module-state leakage. Run with: pytest tests/test_debug_auth.py -v

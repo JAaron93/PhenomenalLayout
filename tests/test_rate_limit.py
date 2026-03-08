@@ -3,7 +3,12 @@
 import pytest
 from fastapi.testclient import TestClient
 from fastapi import FastAPI, Request
-from api.rate_limit import rate_limit, shutdown_rate_limiter
+from api.rate_limit import (
+    rate_limit,
+    shutdown_rate_limiter,
+    get_rate_limiter,
+    RATE_LIMITS,
+)
 
 
 @pytest.fixture
@@ -44,20 +49,33 @@ def test_client_async(test_app_async):
     return TestClient(test_app_async)
 
 
-def test_sync_function_decorator(test_client_sync):
+@pytest.fixture
+def reset_rate_limiter():
+    """Reset rate limiter state before and after each test."""
+    # Reset before test
+    shutdown_rate_limiter()
+    # Reinitialize for the test
+    get_rate_limiter()
+    yield
+    # Reset after test
+    shutdown_rate_limiter()
+
+
+def test_sync_function_decorator(test_client_sync, reset_rate_limiter):
     """Test that the rate limit decorator works with synchronous functions."""
+    # Get the expected limit from configuration
+    read_limit = RATE_LIMITS["read"]
     # Make multiple requests to trigger rate limiting
-    for _ in range(60):
+    for _ in range(read_limit):
         response = test_client_sync.get("/sync-endpoint")
         assert response.status_code == 200, "Sync endpoint should return 200"
 
-    # The 61st request should be rate-limited
+    # The request after the limit should be rate-limited
     response = test_client_sync.get("/sync-endpoint")
     assert response.status_code == 429, "Rate limiting for sync function"
 
 
-@pytest.mark.asyncio
-async def test_async_function_decorator(test_client_async):
+def test_async_function_decorator(test_client_async):
     """Test that the rate limit decorator works with asynchronous functions."""
     # Make multiple requests to trigger rate limiting
     for _ in range(10):
@@ -69,8 +87,30 @@ async def test_async_function_decorator(test_client_async):
     assert response.status_code == 429, "Rate limiting for async function"
 
 
-def test_shutdown_rate_limiter():
+def test_shutdown_rate_limiter(reset_rate_limiter):
     """Test that shutdown_rate_limiter() function works correctly."""
+    # Initialize rate limiter first by calling get_rate_limiter()
+    limiter = get_rate_limiter()
+    assert limiter is not None, "Rate limiter should be initialized"
+
+    # Shutdown the rate limiter
     shutdown_rate_limiter()
+
+    # After shutdown, get_rate_limiter() should return a new instance
+    # (not the same object) - verifies old limiter was properly shut down
+    new_limiter = get_rate_limiter()
+    assert new_limiter is not None, (
+        "Rate limiter should be re-initialized after shutdown"
+    )
+    assert new_limiter is not limiter, (
+        "After shutdown, get_rate_limiter should return a new instance"
+    )
+
+    # Call shutdown again to verify idempotency (should not raise)
     shutdown_rate_limiter()
-    assert True, "shutdown_rate_limiter() handles both cases"
+
+    # Verify calling get_rate_limiter after second shutdown works
+    final_limiter = get_rate_limiter()
+    assert final_limiter is not None, (
+        "Rate limiter should work after multiple shutdowns"
+    )
