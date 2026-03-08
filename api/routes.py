@@ -109,15 +109,28 @@ async def philosophy_interface(request: Request) -> HTMLResponse:
 
 
 # Dolphin OCR Configuration Endpoints
+# Use a module-level dictionary to store runtime configuration instead of mutating os.environ
+_dolphin_config = {
+    "DOLPHIN_ENDPOINT_TYPE": "modal",
+    "DOLPHIN_LOCAL_ENDPOINT": DEFAULT_LOCAL_ENDPOINT,
+    "DOLPHIN_ENDPOINT": DEFAULT_MODAL_ENDPOINT,
+    "DOLPHIN_TIMEOUT_SECONDS": "300"
+}
+
+# Initialize with environment variables
+import os
+for key in _dolphin_config:
+    if os.getenv(key):
+        _dolphin_config[key] = os.getenv(key)
+
+
 @api_router.get("/config/dolphin")
 async def get_dolphin_configuration() -> dict[str, Any]:
     """Get Dolphin OCR service configuration."""
-    import os
-    
-    endpoint_type = os.getenv("DOLPHIN_ENDPOINT_TYPE", "modal").lower()
-    local_endpoint = os.getenv("DOLPHIN_LOCAL_ENDPOINT", DEFAULT_LOCAL_ENDPOINT)
-    modal_endpoint = os.getenv("DOLPHIN_ENDPOINT", DEFAULT_MODAL_ENDPOINT)
-    timeout = os.getenv("DOLPHIN_TIMEOUT_SECONDS", "300")
+    endpoint_type = _dolphin_config["DOLPHIN_ENDPOINT_TYPE"].lower()
+    local_endpoint = _dolphin_config["DOLPHIN_LOCAL_ENDPOINT"]
+    modal_endpoint = _dolphin_config["DOLPHIN_ENDPOINT"]
+    timeout = _dolphin_config["DOLPHIN_TIMEOUT_SECONDS"]
     
     # Determine active endpoint
     if endpoint_type == "local":
@@ -139,17 +152,15 @@ async def get_dolphin_configuration() -> dict[str, Any]:
 async def update_dolphin_configuration(config_data: dict[str, Any]) -> dict[str, Any]:
     """Update Dolphin OCR service configuration.
     
-    Note: This only updates the runtime environment. For persistent changes,
+    Note: This only updates the runtime configuration in memory. For persistent changes,
     update the environment variables in your deployment configuration.
     """
-    import os
-    
-    valid_keys = {"DOLPHIN_ENDPOINT_TYPE", "DOLPHIN_LOCAL_ENDPOINT", "DOLPHIN_TIMEOUT_SECONDS"}
+    valid_keys = {"DOLPHIN_ENDPOINT_TYPE", "DOLPHIN_LOCAL_ENDPOINT", "DOLPHIN_TIMEOUT_SECONDS", "DOLPHIN_ENDPOINT"}
     updated_keys = []
     
     for key, value in config_data.items():
         if key in valid_keys:
-            os.environ[key] = str(value)
+            _dolphin_config[key] = str(value)
             updated_keys.append(key)
     
     if updated_keys:

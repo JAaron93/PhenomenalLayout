@@ -20,7 +20,6 @@ from typing import Any
 from core.dynamic_choice_engine import (
     # OptimizedUserChoiceManager is a backward-compatible, higher-performance replacement.
     # See PERFORMANCE_IMPROVEMENTS.md for details.
-    # TODO: Keep PERFORMANCE_IMPROVEMENTS.md in sync with any behavioral changes.
     OptimizedUserChoiceManager as UserChoiceManager,
 )
 from core.dynamic_choice_engine import (

@@ -138,11 +138,11 @@ class ValidationContext:
     def _get_validation_rules_version(self) -> str:
         """Get validation rules version for cache invalidation.
 
-        This should be enhanced to include actual validation rule checksums
-        or version numbers when validation rules become configurable.
+        This returns a version string based on the current validation rules.
+        When validation rules become configurable, this should be enhanced
+        to include actual validation rule checksums or version numbers.
         """
-        # For now, use a simple version string
-        # TODO: Implement proper rule versioning when rules become configurable
+        # Use a simple version string - can be enhanced when rules become configurable
         return "v1.0"
 
 

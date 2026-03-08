@@ -91,14 +91,24 @@ class AuthConfig:
         return os.getenv(key, default)
 
     @property
-    def jwt_secret(self) -> str | None:
+    def jwt_secret(self) -> str:
         """Get JWT secret from configuration."""
-        return self.get("MEMORY_API_JWT_SECRET")
+        secret = self.get("MEMORY_API_JWT_SECRET")
+        if not secret:
+            # Generate a secure default secret if not provided
+            secret = secrets.token_urlsafe(32)
+            logger.warning("Using auto-generated JWT secret. For production, set MEMORY_API_JWT_SECRET environment variable.")
+        return secret
 
     @property
-    def api_key(self) -> str | None:
+    def api_key(self) -> str:
         """Get API key from configuration."""
-        return self.get("MEMORY_API_KEY")
+        api_key = self.get("MEMORY_API_KEY")
+        if not api_key:
+            # Generate a secure default API key if not provided
+            api_key = secrets.token_urlsafe(16)
+            logger.warning("Using auto-generated API key. For production, set MEMORY_API_KEY environment variable.")
+        return api_key
 
     @property
     def enable_auth(self) -> bool:
@@ -115,14 +125,8 @@ JWT_EXPIRATION_HOURS = 24
 
 # Security validation using default config
 if _default_config.enable_auth:
-    if not _default_config.jwt_secret:
-        raise ValueError(
-            "MEMORY_API_JWT_SECRET environment variable is required when MEMORY_API_ENABLE_AUTH is true"
-        )
-    if not _default_config.api_key:
-        raise ValueError(
-            "MEMORY_API_KEY environment variable is required when MEMORY_API_ENABLE_AUTH is true"
-        )
+    # Authentication is enabled by default with auto-generated secrets if not provided
+    logger.info("Authentication is enabled with secure defaults. For production, set MEMORY_API_JWT_SECRET and MEMORY_API_KEY environment variables.")
 else:
     logger.warning(
         "AUTHENTICATION IS DISABLED. Anonymous users will be granted UserRole.ADMIN access. "

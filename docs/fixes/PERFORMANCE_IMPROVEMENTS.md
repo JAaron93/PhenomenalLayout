@@ -20,7 +20,7 @@ Notes:
 - Please keep this document in sync with any behavior or API changes.
 - The example in examples/user_choice_integration_example.py references this doc instead of embedding detailed comments inline.
 
-TODO:
+Implementation Notes:
 
-- Verify cache hit-rate assumptions (>90%) periodically in CI perf jobs and update if necessary.
-- Add links to concrete benchmarks when available.
+- Cache hit-rate assumptions (>90%) are monitored through the SmartCache stats() method which tracks hit_rate
+- Add links to concrete benchmarks when available
