@@ -683,7 +683,7 @@ When you move on to actual cleanup, these groups should be treated differently:
 
 ## Phased Cleanup Plan (Safest Removals First)
 
-### Phase 1 — Lowest-risk removals
+### [x] Phase 1 — Lowest-risk removals 
 These are the safest first-pass candidates because they appear isolated, have no meaningful consumers, and do not sit on important runtime paths.
 
 #### API helpers
@@ -709,7 +709,7 @@ These are the safest first-pass candidates because they appear isolated, have no
 
 ---
 
-### Phase 2 — Dead configuration and disconnected config surface
+### [x] Phase 2 — Dead configuration and disconnected config surface
 These appear unused in the current app wiring and should be reviewed next.
 
 #### Likely disconnected config surface
@@ -727,7 +727,7 @@ These appear unused in the current app wiring and should be reviewed next.
 
 ---
 
-### Phase 3 — Unused helper methods on otherwise active classes
+### [ ] Phase 3 — Unused helper methods on otherwise active classes
 These live in production-used modules/classes, so removal risk is slightly higher even though the individual methods appear unused.
 
 #### `services.enhanced_document_processor.py`
@@ -760,7 +760,7 @@ These live in production-used modules/classes, so removal risk is slightly highe
 
 ---
 
-### Phase 4 — Broader abstraction cleanup
+### [ ]Phase 4 — Broader abstraction cleanup
 These items are likely unused, but they are part of generic infrastructure and may have been added intentionally for future extension.
 
 #### Generic infrastructure
@@ -780,7 +780,7 @@ These items are likely unused, but they are part of generic infrastructure and m
 
 ---
 
-### Phase 5 — Future-facing but currently disconnected APIs
+### [ ]Phase 5 — Future-facing but currently disconnected APIs
 These should only be removed if you explicitly decide they are no longer part of the product direction.
 
 - `services.philosophical_context_analyzer.update_terminology_map()`

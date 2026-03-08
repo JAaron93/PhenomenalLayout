@@ -1,6 +1,7 @@
 """Rate limiting middleware for API endpoints."""
 
 import functools
+import inspect
 import ipaddress
 import logging
 import os
@@ -33,7 +34,6 @@ TRUSTED_PROXIES = (
     if TRUST_FORWARDER_HEADERS
     else []
 )
-ENABLE_RATE_LIMITING = is_rate_limiting_enabled()
 
 
 class TokenBucket:
@@ -226,6 +226,10 @@ def get_rate_limiter() -> RateLimiter:
 
     Returns:
         The global RateLimiter instance
+
+    Note:
+        When the application is shutting down, you should call
+        shutdown_rate_limiter() to properly stop the cleanup thread.
     """
     global _rate_limiter
     if _rate_limiter is None:
@@ -234,6 +238,25 @@ def get_rate_limiter() -> RateLimiter:
                 _rate_limiter = RateLimiter()
                 _rate_limiter.start_cleanup()
     return _rate_limiter
+
+
+def shutdown_rate_limiter() -> None:
+    """Shutdown the global rate limiter instance.
+
+    This function:
+    - Acquires the rate limiter lock
+    - Checks if the module-global rate limiter exists
+    - Calls its stop() method if present
+    - Clears the _rate_limiter reference
+
+    Should be called during application shutdown to ensure proper
+    cleanup of the rate limiter's resources.
+    """
+    global _rate_limiter
+    with _rate_limiter_lock:
+        if _rate_limiter is not None:
+            _rate_limiter.stop()
+            _rate_limiter = None
 
 
 # Rate limit configurations (requests per minute)
@@ -399,25 +422,47 @@ def rate_limit(limit_type: str, tokens: float = 1.0):
     """
 
     def decorator(func):
-        @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Extract request from kwargs
-            request = kwargs.get("request")
-            if not request:
-                # Try to get request from first positional argument
-                if args and hasattr(args[0], "request"):
-                    request = args[0].request
-                else:
-                    raise ValueError("Request object not found in function arguments")
+        if inspect.iscoroutinefunction(func):
+            # Async function handler
+            @functools.wraps(func)
+            async def wrapper(*args, **kwargs):
+                # Extract request from kwargs
+                request = kwargs.get("request")
+                if not request:
+                    # Try to get request from first positional argument
+                    if args and hasattr(args[0], "request"):
+                        request = args[0].request
+                    else:
+                        raise ValueError("Request object not found in function arguments")
 
-            # Check rate limit
-            check_rate_limit(request, limit_type, tokens)
+                # Check rate limit
+                check_rate_limit(request, limit_type, tokens)
 
-            # Call the function
-            result = await func(*args, **kwargs)
+                # Call the async function
+                result = await func(*args, **kwargs)
+                return result
 
-            return result
+            return wrapper
+        else:
+            # Sync function handler
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                # Extract request from kwargs
+                request = kwargs.get("request")
+                if not request:
+                    # Try to get request from first positional argument
+                    if args and hasattr(args[0], "request"):
+                        request = args[0].request
+                    else:
+                        raise ValueError("Request object not found in function arguments")
 
-        return wrapper
+                # Check rate limit
+                check_rate_limit(request, limit_type, tokens)
+
+                # Call the sync function directly
+                result = func(*args, **kwargs)
+                return result
+
+            return wrapper
 
     return decorator

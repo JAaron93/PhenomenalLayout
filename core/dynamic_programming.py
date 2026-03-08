@@ -16,6 +16,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Hashable
+import dataclasses
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Generic, TypeVar
@@ -65,8 +66,6 @@ def _normalize_value(value: Any) -> Hashable:
             return tuple(normalized_items)
         elif hasattr(value, "__dataclass_fields__"):
             # Handle dataclass objects
-            import dataclasses
-
             normalized_fields = []
             for field_obj in sorted(dataclasses.fields(value), key=lambda f: f.name):
                 field_name = field_obj.name
@@ -205,7 +204,7 @@ class PerformanceMetrics:
 class CacheEntry(Generic[V]):
     """Generic cache entry with metadata."""
 
-    def __init__(self, value: V, timestamp: float = None, access_count: int = 0):
+    def __init__(self, value: V, timestamp: float | None = None, access_count: int = 0):
         self.value = value
         self.timestamp = timestamp or time.time()
         self.access_count = access_count
@@ -703,22 +702,49 @@ def performance_monitor(operation_name: str | None = None):
 
 
 class DynamicFactory(Generic[T]):
-    """Generic factory with dynamic type resolution."""
+    """Generic factory with dynamic type resolution and caching."""
 
     def __init__(self):
         self._creators: dict[str, Callable[..., T]] = {}
-        self._cache: SmartCache[str, type[T]] = SmartCache(max_size=64)
+        self._cache: SmartCache[tuple, T] = SmartCache(max_size=64)
 
     def register(self, type_name: str, creator: Callable[..., T]) -> None:
         """Register a creator function for a type."""
         self._creators[type_name] = creator
 
     def create(self, type_name: str, *args, **kwargs) -> T | None:
-        """Create an instance of the specified type."""
+        """Create an instance of the specified type with caching."""
+        # Create cache key from arguments
+        cache_key = self._create_cache_key(type_name, args, kwargs)
+        
+        # Check cache first
+        cached_result = self._cache.get(cache_key)
+        if cached_result is not self._cache.MISS:
+            return cached_result
+            
         creator = self._creators.get(type_name)
         if creator:
-            return creator(*args, **kwargs)
+            result = creator(*args, **kwargs)
+            self._cache.put(cache_key, result)
+            return result
         return None
+        
+    def _create_cache_key(self, type_name: str, args: tuple, kwargs: dict) -> tuple:
+        """Create a hashable cache key from arguments."""
+        # Normalize args tuple recursively
+        normalized_args = tuple(_normalize_value(arg) for arg in args)
+        
+        # Normalize kwargs dict recursively
+        normalized_kwargs_items = []
+        for k, v in sorted(kwargs.items()):
+            normalized_kwargs_items.append((_normalize_value(k), _normalize_value(v)))
+        normalized_kwargs = tuple(normalized_kwargs_items)
+        
+        return (type_name, normalized_args, normalized_kwargs)
+        
+    def clear_cache(self) -> None:
+        """Clear all cached instances."""
+        self._cache.clear()
 
 
 # Global registry instances for common patterns
@@ -732,5 +758,18 @@ def get_registry(name: str, **kwargs) -> DynamicRegistry:
         if name not in _GLOBAL_REGISTRIES:
             _GLOBAL_REGISTRIES[name] = DynamicRegistry(**kwargs)
         return _GLOBAL_REGISTRIES[name]
+
+
+def clear_all_registries(name: str | None = None) -> None:
+    """Clear all global registries or a specific registry by name.
+    
+    Args:
+        name: Optional registry name to clear. If None, clears all registries.
+    """
+    with _GLOBAL_LOCK:
+        if name is None:
+            _GLOBAL_REGISTRIES.clear()
+        else:
+            _GLOBAL_REGISTRIES.pop(name, None)
 
 
