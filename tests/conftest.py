@@ -11,16 +11,12 @@ logger = logging.getLogger(__name__)
 
 # Modules to reload in dependency order (base → dependent)
 # Order matters: auth → rate_limit → memory_routes → app
-# Exclude third-party modules that can't be reloaded (like numpy)
 _RELOAD_MODULE_NAMES = [
     "api.auth",
     "api.rate_limit",
     "api.memory_routes",
     "app",
 ]
-
-# Modules to exclude from sys.modules operations
-_EXCLUDE_MODULES = {"numpy", "gradio"}
 
 
 @pytest.fixture(autouse=True)
@@ -58,9 +54,7 @@ def pytest_configure(config: pytest.Config) -> None:
     # Set DEBUG=True for tests to enable auto-generated SECRET_KEY
     os.environ.setdefault("DEBUG", "true")
     # Provide a deterministic SECRET_KEY for tests to ensure consistency across workers
-    os.environ.setdefault(
-        "SECRET_KEY", "test-secret-key-for-testing-only!"
-    )
+    os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only!")
     # Set memory API security environment variables
     os.environ.setdefault("MEMORY_API_ENABLE_AUTH", "true")
     os.environ.setdefault("MEMORY_API_JWT_SECRET", "test-secret-key")
@@ -74,7 +68,7 @@ def pytest_configure(config: pytest.Config) -> None:
 @pytest.fixture(scope="module")
 def test_client():
     """Pytest fixture providing a test client with test environment.
-    
+
     Uses module scope to prevent cached state leakage across tests that
     could occur when reloading modules with function-scoped fixtures.
     """
@@ -84,10 +78,10 @@ def test_client():
         "MEMORY_API_KEY": "test-admin-key",
         "MEMORY_API_READ_RATE_LIMIT": "100",
         "MEMORY_API_WRITE_RATE_LIMIT": "100",
-        "MEMORY_API_ADMIN_RATE_LIMIT": "100"
+        "MEMORY_API_ADMIN_RATE_LIMIT": "100",
     }
 
-    with patch.dict('os.environ', test_env):
+    with patch.dict("os.environ", test_env):
         # Reload modules to pick up environment
         import importlib
         import sys
@@ -108,13 +102,16 @@ def test_client():
                 try:
                     importlib.reload(sys.modules[name])
                 except Exception:
-                    logger.debug("Failed to reload %s during teardown", name, exc_info=True)
+                    logger.debug(
+                        "Failed to reload %s during teardown", name, exc_info=True
+                    )
 
 
 @pytest.fixture
 def read_token(test_client):
     """Pytest fixture providing a read-only token."""
     import api.auth
+
     return api.auth.create_jwt_token("read_user", api.auth.UserRole.READ_ONLY)
 
 
@@ -122,6 +119,7 @@ def read_token(test_client):
 def admin_token(test_client):
     """Pytest fixture providing an admin token."""
     import api.auth
+
     return api.auth.create_jwt_token("admin_user", api.auth.UserRole.ADMIN)
 
 
@@ -155,9 +153,8 @@ def reload_app_with_env():
         active_patches.append(patch_obj)
 
         # Remove modules from sys.modules to ensure fresh imports
-        # Exclude problematic modules that can't be reloaded
         for name in _RELOAD_MODULE_NAMES:
-            if name in sys.modules and not any(excluded in name for excluded in _EXCLUDE_MODULES):
+            if name in sys.modules:
                 del sys.modules[name]
 
         # Import fresh modules

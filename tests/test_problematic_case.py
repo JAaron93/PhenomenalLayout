@@ -26,10 +26,14 @@ def test_problematic_case_fixed(
 
     # Use logger for diagnostics only on failure
     logger = logging.getLogger(__name__)
+    original_level = logger.level
     if response.status_code != 200:
-        logger.setLevel(logging.DEBUG)
-        logger.debug(f"Response status: {response.status_code}")
-        logger.debug(f"Response text: {response.text}")
+        try:
+            logger.setLevel(logging.DEBUG)
+            logger.debug(f"Response status: {response.status_code}")
+            logger.debug(f"Response text: {response.text}")
+        finally:
+            logger.setLevel(original_level)
 
     assert response.status_code == 200, (
         f"Expected 200, got {response.status_code}"

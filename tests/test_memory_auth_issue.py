@@ -3,6 +3,7 @@
 
 import os
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,13 +15,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
+@contextmanager
 def setup_test_client_with_env(test_env):
-    """Helper function to set up test client with specific environment variables.
+    """Helper context manager to set up a test client with specific environment variables.
 
     Args:
         test_env: Dictionary of environment variables to patch
 
-    Returns:
+    Yields:
         Tuple of (TestClient instance, enable_auth value from config)
     """
     with patch.dict("os.environ", test_env):
@@ -34,26 +36,25 @@ def setup_test_client_with_env(test_env):
             # Import fresh modules with the patched environment
             from app import create_app
 
-            client = TestClient(create_app())
+            with TestClient(create_app()) as client:
+                print(
+                    f"os.getenv('MEMORY_API_ENABLE_AUTH') = '{os.getenv('MEMORY_API_ENABLE_AUTH')}'"
+                )
+                # Defensive access to internal attribute
+                enable_auth = None
+                try:
+                    auth_module = sys.modules.get("api.auth")
+                    if auth_module is not None:
+                        default_config = getattr(auth_module, "_default_config", None)
+                        if default_config is not None:
+                            enable_auth = getattr(default_config, "enable_auth", None)
+                except AttributeError:
+                    pass
+                print(
+                    f"sys.modules.get('api.auth')._default_config.enable_auth = {enable_auth}"
+                )
 
-            print(
-                f"os.getenv('MEMORY_API_ENABLE_AUTH') = '{os.getenv('MEMORY_API_ENABLE_AUTH')}'"
-            )
-            # Defensive access to internal attribute
-            enable_auth = None
-            try:
-                auth_module = sys.modules.get("api.auth")
-                if auth_module is not None:
-                    default_config = getattr(auth_module, "_default_config", None)
-                    if default_config is not None:
-                        enable_auth = getattr(default_config, "enable_auth", None)
-            except AttributeError:
-                pass
-            print(
-                f"sys.modules.get('api.auth')._default_config.enable_auth = {enable_auth}"
-            )
-
-            yield client, enable_auth
+                yield client, enable_auth
         finally:
             # Clean up any new modules imported during the test
             for module in list(sys.modules.keys()):
@@ -97,7 +98,7 @@ def test_endpoints_with_auth(test_env, expected_status):
     )
     print(f"\n=== Test: Direct import with auth {auth_state} ===")
 
-    for client, enable_auth in setup_test_client_with_env(test_env):
+    with setup_test_client_with_env(test_env) as (client, enable_auth):
         # Test the endpoint
         response = client.get("/api/v1/memory/stats")
         print(f"\nGET /api/v1/memory/stats response: {response.status_code}")
@@ -111,24 +112,24 @@ def test_endpoints_with_auth(test_env, expected_status):
 if __name__ == "__main__":
     try:
         # Run tests with auth disabled
-        for client, _ in setup_test_client_with_env(
+        with setup_test_client_with_env(
             {
                 "MEMORY_API_ENABLE_AUTH": "false",
                 "MEMORY_API_JWT_SECRET": "test-secret",
                 "MEMORY_API_KEY": "test-key",
             }
-        ):
+        ) as (client, _):
             response = client.get("/api/v1/memory/stats")
             assert response.status_code == 200
 
         # Run tests with auth enabled
-        for client, _ in setup_test_client_with_env(
+        with setup_test_client_with_env(
             {
                 "MEMORY_API_ENABLE_AUTH": "true",
                 "MEMORY_API_JWT_SECRET": "test-secret",
                 "MEMORY_API_KEY": "test-key",
             }
-        ):
+        ) as (client, _):
             response = client.get("/api/v1/memory/stats")
             assert response.status_code == 401
 

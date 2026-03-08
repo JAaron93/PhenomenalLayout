@@ -541,17 +541,3 @@ def merge_analyses(analyses: list[NeologismAnalysis]) -> NeologismAnalysis:
         merged.coverage_ratio = sum(a.coverage_ratio for a in analyses) / len(analyses)
 
     return merged
-
-
-def filter_neologisms_by_confidence(
-    neologisms: list[DetectedNeologism], min_confidence: float = 0.5
-) -> list[DetectedNeologism]:
-    """Filter neologisms by minimum confidence threshold."""
-    return [n for n in neologisms if n.confidence >= min_confidence]
-
-
-def sort_neologisms_by_confidence(
-    neologisms: list[DetectedNeologism], descending: bool = True
-) -> list[DetectedNeologism]:
-    """Sort neologisms by confidence score."""
-    return sorted(neologisms, key=lambda n: n.confidence, reverse=descending)

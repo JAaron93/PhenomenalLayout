@@ -1,6 +1,5 @@
 """Authentication utilities for API endpoints."""
 
-import functools
 import os
 import random
 import secrets
@@ -23,6 +22,7 @@ _LOG_METHODS = {
     "CRITICAL": logger.critical,
 }
 
+
 # Auth event logging configuration
 def _parse_sampling_rate() -> float:
     """Parse and validate AUTH_ACCESS_SAMPLING_RATE from environment."""
@@ -33,14 +33,16 @@ def _parse_sampling_rate() -> float:
         logger.warning(f"Invalid AUTH_ACCESS_SAMPLING_RATE '{raw}', using default 0.1")
         return 0.1
     if not 0.0 <= rate <= 1.0:
-        logger.warning(f"AUTH_ACCESS_SAMPLING_RATE {rate} out of range [0.0, 1.0], clamping")
+        logger.warning(
+            f"AUTH_ACCESS_SAMPLING_RATE {rate} out of range [0.0, 1.0], clamping"
+        )
         return max(0.0, min(1.0, rate))
     return rate
 
 
 def _parse_auth_log_level() -> str:
     """Parse and validate AUTH_ACCESS_LOG_LEVEL from environment.
-    
+
     Accepts common log level names: DEBUG, INFO, WARNING, ERROR, CRITICAL
     Returns 'DEBUG' as safe default for invalid values.
     """
@@ -68,7 +70,7 @@ class AuthConfig:
 
     def __init__(self, config: dict | None = None):
         """Initialize auth configuration.
-        
+
         Args:
             config: Optional configuration dict (for testing)
         """
@@ -76,11 +78,11 @@ class AuthConfig:
 
     def get(self, key: str, default=None):
         """Get configuration value from injected config or fallback to environment.
-        
+
         Args:
             key: Configuration key to look up
             default: Default value if not found
-            
+
         Returns:
             Configuration value from injected config or environment variable
         """
@@ -114,9 +116,13 @@ JWT_EXPIRATION_HOURS = 24
 # Security validation using default config
 if _default_config.enable_auth:
     if not _default_config.jwt_secret:
-        raise ValueError("MEMORY_API_JWT_SECRET environment variable is required when MEMORY_API_ENABLE_AUTH is true")
+        raise ValueError(
+            "MEMORY_API_JWT_SECRET environment variable is required when MEMORY_API_ENABLE_AUTH is true"
+        )
     if not _default_config.api_key:
-        raise ValueError("MEMORY_API_KEY environment variable is required when MEMORY_API_ENABLE_AUTH is true")
+        raise ValueError(
+            "MEMORY_API_KEY environment variable is required when MEMORY_API_ENABLE_AUTH is true"
+        )
 else:
     logger.warning(
         "AUTHENTICATION IS DISABLED. Anonymous users will be granted UserRole.ADMIN access. "
@@ -124,13 +130,17 @@ else:
     )
 
 # Security schemes - cached module-level instances based on auth enabled
-_API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False) if _default_config.enable_auth else None
+_API_KEY_HEADER = (
+    APIKeyHeader(name="X-API-Key", auto_error=False)
+    if _default_config.enable_auth
+    else None
+)
 _BEARER_SCHEME = HTTPBearer(auto_error=False) if _default_config.enable_auth else None
 
 
 def get_api_key_header():
     """Get API key header scheme based on current auth status.
-    
+
     Returns the cached module-level instance to avoid allocating
     new objects on every call.
     """
@@ -139,7 +149,7 @@ def get_api_key_header():
 
 def get_bearer_scheme():
     """Get bearer scheme based on current auth status.
-    
+
     Returns the cached module-level instance to avoid allocating
     new objects on every call.
     """
@@ -148,7 +158,7 @@ def get_bearer_scheme():
 
 def is_auth_enabled() -> bool:
     """Check if authentication is enabled.
-    
+
     Returns:
         True if authentication is enabled, False otherwise.
     """
@@ -157,33 +167,39 @@ def is_auth_enabled() -> bool:
 
 class AuthError(Exception):
     """Authentication error."""
+
     pass
 
 
 class UserRole:
     """User roles for access control."""
+
     READ_ONLY = "read_only"
     ADMIN = "admin"
 
 
 # Anonymous user returned when authentication is disabled
 # Wrapped in MappingProxyType to prevent accidental mutation
-ANONYMOUS_USER = MappingProxyType({
-    "user_id": "anonymous",
-    "role": UserRole.ADMIN,
-    "authenticated": False,
-    "method": "disabled"
-})
+ANONYMOUS_USER = MappingProxyType(
+    {
+        "user_id": "anonymous",
+        "role": UserRole.ADMIN,
+        "authenticated": False,
+        "method": "disabled",
+    }
+)
 
 
-def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY, config: AuthConfig | None = None) -> str:
+def create_jwt_token(
+    user_id: str, role: str = UserRole.READ_ONLY, config: AuthConfig | None = None
+) -> str:
     """Create a JWT token for authentication.
-    
+
     Args:
         user_id: User identifier
         role: User role (read_only or admin)
         config: Optional auth configuration (uses default if not provided)
-        
+
     Returns:
         JWT token string
     """
@@ -198,21 +214,21 @@ def create_jwt_token(user_id: str, role: str = UserRole.READ_ONLY, config: AuthC
         "role": role,
         "exp": expiration,
         "iat": now,
-        "type": "access"
+        "type": "access",
     }
     return jwt.encode(payload, auth_config.jwt_secret, algorithm=JWT_ALGORITHM)
 
 
 def verify_jwt_token(token: str, config: AuthConfig | None = None) -> dict:
     """Verify and decode a JWT token.
-    
+
     Args:
         token: JWT token string
         config: Optional auth configuration (uses default if not provided)
-        
+
     Returns:
         Decoded token payload
-        
+
     Raises:
         AuthError: If token is invalid or expired
     """
@@ -231,11 +247,11 @@ def verify_jwt_token(token: str, config: AuthConfig | None = None) -> dict:
 
 def verify_api_key(api_key: str, config: AuthConfig | None = None) -> bool:
     """Verify API key against configured key.
-    
+
     Args:
         api_key: API key to verify
         config: Optional auth configuration (uses default if not provided)
-        
+
     Returns:
         True if API key is valid, False otherwise
     """
@@ -255,18 +271,18 @@ def verify_api_key(api_key: str, config: AuthConfig | None = None) -> bool:
 async def get_current_user(
     request: Request,
     api_key: str | None = None,
-    credentials: HTTPAuthorizationCredentials | None = None
+    credentials: HTTPAuthorizationCredentials | None = None,
 ) -> dict:
     """Get current user from authentication credentials.
-    
+
     Args:
         request: FastAPI request object
         api_key: API key from header
         credentials: Bearer token credentials
-        
+
     Returns:
         User information dictionary
-        
+
     Raises:
         HTTPException: If authentication fails
     """
@@ -284,18 +300,18 @@ async def get_current_user(
             "user_id": "admin",
             "role": UserRole.ADMIN,
             "authenticated": True,
-            "method": "api_key"
+            "method": "api_key",
         }
 
     # Check JWT token using dynamic scheme
-    if bearer_scheme and hasattr(credentials, 'credentials'):
+    if bearer_scheme and hasattr(credentials, "credentials"):
         try:
             payload = verify_jwt_token(credentials.credentials)
             return {
                 "user_id": payload.get("user_id", "unknown"),
                 "role": payload.get("role", UserRole.READ_ONLY),
                 "authenticated": True,
-                "method": "jwt"
+                "method": "jwt",
             }
         except AuthError as e:
             raise HTTPException(
@@ -315,15 +331,15 @@ async def get_current_user(
 async def get_current_user_optional(
     request: Request,
     api_key: str | None = None,
-    credentials: HTTPAuthorizationCredentials | None = None
+    credentials: HTTPAuthorizationCredentials | None = None,
 ) -> dict | None:
     """Get current user from authentication credentials (optional).
-    
+
     Args:
         request: FastAPI request object
         api_key: API key from header
         credentials: Bearer token credentials
-        
+
     Returns:
         User information dictionary or None if not authenticated
     """
@@ -338,54 +354,14 @@ async def get_current_user_optional(
         return None
 
 
-def require_role(required_role: str):
-    """Decorator to require specific user role.
-    
-    Args:
-        required_role: Required role (read_only or admin)
-        
-    Returns:
-        Decorator function
-    """
-    def decorator(func):
-        @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Get user from kwargs (injected by dependencies)
-            current_user = kwargs.get("current_user")
-            if not current_user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required"
-                )
-
-            user_role = current_user.get("role", UserRole.READ_ONLY)
-
-            # Admin can access everything
-            if user_role == UserRole.ADMIN:
-                return await func(*args, **kwargs)
-
-            # Read-only can only access read-only endpoints
-            if required_role == UserRole.READ_ONLY and user_role == UserRole.READ_ONLY:
-                return await func(*args, **kwargs)
-
-            # Access denied
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions"
-            )
-
-        return wrapper
-    return decorator
-
-
 def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
     """Log authentication event for audit trail with configurable sampling.
-    
+
     Access events are sampled to prevent log flooding in high-traffic scenarios.
     Configure via environment variables:
     - AUTH_ACCESS_SAMPLING_RATE: Fraction of access events to log (0.0-1.0, default 0.1)
     - AUTH_ACCESS_LOG_LEVEL: Log level for access events (DEBUG/INFO, default DEBUG)
-    
+
     Args:
         event_type: Type of event (login, logout, access, denied)
         user_id: User identifier
@@ -410,16 +386,16 @@ def log_auth_event(event_type: str, user_id: str, details: str = "") -> None:
 
 
 async def _extract_credentials(
-    request: Request
+    request: Request,
 ) -> tuple[str | None, HTTPAuthorizationCredentials | None]:
     """Extract API key and bearer token credentials from request.
-    
+
     Helper function to avoid duplicating credential extraction logic.
     Respects ENABLE_AUTH setting.
-    
+
     Args:
         request: FastAPI request object
-        
+
     Returns:
         Tuple of (api_key, credentials) where both may be None
     """
@@ -441,55 +417,50 @@ async def _extract_credentials(
 
 
 # Authentication dependencies for FastAPI
-async def get_current_user_dependency(
-    request: Request
-) -> dict:
+async def get_current_user_dependency(request: Request) -> dict:
     """FastAPI dependency for getting current user."""
     api_key, credentials = await _extract_credentials(request)
     user = await get_current_user(request, api_key, credentials)
     log_auth_event(
-        "access",
-        user.get("user_id", "unknown"),
-        f"Role: {user.get('role')}"
+        "access", user.get("user_id", "unknown"), f"Role: {user.get('role')}"
     )
     return user
 
 
-async def get_current_user_optional_dependency(
-    request: Request
-) -> dict | None:
+async def get_current_user_optional_dependency(request: Request) -> dict | None:
     """FastAPI dependency for getting current user (optional)."""
     api_key, credentials = await _extract_credentials(request)
     user = await get_current_user_optional(request, api_key, credentials)
     if user:
         log_auth_event(
-            "access",
-            user.get("user_id", "unknown"),
-            f"Role: {user.get('role')}"
+            "access", user.get("user_id", "unknown"), f"Role: {user.get('role')}"
         )
     return user
 
 
 # Role-based access dependencies
-async def get_read_only_user(current_user: dict = Depends(get_current_user_dependency)) -> dict:
+async def get_read_only_user(
+    current_user: dict = Depends(get_current_user_dependency),
+) -> dict:
     """Dependency for read-only access."""
     user_role = current_user.get("role", UserRole.READ_ONLY)
-    
+
     # Both admin and read-only users can access read-only endpoints
     if user_role in (UserRole.ADMIN, UserRole.READ_ONLY):
         return current_user
-        
+
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Read-only or admin access required"
+        detail="Read-only or admin access required",
     )
 
 
-async def get_admin_user(current_user: dict = Depends(get_current_user_dependency)) -> dict:
+async def get_admin_user(
+    current_user: dict = Depends(get_current_user_dependency),
+) -> dict:
     """Dependency for admin access."""
     if current_user.get("role") != UserRole.ADMIN:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
         )
     return current_user

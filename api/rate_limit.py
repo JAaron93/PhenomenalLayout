@@ -14,18 +14,25 @@ logger = logging.getLogger(__name__)
 
 def is_rate_limiting_enabled() -> bool:
     """Check if rate limiting is enabled via environment variable.
-    
+
     Returns:
         True if rate limiting is enabled (env var is "true" or "enabled"), False otherwise
     """
-    return os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() in ("true", "enabled")
+    return os.getenv("MEMORY_API_ENABLE_RATE_LIMITING", "true").lower() in (
+        "true",
+        "enabled",
+    )
 
 
 # Configuration for trusted proxies and forwarded headers
-TRUST_FORWARDER_HEADERS = os.getenv("TRUST_FORWARDER_HEADERS", "false").lower() == "true"
-TRUSTED_PROXIES = [
-    ip.strip() for ip in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",")
-] if TRUST_FORWARDER_HEADERS else []
+TRUST_FORWARDER_HEADERS = (
+    os.getenv("TRUST_FORWARDER_HEADERS", "false").lower() == "true"
+)
+TRUSTED_PROXIES = (
+    [ip.strip() for ip in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",")]
+    if TRUST_FORWARDER_HEADERS
+    else []
+)
 ENABLE_RATE_LIMITING = is_rate_limiting_enabled()
 
 
@@ -34,7 +41,7 @@ class TokenBucket:
 
     def __init__(self, max_tokens: float, refill_rate: float):
         """Initialize token bucket.
-        
+
         Args:
             max_tokens: Maximum number of tokens in bucket
             refill_rate: Tokens per second refill rate
@@ -47,10 +54,10 @@ class TokenBucket:
 
     def consume(self, tokens: float = 1.0) -> bool:
         """Consume tokens from bucket.
-        
+
         Args:
             tokens: Number of tokens to consume
-            
+
         Returns:
             True if tokens were consumed, False if insufficient tokens
         """
@@ -70,10 +77,10 @@ class TokenBucket:
 
     def time_until_available(self, tokens: float = 1.0) -> float:
         """Get time until tokens are available.
-        
+
         Args:
             tokens: Number of tokens needed
-            
+
         Returns:
             Seconds until tokens are available
         """
@@ -93,18 +100,22 @@ class RateLimiter:
         self._buckets: dict[str, TokenBucket] = {}
         self._cleanup_thread: threading.Thread | None = None
         self._stop_event = threading.Event()  # For shutdown signaling
-        self._stop_requested = False  # Guard flag to prevent thread creation during shutdown
+        self._stop_requested = (
+            False  # Guard flag to prevent thread creation during shutdown
+        )
         self._lock = threading.Lock()
         self._cleanup_lock = threading.Lock()
 
-    def get_bucket(self, client_id: str, max_tokens: float, refill_rate: float) -> TokenBucket:
+    def get_bucket(
+        self, client_id: str, max_tokens: float, refill_rate: float
+    ) -> TokenBucket:
         """Get or create token bucket for client.
-        
+
         Args:
             client_id: Client identifier (IP address)
             max_tokens: Maximum tokens for bucket
             refill_rate: Refill rate in tokens per second
-            
+
         Returns:
             Token bucket for client
         """
@@ -116,20 +127,16 @@ class RateLimiter:
             return self._buckets[bucket_key]
 
     def is_allowed(
-        self,
-        client_id: str,
-        max_tokens: float,
-        refill_rate: float,
-        tokens: float = 1.0
+        self, client_id: str, max_tokens: float, refill_rate: float, tokens: float = 1.0
     ) -> tuple[bool, float]:
         """Check if request is allowed.
-        
+
         Args:
             client_id: Client identifier
             max_tokens: Maximum tokens for bucket
             refill_rate: Refill rate in tokens per second
             tokens: Number of tokens required
-            
+
         Returns:
             Tuple of (allowed, retry_after_seconds)
         """
@@ -152,7 +159,7 @@ class RateLimiter:
                 self._cleanup_thread = threading.Thread(
                     target=self._cleanup_old_buckets,
                     daemon=True,
-                    name="RateLimiterCleanup"
+                    name="RateLimiterCleanup",
                 )
                 self._cleanup_thread.start()
 
@@ -190,20 +197,19 @@ class RateLimiter:
             if thread.is_alive():
                 # Thread didn't shut down gracefully, but it's daemon
                 # so will exit on process exit
-                thread_name = getattr(thread, 'name', 'unknown')
-                thread_id = getattr(thread, 'ident', 'unknown')
+                thread_name = getattr(thread, "name", "unknown")
+                thread_id = getattr(thread, "ident", "unknown")
                 logger.warning(
                     "Daemon cleanup thread did not shut down within "
                     "timeout. Thread name: %s, Thread ID: %s",
                     thread_name,
-                    thread_id
+                    thread_id,
                 )
 
         # Clear the thread reference only if it's still the same thread we joined
         with self._cleanup_lock:
             if self._cleanup_thread is thread:
                 self._cleanup_thread = None
-
 
 
 # Global rate limiter instance (lazy initialization)
@@ -213,11 +219,11 @@ _rate_limiter_lock = threading.Lock()
 
 def get_rate_limiter() -> RateLimiter:
     """Get or create the global rate limiter instance (lazy initialization).
-    
+
     This function ensures the rate limiter is initialized on first use
     rather than at module import time, avoiding spawning threads during
     import.
-    
+
     Returns:
         The global RateLimiter instance
     """
@@ -230,23 +236,11 @@ def get_rate_limiter() -> RateLimiter:
     return _rate_limiter
 
 
-def init_rate_limiter() -> RateLimiter:
-    """Initialize the global rate limiter instance.
-    
-    This function should be called during application startup to
-    initialize the rate limiter and start its cleanup thread.
-    
-    Returns:
-        The initialized RateLimiter instance
-    """
-    return get_rate_limiter()
-
-
 # Rate limit configurations (requests per minute)
 RATE_LIMITS = {
-    "read": int(os.getenv("MEMORY_API_READ_RATE_LIMIT", "60")),      # 60 requests/minute
-    "write": int(os.getenv("MEMORY_API_WRITE_RATE_LIMIT", "10")),     # 10 requests/minute
-    "admin": int(os.getenv("MEMORY_API_ADMIN_RATE_LIMIT", "5")),      # 5 requests/minute
+    "read": int(os.getenv("MEMORY_API_READ_RATE_LIMIT", "60")),  # 60 requests/minute
+    "write": int(os.getenv("MEMORY_API_WRITE_RATE_LIMIT", "10")),  # 10 requests/minute
+    "admin": int(os.getenv("MEMORY_API_ADMIN_RATE_LIMIT", "5")),  # 5 requests/minute
 }
 
 # Convert to requests per second for token bucket
@@ -259,13 +253,14 @@ RATE_LIMITS_PER_SECOND = {
 
 def get_client_ip(request: Request) -> str:
     """Get client IP address from request with security validation.
-    
+
     Args:
         request: FastAPI request
-        
+
     Returns:
         Client IP address (validated and trusted)
     """
+
     def validate_ip(ip_str: str) -> str | None:
         """Validate IP address format."""
         try:
@@ -293,7 +288,9 @@ def get_client_ip(request: Request) -> str:
         return False
 
     # Only use forwarded headers if configured and request comes from trusted proxy
-    if TRUST_FORWARDER_HEADERS and is_trusted_proxy(request.client.host if request.client else "unknown"):
+    if TRUST_FORWARDER_HEADERS and is_trusted_proxy(
+        request.client.host if request.client else "unknown"
+    ):
         # Check X-Forwarded-For header
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
@@ -315,20 +312,18 @@ def get_client_ip(request: Request) -> str:
 
 
 def check_rate_limit(
-    request: Request,
-    limit_type: str,
-    tokens: float = 1.0
+    request: Request, limit_type: str, tokens: float = 1.0
 ) -> tuple[bool, float]:
     """Check if request is within rate limits.
-    
+
     Args:
         request: FastAPI request
         limit_type: Type of limit (read, write, admin)
         tokens: Number of tokens required
-        
+
     Returns:
         Tuple of (allowed, retry_after_seconds)
-        
+
     Raises:
         HTTPException: If rate limit exceeded
     """
@@ -357,20 +352,16 @@ def check_rate_limit(
                 "Retry-After": str(int(retry_after)),
                 "X-RateLimit-Limit": str(max_tokens),
                 "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(int(time.time() + retry_after))
-            }
+                "X-RateLimit-Reset": str(int(time.time() + retry_after)),
+            },
         )
 
     return allowed, retry_after
 
 
-def add_rate_limit_headers(
-    response: Response,
-    limit_type: str,
-    client_ip: str
-) -> None:
+def add_rate_limit_headers(response: Response, limit_type: str, client_ip: str) -> None:
     """Add rate limit headers to response.
-    
+
     Args:
         response: FastAPI response
         limit_type: Type of limit
@@ -395,64 +386,18 @@ def add_rate_limit_headers(
     response.headers["X-RateLimit-Reset"] = str(reset_time)
 
 
-class RateLimitMiddleware:
-    """Rate limiting middleware for FastAPI."""
-
-    def __init__(self, limit_type: str):
-        """Initialize middleware.
-        
-        Args:
-            limit_type: Type of rate limit (read, write, admin)
-        """
-        self.limit_type = limit_type
-
-    async def __call__(self, request: Request, call_next):
-        """Middleware call method.
-        
-        Args:
-            request: FastAPI request
-            call_next: Next middleware in chain
-            
-        Returns:
-            Response
-        """
-        # Check rate limit
-        check_rate_limit(request, self.limit_type)
-
-        # Call next middleware
-        response = await call_next(request)
-
-        # Add rate limit headers
-        client_ip = get_client_ip(request)
-        add_rate_limit_headers(response, self.limit_type, client_ip)
-
-        return response
-
-
-def create_rate_limit_middleware(limit_type: str):
-    """Create rate limiting middleware.
-    
-    Args:
-        limit_type: Type of rate limit
-        
-    Returns:
-        Middleware function
-    """
-    middleware = RateLimitMiddleware(limit_type)
-    return middleware
-
-
 # Decorator for rate limiting endpoints
 def rate_limit(limit_type: str, tokens: float = 1.0):
     """Decorator for rate limiting endpoints.
-    
+
     Args:
         limit_type: Type of rate limit (read, write, admin)
         tokens: Number of tokens required
-        
+
     Returns:
         Decorator function
     """
+
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -474,27 +419,5 @@ def rate_limit(limit_type: str, tokens: float = 1.0):
             return result
 
         return wrapper
+
     return decorator
-
-
-# Rate limiting utilities
-def get_rate_limit_stats() -> dict:
-    """Get rate limiting statistics.
-    
-    Returns:
-        Rate limiting statistics
-    """
-    rate_limiter = get_rate_limiter()
-    with rate_limiter._lock:
-        return {
-            "active_buckets": len(rate_limiter._buckets),
-            "rate_limits": RATE_LIMITS,
-            "rate_limits_per_second": RATE_LIMITS_PER_SECOND
-        }
-
-
-def reset_rate_limits() -> None:
-    """Reset all rate limits (for testing/admin use)."""
-    rate_limiter = get_rate_limiter()
-    with rate_limiter._lock:
-        rate_limiter._buckets.clear()

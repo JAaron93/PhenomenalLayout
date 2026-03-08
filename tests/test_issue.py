@@ -26,62 +26,73 @@ def test_authentication_disabled():
 
     # Explicit list of modules to reload for testing
     MODULES_TO_RELOAD = ["app", "api", "api.auth", "api.routes", "api.memory_routes"]
+    original_modules = {
+        module_name: sys.modules[module_name]
+        for module_name in MODULES_TO_RELOAD
+        if module_name in sys.modules
+    }
 
-    # Clear specific modules before reloading to test with new environment
-    for module_name in MODULES_TO_RELOAD:
-        if module_name in sys.modules:
-            print(f"Removing module from sys.modules: {module_name}")
-            del sys.modules[module_name]
+    try:
+        # Clear specific modules before reloading to test with new environment
+        for module_name in MODULES_TO_RELOAD:
+            if module_name in sys.modules:
+                print(f"Removing module from sys.modules: {module_name}")
+                del sys.modules[module_name]
 
-    with patch.dict("os.environ", test_env):
-        # Import modules after environment is patched
-        from app import create_app
+        with patch.dict("os.environ", test_env):
+            # Import modules after environment is patched
+            from app import create_app
 
-        client = TestClient(create_app())
+            client = TestClient(create_app())
 
-        # Test endpoints without authentication
-        print("Testing without authentication...")
+            # Test endpoints without authentication
+            print("Testing without authentication...")
 
-        # Dispatch map for handling mixed HTTP methods
-        method_map = {
-            "GET": client.get,
-            "POST": client.post,
-        }
+            # Dispatch map for handling mixed HTTP methods
+            method_map = {
+                "GET": client.get,
+                "POST": client.post,
+            }
 
-        # Test read endpoints
-        read_endpoints = [
-            ("/api/v1/memory/stats", "GET"),
-            ("/api/v1/memory/monitoring/status", "GET"),
-        ]
+            # Test read endpoints
+            read_endpoints = [
+                ("/api/v1/memory/stats", "GET"),
+                ("/api/v1/memory/monitoring/status", "GET"),
+            ]
 
-        for url, method in read_endpoints:
-            response = method_map[method](url)
-            print(f"\n{method} {url}")
-            print(f"Status: {response.status_code}")
-            print(f"Response: {response.text}")
-            assert response.status_code == 200, (
-                f"Expected 200 for {url}, got {response.status_code}"
-            )
+            for url, method in read_endpoints:
+                response = method_map[method](url)
+                print(f"\n{method} {url}")
+                print(f"Status: {response.status_code}")
+                print(f"Response: {response.text}")
+                assert response.status_code == 200, (
+                    f"Expected 200 for {url}, got {response.status_code}"
+                )
 
-        # Test admin endpoints
-        admin_endpoints = [
-            ("/api/v1/memory/gc", "POST"),
-            ("/api/v1/memory/monitoring/start", "POST"),
-            ("/api/v1/memory/monitoring/stop", "POST"),
-        ]
+            # Test admin endpoints
+            admin_endpoints = [
+                ("/api/v1/memory/gc", "POST"),
+                ("/api/v1/memory/monitoring/start", "POST"),
+                ("/api/v1/memory/monitoring/stop", "POST"),
+            ]
 
-        for url, method in admin_endpoints:
-            response = method_map[method](url)
+            for url, method in admin_endpoints:
+                response = method_map[method](url)
 
-            print(f"\n{method} {url}")
-            print(f"Status: {response.status_code}")
-            print(f"Response: {response.text}")
-            assert response.status_code == 200, (
-                f"Expected 200 for {url}, got {response.status_code}"
-            )
+                print(f"\n{method} {url}")
+                print(f"Status: {response.status_code}")
+                print(f"Response: {response.text}")
+                assert response.status_code == 200, (
+                    f"Expected 200 for {url}, got {response.status_code}"
+                )
 
-        print("\n✓ All tests passed!")
-        return True
+            print("\n✓ All tests passed!")
+    finally:
+        for module_name in MODULES_TO_RELOAD:
+            if module_name in original_modules:
+                sys.modules[module_name] = original_modules[module_name]
+            else:
+                sys.modules.pop(module_name, None)
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ from typing import Any, Generic, TypeVar
 
 def _normalize_value(value: Any) -> Hashable:
     """Recursively normalize unhashable values into hashable representations.
-    
+
     Handles:
     - Lists -> tuples (recursively normalized)
     - Sets -> sorted tuples (recursively normalized)
@@ -58,27 +58,20 @@ def _normalize_value(value: Any) -> Hashable:
             except TypeError:
                 # Fallback to stable sort with type and string representation
                 sorted_items = sorted(
-                    value.items(), 
-                    key=lambda kv: (type(kv[0]).__name__, str(kv[0]))
+                    value.items(), key=lambda kv: (type(kv[0]).__name__, str(kv[0]))
                 )
             for k, v in sorted_items:
-                normalized_items.append(
-                    (_normalize_value(k), _normalize_value(v))
-                )
+                normalized_items.append((_normalize_value(k), _normalize_value(v)))
             return tuple(normalized_items)
         elif hasattr(value, "__dataclass_fields__"):
             # Handle dataclass objects
             import dataclasses
 
             normalized_fields = []
-            for field_obj in sorted(
-                dataclasses.fields(value), key=lambda f: f.name
-            ):
+            for field_obj in sorted(dataclasses.fields(value), key=lambda f: f.name):
                 field_name = field_obj.name
                 field_value = getattr(value, field_name)
-                normalized_fields.append(
-                    (field_name, _normalize_value(field_value))
-                )
+                normalized_fields.append((field_name, _normalize_value(field_value)))
             return (value.__class__.__name__, tuple(normalized_fields))
         elif hasattr(value, "__dict__"):
             # Handle regular objects with __dict__
@@ -90,6 +83,7 @@ def _normalize_value(value: Any) -> Hashable:
         else:
             # For any other unhashable type, use repr as stable string representation
             return repr(value)
+
 
 # Type variables for generic implementations
 T = TypeVar("T")
@@ -232,7 +226,7 @@ class SmartCache(Generic[K, V]):
     - FIFO: OrderedDict for O(1) eviction
     - LRU: OrderedDict for O(1) move_to_end and eviction
     """
-    
+
     # Sentinel object to distinguish between miss and cached None
     MISS = object()
 
@@ -481,35 +475,21 @@ class DynamicRegistry(Generic[T]):
             return self._metrics.get(key, PerformanceMetrics(key))
         return dict(self._metrics)
 
-    def get_registered_keys(self) -> list[str]:
-        """Get list of all registered factory keys."""
-        with self._lock:
-            return list(self._registry.keys())
-
 
 class DecisionTreeNode(Generic[T]):
     """Node in a dynamic decision tree for pattern matching."""
 
-    def __init__(self, condition: Callable[[Any], bool], result: T | None = None, cache: SmartCache[str, T] | None = None):
+    def __init__(
+        self,
+        condition: Callable[[Any], bool],
+        result: T | None = None,
+        cache: SmartCache[str, T] | None = None,
+    ):
         self.condition = condition
         self.result = result
         self.children: list[DecisionTreeNode[T]] = []
         self.cache: SmartCache[str, T] | None = cache
 
-    def add_child(self, child: DecisionTreeNode[T]) -> None:
-        """Add a child node to the decision tree.
-        
-        The child inherits the parent's cache for shared caching across
-        the entire decision tree. This ensures evaluation results are
-        cached at the appropriate level and shared among all descendants.
-        
-        Note: If the child already has a cache, it will be replaced with
-        the parent's cache. Nodes should not be shared across multiple trees.
-        """
-        # Propagate parent's cache to child for shared caching
-        if self.cache is not None:
-            child.cache = self.cache
-        self.children.append(child)
 
     def evaluate(self, context: Any) -> T | None:
         """Evaluate the decision tree with caching."""
@@ -630,19 +610,6 @@ class StrategyRegistry(Generic[T]):
         """Get strategy selection performance metrics."""
         return self._metrics
 
-    @property
-    def strategy_count(self) -> int:
-        """Get the number of registered strategies.
-
-        Returns:
-            int: The total number of strategies currently registered in this registry.
-
-        Note:
-            This property provides public access to the strategy count without
-            exposing the internal _strategies list implementation.
-        """
-        return len(self._strategies)
-
     def __len__(self) -> int:
         """Return the number of registered strategies.
 
@@ -753,10 +720,6 @@ class DynamicFactory(Generic[T]):
             return creator(*args, **kwargs)
         return None
 
-    def get_registered_types(self) -> list[str]:
-        """Get list of registered type names."""
-        return list(self._creators.keys())
-
 
 # Global registry instances for common patterns
 _GLOBAL_REGISTRIES: dict[str, DynamicRegistry] = {}
@@ -771,9 +734,3 @@ def get_registry(name: str, **kwargs) -> DynamicRegistry:
         return _GLOBAL_REGISTRIES[name]
 
 
-def clear_all_registries() -> None:
-    """Clear all global registries (useful for testing)."""
-    with _GLOBAL_LOCK:
-        for registry in _GLOBAL_REGISTRIES.values():
-            registry.clear_cache()
-        _GLOBAL_REGISTRIES.clear()

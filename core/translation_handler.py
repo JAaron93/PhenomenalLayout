@@ -403,7 +403,7 @@ async def translate_content(
 
                 for start in range(0, len(indices_to_translate), batch_size):
                     batch_indices: list[int] = indices_to_translate[
-                        start: start + batch_size
+                        start : start + batch_size
                     ]
                     batch_texts: list[str] = [page_texts[idx] for idx in batch_indices]
 
@@ -418,9 +418,9 @@ async def translate_content(
                             f"Batch translation failed for page {page_num} "
                             f"(indices {batch_indices}): {e}"
                         )
-                        batch_translated: list[
-                            str
-                        ] = batch_texts  # Fallback to original
+                        batch_translated: list[str] = (
+                            batch_texts  # Fallback to original
+                        )
 
                     # Map translated texts back to their original positions
                     for idx, translated in zip(
@@ -599,11 +599,6 @@ async def perform_advanced_translation() -> None:
         logger.error(f"Advanced translation error: {e!s}")
         state.translation_status = "error"
         state.error_message = str(e)
-
-
-def update_translation_progress(progress: int) -> None:
-    """Update translation progress."""
-    state.translation_progress = min(30 + (progress * 0.6), 90)
 
 
 def generate_output_filename(original_filename: str, target_language: str) -> str:
