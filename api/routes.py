@@ -23,6 +23,7 @@ from core.translation_handler import (
     file_handler,
     language_detector,
     neologism_detector,
+    philosophy_translation_service,
     process_advanced_translation_job,
     user_choice_manager,
 )
@@ -40,6 +41,20 @@ from models.user_choice_models import (
 )
 from utils import pdf_validator
 from utils.language_utils import extract_text_sample_for_language_detection
+
+# Import dolphin client for configuration exposure
+from services.dolphin_client import DEFAULT_LOCAL_ENDPOINT, DEFAULT_MODAL_ENDPOINT
+
+# Import services for configuration endpoints
+from services.philosophical_context_analyzer import PhilosophicalContextAnalyzer
+from services.neologism_detector import NeologismDetector
+from services.philosophy_enhanced_translation_service import (
+    PhilosophyEnhancedTranslationService,
+    translate_with_philosophy_awareness,
+)
+from services.neologism_detector import NeologismDetector, merge_neologism_analyses
+from services.pdf_quality_validator import PDFQualityValidator
+from services.confidence_scorer import ConfidenceScorer
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -91,6 +106,244 @@ async def philosophy_interface(request: Request) -> HTMLResponse:
         "philosophy_interface.html",
         {"request": request},
     )
+
+
+# Dolphin OCR Configuration Endpoints
+@api_router.get("/config/dolphin")
+async def get_dolphin_configuration() -> dict[str, Any]:
+    """Get Dolphin OCR service configuration."""
+    import os
+    
+    endpoint_type = os.getenv("DOLPHIN_ENDPOINT_TYPE", "modal").lower()
+    local_endpoint = os.getenv("DOLPHIN_LOCAL_ENDPOINT", DEFAULT_LOCAL_ENDPOINT)
+    modal_endpoint = os.getenv("DOLPHIN_ENDPOINT", DEFAULT_MODAL_ENDPOINT)
+    timeout = os.getenv("DOLPHIN_TIMEOUT_SECONDS", "300")
+    
+    # Determine active endpoint
+    if endpoint_type == "local":
+        active_endpoint = local_endpoint
+    else:
+        active_endpoint = modal_endpoint
+    
+    return {
+        "endpoint_type": endpoint_type,
+        "local_endpoint": local_endpoint,
+        "modal_endpoint": modal_endpoint,
+        "active_endpoint": active_endpoint,
+        "timeout_seconds": timeout,
+        "available_endpoint_types": ["modal", "local"],
+    }
+
+
+@api_router.post("/config/dolphin")
+async def update_dolphin_configuration(config_data: dict[str, Any]) -> dict[str, Any]:
+    """Update Dolphin OCR service configuration.
+    
+    Note: This only updates the runtime environment. For persistent changes,
+    update the environment variables in your deployment configuration.
+    """
+    import os
+    
+    valid_keys = {"DOLPHIN_ENDPOINT_TYPE", "DOLPHIN_LOCAL_ENDPOINT", "DOLPHIN_TIMEOUT_SECONDS"}
+    updated_keys = []
+    
+    for key, value in config_data.items():
+        if key in valid_keys:
+            os.environ[key] = str(value)
+            updated_keys.append(key)
+    
+    if updated_keys:
+        return {
+            "success": True,
+            "message": f"Updated configuration: {', '.join(updated_keys)}",
+            "note": "Runtime changes will take effect on next request",
+        }
+    else:
+        return {
+            "success": False,
+            "message": "No valid configuration keys provided",
+            "valid_keys": list(valid_keys),
+        }
+
+
+# Philosophy Terminology Management Endpoints
+@api_router.get("/philosophy/terminology")
+async def get_terminology_map() -> dict[str, Any]:
+    """Get the current philosophical terminology map."""
+    try:
+        # Access the philosophical context analyzer from neologism_detector
+        analyzer = neologism_detector.philosophical_context_analyzer
+        terminology_map = analyzer.terminology_map
+        
+        return {
+            "terminology_map": terminology_map,
+            "term_count": len(terminology_map),
+        }
+    except Exception as e:
+        logger.error("Error getting terminology map: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/philosophy/terminology")
+async def update_terminology_map(terminology_data: dict[str, Any]) -> dict[str, Any]:
+    """Update the philosophical terminology map with new terms.
+    
+    This enables runtime terminology management for philosophy-aware translation.
+    """
+    try:
+        new_terms = terminology_data.get("terminology", {})
+        
+        if not isinstance(new_terms, dict):
+            raise HTTPException(
+                status_code=400, 
+                detail="Terminology must be a dictionary mapping terms to translations"
+            )
+        
+        # Access the philosophical context analyzer from neologism_detector
+        analyzer = neologism_detector.philosophical_context_analyzer
+        
+        # Update the terminology map
+        analyzer.update_terminology_map(new_terms)
+        
+        return {
+            "success": True,
+            "message": f"Updated terminology map with {len(new_terms)} new terms",
+            "total_terms": len(analyzer.terminology_map),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error updating terminology map: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Philosophy-Enhanced Translation Configuration Endpoints
+@api_router.get("/philosophy/config")
+async def get_philosophy_translation_config() -> dict[str, Any]:
+    """Get philosophy-enhanced translation service configuration."""
+    try:
+        config = philosophy_translation_service.get_statistics().get("configuration", {})
+        
+        return {
+            "preserve_neologisms_by_default": config.get("preserve_neologisms_by_default", True),
+            "neologism_confidence_threshold": config.get("neologism_confidence_threshold", 0.5),
+            "chunk_size": config.get("chunk_size", 2000),
+            "available_providers": philosophy_translation_service.get_available_providers(),
+        }
+    except Exception as e:
+        logger.error("Error getting philosophy translation config: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/philosophy/config")
+async def update_philosophy_translation_config(config_data: dict[str, Any]) -> dict[str, Any]:
+    """Update philosophy-enhanced translation service configuration."""
+    try:
+        # Map API keys to service parameter names
+        param_mapping = {
+            "preserve_neologisms_by_default": "preserve_neologisms_by_default",
+            "neologism_confidence_threshold": "neologism_confidence_threshold",
+            "chunk_size": "chunk_size",
+        }
+        
+        # Build kwargs for update_configuration
+        kwargs = {}
+        for api_key, param_name in param_mapping.items():
+            if api_key in config_data:
+                kwargs[param_name] = config_data[api_key]
+        
+        if kwargs:
+            philosophy_translation_service.update_configuration(**kwargs)
+            return {
+                "success": True,
+                "message": f"Updated configuration: {', '.join(kwargs.keys())}",
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No valid configuration keys provided",
+                "valid_keys": list(param_mapping.keys()),
+            }
+    except Exception as e:
+        logger.error("Error updating philosophy translation config: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/philosophy/translate")
+async def translate_with_philosophy(
+    translation_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Translate text with philosophy awareness.
+    
+    This endpoint uses the philosophy-enhanced translation service to detect
+    and preserve neologisms while applying user choices.
+    """
+    try:
+        text = translation_data.get("text", "")
+        source_lang = translation_data.get("source_language", "de")
+        target_lang = translation_data.get("target_language", "en")
+        provider = translation_data.get("provider", "auto")
+        session_id = translation_data.get("session_id")
+        
+        if not text:
+            raise HTTPException(
+                status_code=400,
+                detail="Text is required for translation"
+            )
+        
+        result = await translate_with_philosophy_awareness(
+            text=text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            provider=provider,
+            session_id=session_id,
+            service=philosophy_translation_service,
+        )
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error in philosophy-aware translation: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Neologism Analysis Utilities
+@api_router.post("/philosophy/merge-analyses")
+async def merge_neologism_analyses_endpoint(
+    merge_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge multiple neologism analyses into a single comprehensive analysis.
+    
+    This is useful for batch processing or combining results from different
+    detection passes.
+    """
+    try:
+        analyses = merge_data.get("analyses", [])
+        
+        if not analyses:
+            raise HTTPException(
+                status_code=400,
+                detail="No analyses provided for merging"
+            )
+        
+        if not isinstance(analyses, list):
+            raise HTTPException(
+                status_code=400,
+                detail="Analyses must be a list"
+            )
+        
+        merged = merge_neologism_analyses(analyses)
+        
+        return {
+            "success": True,
+            "merged_analysis": merged.to_dict() if hasattr(merged, 'to_dict') else merged,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error merging neologism analyses: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Philosophy API Endpoints
@@ -519,3 +772,158 @@ async def download_result(job_id: str) -> FileResponse:
         )
     except (FileNotFoundError, OSError):
         raise HTTPException(status_code=404, detail="Output file not found") from None
+
+
+# PDF Quality Validation Endpoint
+@api_router.post("/pdf/validate-quality")
+async def validate_pdf_quality(
+    validation_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Validate PDF reconstruction quality.
+    
+    This endpoint checks how well a reconstructed PDF matches the original
+    in terms of text preservation, layout, and optionally font preservation.
+    """
+    try:
+        original_pdf = validation_data.get("original_pdf")
+        reconstructed_pdf = validation_data.get("reconstructed_pdf")
+        
+        if not original_pdf:
+            raise HTTPException(
+                status_code=400,
+                detail="original_pdf path is required"
+            )
+        
+        if not reconstructed_pdf:
+            raise HTTPException(
+                status_code=400,
+                detail="reconstructed_pdf path is required"
+            )
+        
+        # Optional validation parameters
+        min_text_length_score = validation_data.get("min_text_length_score", 0.9)
+        min_layout_score = validation_data.get("min_layout_score", 0.7)
+        require_font_preservation = validation_data.get("require_font_preservation", False)
+        min_font_match_ratio = validation_data.get("min_font_match_ratio", 0.8)
+        
+        # Initialize validator and run validation
+        validator = PDFQualityValidator()
+        
+        result = validator.validate_pdf_reconstruction_quality(
+            original_pdf=original_pdf,
+            reconstructed_pdf=reconstructed_pdf,
+            min_text_length_score=min_text_length_score,
+            min_layout_score=min_layout_score,
+            require_font_preservation=require_font_preservation,
+            min_font_match_ratio=min_font_match_ratio,
+        )
+        
+        return {
+            "success": True,
+            "validation_result": result,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error validating PDF quality: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Confidence Scorer Endpoints
+@api_router.get("/confidence/scorer-info")
+async def get_confidence_scorer_info() -> dict[str, Any]:
+    """Get information about the confidence scorer and its configuration."""
+    try:
+        scorer = ConfidenceScorer()
+        
+        return {
+            "confidence_threshold": scorer.confidence_threshold,
+            "philosophical_indicators_count": len(scorer.philosophical_indicators),
+            "pattern_types": list(scorer.patterns.keys()),
+        }
+    except Exception as e:
+        logger.error("Error getting confidence scorer info: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/confidence/scorer-config")
+async def update_confidence_scorer_config(
+    config_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Update confidence scorer configuration."""
+    try:
+        scorer = ConfidenceScorer()
+        
+        updated = []
+        
+        # Update threshold if provided
+        if "confidence_threshold" in config_data:
+            threshold = config_data["confidence_threshold"]
+            if isinstance(threshold, (int, float)) and 0 <= threshold <= 1:
+                scorer.adjust_confidence_threshold(threshold)
+                updated.append("confidence_threshold")
+        
+        # Update patterns if provided
+        if "patterns" in config_data:
+            patterns = config_data["patterns"]
+            if isinstance(patterns, dict):
+                scorer.update_patterns(patterns)
+                updated.append("patterns")
+        
+        # Update philosophical indicators if provided
+        if "philosophical_indicators" in config_data:
+            indicators = config_data["philosophical_indicators"]
+            if isinstance(indicators, (list, set)):
+                scorer.update_philosophical_indicators(set(indicators))
+                updated.append("philosophical_indicators")
+        
+        if updated:
+            return {
+                "success": True,
+                "message": f"Updated configuration: {', '.join(updated)}",
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No valid configuration keys provided",
+                "valid_keys": ["confidence_threshold", "patterns", "philosophical_indicators"],
+            }
+    except Exception as e:
+        logger.error("Error updating confidence scorer config: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/confidence/calculate")
+async def calculate_confidence(
+    confidence_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Calculate confidence factors for a term."""
+    try:
+        term = confidence_data.get("term", "")
+        
+        if not term:
+            raise HTTPException(
+                status_code=400,
+                detail="term is required"
+            )
+        
+        scorer = ConfidenceScorer()
+        
+        # Calculate confidence factors
+        factors = scorer.calculate_confidence_factors(term)
+        
+        # Get final confidence and breakdown
+        final_confidence = scorer.calculate_final_confidence(factors)
+        breakdown = scorer.get_confidence_breakdown(factors)
+        
+        return {
+            "term": term,
+            "final_confidence": final_confidence,
+            "confidence_factors": factors.__dict__ if hasattr(factors, '__dict__') else {},
+            "confidence_breakdown": breakdown,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error calculating confidence: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))

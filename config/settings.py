@@ -312,6 +312,21 @@ class Settings:
         "TRANSLATION_CONCURRENCY_LIMIT", default=8, min_value=1
     )
 
+    # Dolphin OCR service configuration
+    # Choose between 'modal' (Modal Labs cloud) or 'local' (self-hosted) endpoint
+    # Environment variable: DOLPHIN_ENDPOINT_TYPE
+    DOLPHIN_ENDPOINT_TYPE: str = os.getenv("DOLPHIN_ENDPOINT_TYPE", "modal")
+    # Custom local endpoint URL (used when DOLPHIN_ENDPOINT_TYPE is 'local')
+    # Environment variable: DOLPHIN_LOCAL_ENDPOINT
+    DOLPHIN_LOCAL_ENDPOINT: str = os.getenv(
+        "DOLPHIN_LOCAL_ENDPOINT", "http://localhost:8501/layout"
+    )
+    # Timeout for Dolphin service requests in seconds
+    # Environment variable: DOLPHIN_TIMEOUT_SECONDS
+    DOLPHIN_TIMEOUT_SECONDS: int = _parse_int_env(
+        "DOLPHIN_TIMEOUT_SECONDS", default=300, min_value=1
+    )
+
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     LOG_FILE: str = os.getenv("LOG_FILE", "app.log")

@@ -27,6 +27,7 @@ from services.enhanced_document_processor import EnhancedDocumentProcessor
 from services.neologism_detector import NeologismDetector
 from services.philosophy_enhanced_translation_service import (
     PhilosophyEnhancedTranslationService,
+    translate_with_philosophy_awareness,
 )
 from services.translation_service import TranslationService
 from utils.file_handler import FileHandler

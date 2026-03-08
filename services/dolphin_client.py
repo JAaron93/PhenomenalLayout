@@ -199,7 +199,17 @@ async def get_layout(pdf_path: str | os.PathLike[str]) -> dict[str, Any]:
         Whatever JSON structure the Dolphin service responds with.  The caller
         is responsible for interpreting the schema.
     """
-    endpoint: str = os.getenv("DOLPHIN_ENDPOINT", DEFAULT_MODAL_ENDPOINT)
+    # Determine which endpoint to use based on configuration
+    # Check for DOLPHIN_ENDPOINT_TYPE env var first (modal or local)
+    endpoint_type = os.getenv("DOLPHIN_ENDPOINT_TYPE", "modal").lower()
+    
+    if endpoint_type == "local":
+        # Use local endpoint with custom URL if provided
+        endpoint = os.getenv("DOLPHIN_LOCAL_ENDPOINT", DEFAULT_LOCAL_ENDPOINT)
+    else:
+        # Use Modal endpoint (default) - either custom or default Modal URL
+        endpoint = os.getenv("DOLPHIN_ENDPOINT", DEFAULT_MODAL_ENDPOINT)
+    
     pdf_path = pathlib.Path(pdf_path)
 
     if not pdf_path.exists():
