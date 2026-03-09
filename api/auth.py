@@ -208,8 +208,7 @@ def create_jwt_token(
         JWT token string
     """
     auth_config = config or _default_config
-    if not auth_config.jwt_secret:
-        raise ValueError("JWT secret not configured")
+    # Note: jwt_secret is guaranteed non-empty (auto-generated in AuthConfig.jwt_secret property)
 
     now = datetime.now(UTC)
     expiration = now + timedelta(hours=JWT_EXPIRATION_HOURS)
@@ -237,8 +236,7 @@ def verify_jwt_token(token: str, config: AuthConfig | None = None) -> dict:
         AuthError: If token is invalid or expired
     """
     auth_config = config or _default_config
-    if not auth_config.jwt_secret:
-        raise ValueError("JWT secret not configured")
+    # Note: jwt_secret is guaranteed non-empty (auto-generated in AuthConfig.jwt_secret property)
 
     try:
         payload = jwt.decode(token, auth_config.jwt_secret, algorithms=[JWT_ALGORITHM])

@@ -430,8 +430,16 @@ def _extract_request(args: tuple, kwargs: dict) -> Request:
         if args:
             # Case 1: args[0] has a request attribute
             if hasattr(args[0], "request"):
-                request = args[0].request
-            # Case 2: args[0] is a Request object (check by type or duck typing)
+                potential_request = args[0].request
+                # Validate: Request instance OR duck-typed with scope/method
+                is_valid = isinstance(potential_request, Request)
+                is_valid = is_valid or (
+                    hasattr(potential_request, "scope")
+                    and hasattr(potential_request, "method")
+                )
+                if is_valid:
+                    request = potential_request
+            # Case 2: args[0] is Request (type check or duck typing)
             elif (isinstance(args[0], Request) or
                   (hasattr(args[0], "scope") and hasattr(args[0], "method"))):
                 request = args[0]

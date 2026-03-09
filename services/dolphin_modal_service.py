@@ -380,10 +380,6 @@ def parse_dolphin_output(
     ]
 
 
-@app.function(
-    image=dolphin_image,
-    timeout=630,  # Slightly longer than processing function timeout
-)
 @modal.asgi_app()
 def dolphin_ocr_endpoint():
     """FastAPI app with basic security and file validation."""
