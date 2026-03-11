@@ -39,7 +39,7 @@ ALLOWED_BLOCK_TYPES = frozenset(
 
 # Default endpoints - Modal Labs takes priority
 DEFAULT_MODAL_ENDPOINT: str = (
-    "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
+    "https://jaaron93--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
 )
 DEFAULT_LOCAL_ENDPOINT: str = "http://localhost:8501/layout"
 DEFAULT_TIMEOUT: int = 300  # seconds (increased for Modal processing)

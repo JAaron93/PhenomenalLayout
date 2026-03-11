@@ -188,17 +188,26 @@ class DolphinOCRProcessor:
             logger.debug("Processing page %d/%d", page_num + 1, len(images))
 
             # Process the image with Dolphin using cached model and processor
-            inputs = self.processor(images=image, return_tensors="pt").to(
-                self.model.device
-            )
+            inputs = self.processor(images=image, return_tensors="pt")
+            
+            # Move to device and cast precision for floats
+            processed_inputs = {}
+            for k, v in inputs.items():
+                if k == "pixel_values":
+                    processed_inputs[k] = v.to(device=self.model.device, dtype=torch.float16)
+                else:
+                    processed_inputs[k] = v.to(device=self.model.device)
+                    
+            inputs = processed_inputs
 
             with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=2048,
-                    do_sample=False,
-                    temperature=0.0,
-                )
+                with torch.autocast(device_type=self.model.device.type, dtype=torch.float16):
+                    outputs = self.model.generate(
+                        **inputs,
+                        max_new_tokens=2048,
+                        do_sample=False,
+                        temperature=0.0,
+                    )
 
             # Decode the output
             generated_text = self.processor.batch_decode(
@@ -380,6 +389,7 @@ def parse_dolphin_output(
     ]
 
 
+@app.function(image=dolphin_image)
 @modal.asgi_app()
 def dolphin_ocr_endpoint():
     """FastAPI app with basic security and file validation."""
@@ -517,7 +527,7 @@ def dolphin_ocr_endpoint():
         }
 
     @api.post("/")
-    async def ocr(request: Request, pdf_file: UploadFile = File(...)) -> dict[str, Any]:
+    async def ocr(request: Request, file: UploadFile = File(...)) -> dict[str, Any]:
         """OCR endpoint with basic security validation."""
         client_ip = request.client.host if request.client else "unknown"
 
@@ -531,21 +541,21 @@ def dolphin_ocr_endpoint():
 
         try:
             # Validate file upload
-            validate_pdf_file(pdf_file)
+            validate_pdf_file(file)
 
             # Read and validate content
-            pdf_content = await pdf_file.read()
+            pdf_content = await file.read()
             validate_pdf_content(pdf_content)
 
             logger.info(
-                f"Processing PDF: file={pdf_file.filename}, "
+                f"Processing PDF: file={file.filename}, "
                 f"size={len(pdf_content)}, ip={client_ip}"
             )
 
             # Process with Dolphin OCR
             result = process_pdf_with_dolphin.remote(pdf_content)
 
-            logger.info(f"OCR completed: {pdf_file.filename}")
+            logger.info(f"OCR completed: {file.filename}")
             return result
 
         except HTTPException:

@@ -275,7 +275,7 @@ def main() -> None:
         )
         endpoint_url: str = os.getenv(
             "MODAL_ENDPOINT_BASE",
-            "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run",
+            "https://jaaron93--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run",
         )
         print(f"   export DOLPHIN_ENDPOINT={endpoint_url}")
         print("\n   Then run the test script to verify the deployment:")
@@ -299,7 +299,7 @@ def main() -> None:
     if os.getenv("DOLPHIN_ENDPOINT"):
         endpoint_url: str = os.getenv(
             "MODAL_ENDPOINT_BASE",
-            "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run",
+            "https://jaaron93--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run",
         )
         print(f"\n3. Current DOLPHIN_ENDPOINT: {os.getenv('DOLPHIN_ENDPOINT')}")
         print("   (If this differs from actual deployment URL, update accordingly)")

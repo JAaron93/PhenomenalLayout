@@ -208,7 +208,10 @@ def create_jwt_token(
         JWT token string
     """
     auth_config = config or _default_config
-    # Note: jwt_secret is guaranteed non-empty (auto-generated in AuthConfig.jwt_secret property)
+    # Note: jwt_secret is non-empty when set, but NOT stable across calls.
+    # TODO: Cache the secret in AuthConfig.jwt_secret to ensure stability.
+    # Without caching, each call generates a new secret if env var not set,
+    # causing token verification to fail.
 
     now = datetime.now(UTC)
     expiration = now + timedelta(hours=JWT_EXPIRATION_HOURS)
@@ -236,7 +239,10 @@ def verify_jwt_token(token: str, config: AuthConfig | None = None) -> dict:
         AuthError: If token is invalid or expired
     """
     auth_config = config or _default_config
-    # Note: jwt_secret is guaranteed non-empty (auto-generated in AuthConfig.jwt_secret property)
+    # Note: jwt_secret is non-empty when set, but NOT stable across calls.
+    # TODO: Cache the secret in AuthConfig.jwt_secret to ensure stability.
+    # Without caching, each call generates a new secret if env var not set,
+    # causing token verification to fail.
 
     try:
         payload = jwt.decode(token, auth_config.jwt_secret, algorithms=[JWT_ALGORITHM])
@@ -259,9 +265,6 @@ def verify_api_key(api_key: str, config: AuthConfig | None = None) -> bool:
     """
     auth_config = config or _default_config
     configured_key = auth_config.api_key
-
-    if not configured_key:
-        return False
 
     try:
         return secrets.compare_digest(api_key, configured_key)

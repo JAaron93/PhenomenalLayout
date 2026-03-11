@@ -93,8 +93,8 @@ def validate_monitoring_data(status_data):
     assert peak_val >= 0, f"Expected peak_memory_mb >= 0, got {peak_val}"
 
 
-def create_test_client_and_token():
-    """Create test client and admin token for testing."""
+def create_test_app_and_token():
+    """Create test app and admin token for testing."""
     test_config = {
         "MEMORY_API_ENABLE_AUTH": "true",
         "MEMORY_API_JWT_SECRET": "test-secret-key",
@@ -102,7 +102,7 @@ def create_test_client_and_token():
     }
 
     # Create app with test configuration
-    client = TestClient(create_app(test_config))
+    app = create_app(test_config)
 
     # Create auth config for token generation
     auth_config = AuthConfig(test_config)
@@ -110,17 +110,18 @@ def create_test_client_and_token():
     # Create admin token
     admin_token = create_jwt_token("admin_user", UserRole.ADMIN, auth_config)
 
-    return client, admin_token
+    return app, admin_token
 
 def test_gc_direct():
     """Test GC endpoint directly."""
-    client, admin_token = create_test_client_and_token()
+    app, admin_token = create_test_app_and_token()
 
     # Test GC endpoint
-    response = client.post(
-        "/api/v1/memory/gc",
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/memory/gc",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
 
     assert response.status_code == 200, (
         f"Expected 200, got {response.status_code}: {response.text}"
@@ -166,13 +167,14 @@ def test_gc_direct():
 
 def test_monitoring_status():
     """Test monitoring status endpoint directly."""
-    client, admin_token = create_test_client_and_token()
+    app, admin_token = create_test_app_and_token()
 
     # Test monitoring status endpoint
-    response = client.get(
-        "/api/v1/memory/monitoring/status",
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/memory/monitoring/status",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
 
     assert response.status_code == 200, (
         f"Expected 200, got {response.status_code}: {response.text}"
