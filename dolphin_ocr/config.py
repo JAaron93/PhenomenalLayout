@@ -64,7 +64,7 @@ class DolphinConfig:
         default_factory=lambda: os.getenv(
             "DOLPHIN_MODAL_ENDPOINT",
             (
-                "https://jaaron93--dolphin-ocr-service-"
+                "https://modal-labs--dolphin-ocr-service-"
                 "dolphin-ocr-endpoint.modal.run"
             ),
         )

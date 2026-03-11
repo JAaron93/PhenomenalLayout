@@ -75,6 +75,8 @@ class AuthConfig:
             config: Optional configuration dict (for testing)
         """
         self._config = config or {}
+        self._jwt_secret: str | None = None
+        self._api_key: str | None = None
 
     def get(self, key: str, default=None):
         """Get configuration value from injected config or fallback to environment.
@@ -93,22 +95,26 @@ class AuthConfig:
     @property
     def jwt_secret(self) -> str:
         """Get JWT secret from configuration."""
-        secret = self.get("MEMORY_API_JWT_SECRET")
-        if not secret:
-            # Generate a secure default secret if not provided
-            secret = secrets.token_urlsafe(32)
-            logger.warning("Using auto-generated JWT secret. For production, set MEMORY_API_JWT_SECRET environment variable.")
-        return secret
+        if self._jwt_secret is None:
+            secret = self.get("MEMORY_API_JWT_SECRET")
+            if not secret:
+                # Generate a secure default secret if not provided
+                secret = secrets.token_urlsafe(32)
+                logger.warning("Using auto-generated JWT secret. For production, set MEMORY_API_JWT_SECRET environment variable.")
+            self._jwt_secret = secret
+        return self._jwt_secret
 
     @property
     def api_key(self) -> str:
         """Get API key from configuration."""
-        api_key = self.get("MEMORY_API_KEY")
-        if not api_key:
-            # Generate a secure default API key if not provided
-            api_key = secrets.token_urlsafe(16)
-            logger.warning("Using auto-generated API key. For production, set MEMORY_API_KEY environment variable.")
-        return api_key
+        if self._api_key is None:
+            api_key = self.get("MEMORY_API_KEY")
+            if not api_key:
+                # Generate a secure default API key if not provided
+                api_key = secrets.token_urlsafe(16)
+                logger.warning("Using auto-generated API key. For production, set MEMORY_API_KEY environment variable.")
+            self._api_key = api_key
+        return self._api_key
 
     @property
     def enable_auth(self) -> bool:
@@ -208,10 +214,6 @@ def create_jwt_token(
         JWT token string
     """
     auth_config = config or _default_config
-    # Note: jwt_secret is non-empty when set, but NOT stable across calls.
-    # TODO: Cache the secret in AuthConfig.jwt_secret to ensure stability.
-    # Without caching, each call generates a new secret if env var not set,
-    # causing token verification to fail.
 
     now = datetime.now(UTC)
     expiration = now + timedelta(hours=JWT_EXPIRATION_HOURS)
@@ -239,10 +241,6 @@ def verify_jwt_token(token: str, config: AuthConfig | None = None) -> dict:
         AuthError: If token is invalid or expired
     """
     auth_config = config or _default_config
-    # Note: jwt_secret is non-empty when set, but NOT stable across calls.
-    # TODO: Cache the secret in AuthConfig.jwt_secret to ensure stability.
-    # Without caching, each call generates a new secret if env var not set,
-    # causing token verification to fail.
 
     try:
         payload = jwt.decode(token, auth_config.jwt_secret, algorithms=[JWT_ALGORITHM])

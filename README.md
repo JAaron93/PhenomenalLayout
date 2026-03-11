@@ -338,7 +338,40 @@ modal run services/dolphin_modal_service.py::setup_dolphin_service
 modal serve services/dolphin_modal_service.py
 ```
 
-Notes
+### Configuration & Ownership
+
+- **Official Deployment**: Managed by the `modal-labs` organization. This is the default production-ready endpoint.
+- **Personal Deployments**: Users can deploy their own instances (e.g., for billing or development) and override the default via environment variables.
+- **Endpoint Priority**:
+    1. `DOLPHIN_MODAL_ENDPOINT` (Environment Variable)
+    2. `DOLPHIN_ENDPOINT` (Environment Variable - legacy/general)
+    3. `DEFAULT_MODAL_ENDPOINT` (Hardcoded Fallback: `modal-labs`)
+
+### Verification Steps
+
+To verify the availability and correctness of a Dolphin OCR endpoint:
+
+1. **Health Check**:
+   ```bash
+   curl -I https://<endpoint>/health
+   ```
+   *Expected: HTTP 200 OK with `{"status":"ok","service":"dolphin-ocr"}`*
+
+2. **Functionality Test**:
+   Use the provided test script to verify end-to-end processing:
+   ```bash
+   # Set your endpoint
+   export DOLPHIN_MODAL_ENDPOINT="https://your-org--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
+   # Run the test
+   python -m scripts.test_modal_deployment
+   ```
+
+### Maintenance & Availability
+
+- **Production Service**: The `modal-labs` organizational deployment is maintained for general project use.
+- **SLA/Rate Limits**: Organizations should check their specific Modal plan for concurrency and rate limits. The client defaults to high timeouts (300s) to accommodate large document processing.
+
+### GPU Configuration
 - GPU: Configured for T4 by default in code; adjust @app.cls/@app.function if needed
 - Model cache: Stored in Modal Volume "dolphin-ocr-models" mounted at /models
 - Size limit: 50MB for uploaded PDFs; oversized files return a JSON error

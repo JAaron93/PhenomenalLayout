@@ -10,6 +10,11 @@ This script handles:
 import os
 import sys
 
+# Default Modal endpoint URL - users should set MODAL_ENDPOINT_BASE env var
+DEFAULT_MODAL_ENDPOINT: str = (
+    "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
+)
+
 # Optional (non-fatal) environment variables recognized by deployment.
 # DOLPHIN_ENDPOINT can be provided here for convenience during validation,
 # but it is still validated as required in validate_environment_variables.
@@ -273,9 +278,9 @@ def main() -> None:
         print(
             "\n   After deployment completes, set DOLPHIN_ENDPOINT to the service URL:"
         )
-        endpoint_url: str = os.getenv(
-            "MODAL_ENDPOINT_BASE",
-            "https://jaaron93--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run",
+        endpoint_url: str = (
+            os.getenv("DOLPHIN_MODAL_ENDPOINT")
+            or os.getenv("MODAL_ENDPOINT_BASE", DEFAULT_MODAL_ENDPOINT)
         )
         print(f"   export DOLPHIN_ENDPOINT={endpoint_url}")
         print("\n   Then run the test script to verify the deployment:")
@@ -297,10 +302,6 @@ def main() -> None:
 
     # Only show DOLPHIN_ENDPOINT setup if it wasn't already shown above
     if os.getenv("DOLPHIN_ENDPOINT"):
-        endpoint_url: str = os.getenv(
-            "MODAL_ENDPOINT_BASE",
-            "https://jaaron93--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run",
-        )
         print(f"\n3. Current DOLPHIN_ENDPOINT: {os.getenv('DOLPHIN_ENDPOINT')}")
         print("   (If this differs from actual deployment URL, update accordingly)")
 

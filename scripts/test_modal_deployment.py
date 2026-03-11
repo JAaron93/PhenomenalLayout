@@ -60,7 +60,7 @@ async def run_test_modal_endpoint() -> bool:
     print("🧪 Testing Modal Dolphin OCR endpoint...")
 
     # Get endpoint (already validated by check_environment)
-    endpoint: str = os.getenv("DOLPHIN_ENDPOINT", "")
+    endpoint: str = os.getenv("DOLPHIN_MODAL_ENDPOINT") or os.getenv("DOLPHIN_ENDPOINT") or ""
     print(f"📡 Testing endpoint: {endpoint}")
 
     # Look for a test PDF file using the reusable function

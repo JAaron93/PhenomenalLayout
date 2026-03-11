@@ -1,8 +1,9 @@
 """Async client for the Dolphin PDF layout micro-service.
 
-This client now supports both local microservice and Modal Labs deployment.
-The Modal endpoint provides better performance and scalability compared to
-the previous HuggingFace Spaces API approach.
+This client supports both local microservice and Modal Labs deployment.
+The official Modal deployment is hosted by the 'modal-labs' organization.
+Personal deployments (e.g., for billing or forked development) can be
+configured via the DOLPHIN_MODAL_ENDPOINT environment variable.
 
 The service exposes an endpoint that accepts a multipart upload of a PDF file
 and returns JSON describing the page layouts. This helper wraps the HTTP call
@@ -38,8 +39,9 @@ ALLOWED_BLOCK_TYPES = frozenset(
 )
 
 # Default endpoints - Modal Labs takes priority
+# Fallback is the official modal-labs namespace; override via environment variables for personal use.
 DEFAULT_MODAL_ENDPOINT: str = (
-    "https://jaaron93--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
+    "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
 )
 DEFAULT_LOCAL_ENDPOINT: str = "http://localhost:8501/layout"
 DEFAULT_TIMEOUT: int = 300  # seconds (increased for Modal processing)
@@ -207,8 +209,13 @@ async def get_layout(pdf_path: str | os.PathLike[str]) -> dict[str, Any]:
         # Use local endpoint with custom URL if provided
         endpoint = os.getenv("DOLPHIN_LOCAL_ENDPOINT", DEFAULT_LOCAL_ENDPOINT)
     else:
-        # Use Modal endpoint (default) - either custom or default Modal URL
-        endpoint = os.getenv("DOLPHIN_ENDPOINT", DEFAULT_MODAL_ENDPOINT)
+        # Use Modal endpoint (default)
+        # Prioritize specific DOLPHIN_MODAL_ENDPOINT, then fallback to DOLPHIN_ENDPOINT or the default
+        endpoint = (
+            os.getenv("DOLPHIN_MODAL_ENDPOINT") 
+            or os.getenv("DOLPHIN_ENDPOINT") 
+            or DEFAULT_MODAL_ENDPOINT
+        )
     
     pdf_path = pathlib.Path(pdf_path)
 

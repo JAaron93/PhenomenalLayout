@@ -193,7 +193,9 @@ class DolphinOCRProcessor:
             # Move to device and cast precision for floats
             processed_inputs = {}
             for k, v in inputs.items():
-                if k == "pixel_values":
+                if not isinstance(v, torch.Tensor):
+                    processed_inputs[k] = v
+                elif v.is_floating_point():
                     processed_inputs[k] = v.to(device=self.model.device, dtype=torch.float16)
                 else:
                     processed_inputs[k] = v.to(device=self.model.device)
@@ -527,8 +529,12 @@ def dolphin_ocr_endpoint():
         }
 
     @api.post("/")
-    async def ocr(request: Request, file: UploadFile = File(...)) -> dict[str, Any]:
-        """OCR endpoint with basic security validation."""
+    async def ocr(request: Request, upload_file: UploadFile | None = File(None)) -> dict[str, Any]:
+        """OCR endpoint with backward compatibility for 'file' and 'pdf_file' parameters.
+
+        Supports both 'file' and 'pdf_file' form field names for backward compatibility.
+        When both are provided, 'file' is preferred.
+        """
         client_ip = request.client.host if request.client else "unknown"
 
         # Rate limiting
@@ -540,6 +546,17 @@ def dolphin_ocr_endpoint():
             raise HTTPException(status_code=401, detail="API key required")
 
         try:
+            # Backward compatibility: support both 'file' and 'pdf_file' form fields
+            # Prefer 'file' over 'pdf_file' when both are present
+            form = await request.form()
+            file = form.get("file") or form.get("pdf_file")
+
+            if file is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No file provided. Use 'file' or 'pdf_file' form field."
+                )
+
             # Validate file upload
             validate_pdf_file(file)
 
@@ -562,16 +579,10 @@ def dolphin_ocr_endpoint():
             raise
         except ValueError as e:
             logger.warning(f"Validation error: {e}")
-            return {
-                "error": f"Validation error: {e!s}",
-                "status": "failed",
-            }
+            raise HTTPException(status_code=400, detail=f"Validation error: {e}")
         except Exception:
             logger.exception("Unexpected error in OCR endpoint")
-            return {
-                "error": "Internal server error during OCR processing",
-                "status": "failed",
-            }
+            raise HTTPException(status_code=500, detail="Internal server error during OCR processing")
 
     return api
 

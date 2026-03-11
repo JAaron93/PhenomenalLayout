@@ -22,5 +22,5 @@ Notes:
 
 Implementation Notes:
 
-- Cache hit-rate assumptions (>90%) are monitored through the SmartCache stats() method which tracks hit_rate
+- Cache hit-rate assumptions (>90%) are monitored through the SmartCache stats().hit_rate metric
 - Add links to concrete benchmarks when available
