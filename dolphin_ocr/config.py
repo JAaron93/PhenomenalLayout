@@ -96,7 +96,7 @@ class DolphinConfig:
         endpoint = (self.modal_endpoint or "").strip()
         parsed = urlparse(endpoint)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ValueError("DOLPHIN_ENDPOINT must be a valid HTTP/HTTPS URL")
+            raise ValueError("DOLPHIN_ENDPOINT or DOLPHIN_MODAL_ENDPOINT must be a valid HTTP/HTTPS URL")
         # Persist normalized value
         self.modal_endpoint = endpoint
         if self.timeout_seconds <= 0 or self.timeout_seconds > 3600:

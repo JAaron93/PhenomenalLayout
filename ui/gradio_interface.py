@@ -198,6 +198,7 @@ def start_translation_with_progress(
             philosophy_mode,
         )
     except Exception as e:
+        logging.error("Translation start failed: %s", e, exc_info=True)
         status, upload_status, is_ready = f"❌ Error: {e!s}", "", False
 
     with contextlib.suppress(Exception):

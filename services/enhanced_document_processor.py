@@ -59,6 +59,26 @@ def validate_dolphin_layout(layout: dict[str, Any], expected_page_count: int) ->
     return True
 
 
+def _get_pdf_page_count(pdf_path: str) -> int | None:
+    """Return the number of pages in *pdf_path* using pypdf.
+
+    Returns ``None`` when the page count cannot be determined (e.g.
+    pypdf is not installed, the file is missing, or the PDF is
+    corrupted).  The caller should treat ``None`` as "unknown" and
+    skip any page-count–based validation.
+    """
+    try:
+        import pypdf  # type: ignore[import-untyped]
+
+        reader = pypdf.PdfReader(pdf_path)
+        return len(reader.pages)
+    except Exception as exc:
+        logger.warning(
+            "Could not determine PDF page count for %s: %s", pdf_path, exc
+        )
+        return None
+
+
 @dataclass
 class DocumentMetadata:
     """Metadata for processed documents."""
@@ -135,7 +155,7 @@ class EnhancedDocumentProcessor:
     async def _extract_pdf_content(self, pdf_path: str) -> dict[str, Any]:
         """Extract content from PDF with advanced layout preservation."""
         import time
-        from services.dolphin_client import get_layout, validate_dolphin_layout_response
+        from services.dolphin_client import get_layout
 
         start_time = time.time()
 
@@ -146,6 +166,21 @@ class EnhancedDocumentProcessor:
             logger.error("OCR processing failed for %s: %s", pdf_path, e, exc_info=True)
             # Graceful degradation: continue with empty layout
             dolphin_layout = {"pages": []}
+
+        # Validate dolphin_layout structure against the real PDF page count
+        pdf_page_count = _get_pdf_page_count(pdf_path)
+        if pdf_page_count is not None:
+            if dolphin_layout and not validate_dolphin_layout(
+                dolphin_layout,
+                pdf_page_count,
+            ):
+                logger.warning("Invalid Dolphin layout structure, discarding")
+                dolphin_layout = {"pages": []}  # Reset to empty rather than None
+        else:
+            logger.info(
+                "Skipping Dolphin layout page-count validation "
+                "(could not determine real PDF page count)"
+            )
 
         # Build minimal text_by_page from Dolphin OCR
         text_by_page: dict[int, list[str]] = {}
@@ -169,13 +204,22 @@ class EnhancedDocumentProcessor:
             dpi=self.dpi,
         )
 
-        # Validate dolphin_layout structure if present
-        if dolphin_layout and not validate_dolphin_layout(
-            dolphin_layout,
-            len(text_by_page),
-        ):
-            logger.warning("Invalid Dolphin layout structure, discarding")
-            dolphin_layout = None
+        # Validate dolphin_layout structure against the real PDF page count
+        # so we catch actual OCR/layout mismatches instead of comparing the
+        # layout against a value derived from itself (tautological check).
+        pdf_page_count = _get_pdf_page_count(pdf_path)
+        if pdf_page_count is not None:
+            if dolphin_layout and not validate_dolphin_layout(
+                dolphin_layout,
+                pdf_page_count,
+            ):
+                logger.warning("Invalid Dolphin layout structure, discarding")
+                dolphin_layout = None
+        else:
+            logger.info(
+                "Skipping Dolphin layout page-count validation "
+                "(could not determine real PDF page count)"
+            )
         return {
             "type": "pdf_advanced",
             "layouts": [],

@@ -10,7 +10,10 @@ import dotenv
 
 async def run_test():
     dotenv.load_dotenv()
-    pdf_path = "/Users/pretermodernist/PhenomenalLayout/sample.pdf"
+    pdf_path = os.environ.get("TEST_PDF_PATH", os.path.join(os.path.dirname(__file__), "sample.pdf"))
+    if not os.path.exists(pdf_path):
+        print(f"Test PDF not found at {pdf_path}. Set TEST_PDF_PATH environment variable.")
+        return
     
     print(f"Testing translation with {pdf_path}")
     
@@ -33,10 +36,12 @@ async def run_test():
     # 2. Start translation to Spanish
     print("\n--- Starting Translation ---")
     start_status, start_upload_status, is_ready = await start_translation("Spanish", 0, False)
-    print("Start result:", start_status)
+    print("Start result:", start_status, "| Upload status:", start_upload_status, "| Ready:", is_ready)
     
     # 3. Monitor translation
     print("\n--- Monitoring Progress ---")
+    timeout_seconds = 300  # 5-minute timeout
+    elapsed = 0
     while True:
         curr_status, progress, is_done = get_translation_status()
         print(f"Status: {curr_status} | Progress: {progress}%")
@@ -49,8 +54,13 @@ async def run_test():
         if state.translation_status == "error":
             print(f"\n❌ Translation failed: {state.error_message}")
             break
-            
+        
+        if elapsed >= timeout_seconds:
+            print(f"\n⚠️ Translation timed out after {timeout_seconds} seconds")
+            break
+        
         await asyncio.sleep(2)
+        elapsed += 2
 
 if __name__ == "__main__":
     asyncio.run(run_test())

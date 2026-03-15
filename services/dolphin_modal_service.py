@@ -566,7 +566,7 @@ def dolphin_ocr_endpoint():
                 )
 
             # Extra check for type if it came from form.get
-            if not hasattr(upload_file, "read"):
+            if not (hasattr(upload_file, "read") and hasattr(upload_file, "filename")):
                 raise HTTPException(
                     status_code=400,
                     detail=f"Uploaded object must be a file upload. Got type: {type(upload_file)}"
@@ -587,7 +587,7 @@ def dolphin_ocr_endpoint():
             # Process with Dolphin OCR
             result = await process_pdf_with_dolphin.remote.aio(pdf_content)
 
-            logger.info(f"OCR completed: {file.filename}")
+            logger.info(f"OCR completed: {getattr(upload_file, 'filename', 'unknown')}")
             return result
 
         except HTTPException:

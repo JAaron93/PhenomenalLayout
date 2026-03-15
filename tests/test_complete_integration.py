@@ -632,21 +632,13 @@ async def test_async_complete_integration():
         # Instantiate EnhancedDocumentProcessor
         enhanced_processor = EnhancedDocumentProcessor()
 
-        # Note: EnhancedDocumentProcessor only supports PDF files,
-        # but we have a text file. Test processor instantiation and
-        # basic functionality.
-        try:
-            # Try to process the file (will fail for .txt but tests
-            # error handling)
-            enhanced_processor.extract_content(test_file_path)
-            pytest.fail("Expected ValueError for unsupported .txt format")
-        except ValueError as e:
-            # Expected behavior - processor only supports PDF
-            assert "Only PDF files are supported" in str(e)
-            logger.info(
-                "✓ EnhancedDocumentProcessor correctly rejects "
-                "unsupported format"
-            )
+        # EnhancedDocumentProcessor only supports PDF files; a .txt input
+        # must raise ValueError.
+        with pytest.raises(ValueError, match="Only PDF files are supported"):
+            await enhanced_processor.extract_content(test_file_path)
+        logger.info(
+            "✓ EnhancedDocumentProcessor correctly rejects unsupported format"
+        )
 
         # Test processor metadata and basic functionality
         assert hasattr(enhanced_processor, 'dpi')
