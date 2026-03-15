@@ -161,7 +161,7 @@ async def process_file_upload(file: FileObject) -> tuple[str, str, str, str, str
         )
 
         # Extract content with advanced processing
-        content: ContentDict = document_processor.extract_content(file_path)
+        content: ContentDict = await document_processor.extract_content(file_path)
         state.current_content = content
 
         # Generate preview
@@ -659,8 +659,8 @@ async def process_advanced_translation_job(
         job["status"] = "processing"
 
         # Extract content with advanced processing
-        job["progress"] = 20
-        content: ContentDict = document_processor.extract_content(file_path)
+        # Re-extract content if needed
+        content: ContentDict = await document_processor.extract_content(file_path)
         content["file_path"] = file_path
 
         # Define progress callback for job updates

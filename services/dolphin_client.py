@@ -246,6 +246,14 @@ async def get_layout(pdf_path: str | os.PathLike[str]) -> dict[str, Any]:
             try:
                 response: httpx.Response = await client.post(endpoint, files=files)
                 response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                logger.error(
+                    "Dolphin request to %s failed with status %s: %s",
+                    endpoint,
+                    exc.response.status_code,
+                    exc.response.text,
+                )
+                raise
             except httpx.HTTPError as exc:
                 logger.error(
                     "Dolphin request to %s failed: %s: %s",

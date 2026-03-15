@@ -59,7 +59,7 @@ async def run_test_modal_endpoint() -> bool:
     """Test the Modal Dolphin OCR endpoint."""
     print("🧪 Testing Modal Dolphin OCR endpoint...")
 
-    # Get endpoint (already validated by check_environment)
+    # Get endpoint (validated by check_environment ensures at least one exists)
     endpoint: str = os.getenv("DOLPHIN_MODAL_ENDPOINT") or os.getenv("DOLPHIN_ENDPOINT") or ""
     print(f"📡 Testing endpoint: {endpoint}")
 
@@ -154,8 +154,13 @@ def check_environment() -> bool:
     """Check the deployment environment."""
     print("🌍 Checking deployment environment...")
 
+    # Verify at least one endpoint is configured (modal-specific or general)
+    if not os.getenv("DOLPHIN_MODAL_ENDPOINT") and not os.getenv("DOLPHIN_ENDPOINT"):
+        print("❌ Missing Dolphin endpoint configuration")
+        print("   Please set DOLPHIN_MODAL_ENDPOINT or DOLPHIN_ENDPOINT")
+        return False
+
     required_vars: list[str] = [
-        "DOLPHIN_ENDPOINT",
         "LINGO_API_KEY",
     ]
     # System dependencies checks: Poppler and fonts hints

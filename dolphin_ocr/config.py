@@ -63,10 +63,10 @@ class DolphinConfig:
     modal_endpoint: str = field(
         default_factory=lambda: os.getenv(
             "DOLPHIN_MODAL_ENDPOINT",
-            (
+            os.getenv("DOLPHIN_ENDPOINT", (
                 "https://modal-labs--dolphin-ocr-service-"
                 "dolphin-ocr-endpoint.modal.run"
-            ),
+            )),
         )
     )
     timeout_seconds: int = field(
@@ -91,12 +91,12 @@ class DolphinConfig:
         if not self.hf_token:
             raise ValueError("HF_TOKEN is required for Dolphin OCR authentication")
         if not self.modal_endpoint:
-            raise ValueError("DOLPHIN_MODAL_ENDPOINT is required")
+            raise ValueError("DOLPHIN_ENDPOINT or DOLPHIN_MODAL_ENDPOINT is required")
         # Normalize and validate endpoint using robust URL parsing
         endpoint = (self.modal_endpoint or "").strip()
         parsed = urlparse(endpoint)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ValueError("DOLPHIN_MODAL_ENDPOINT must be a valid HTTP/HTTPS URL")
+            raise ValueError("DOLPHIN_ENDPOINT must be a valid HTTP/HTTPS URL")
         # Persist normalized value
         self.modal_endpoint = endpoint
         if self.timeout_seconds <= 0 or self.timeout_seconds > 3600:

@@ -593,14 +593,16 @@ class DynamicValidationEngine:
         """Create validation context with file analysis."""
         file_path_obj = Path(file_path)
 
-        file_size = 0
-        if file_path_obj.exists():
+        file_size = kwargs.pop("file_size", 0)
+        if hasattr(file_path_obj, "exists") and not file_size and file_path_obj.exists():
             file_size = file_path_obj.stat().st_size
+            
+        file_ext = kwargs.pop("file_ext", file_path_obj.suffix.lower() if hasattr(file_path_obj, "suffix") else "")
 
         return ValidationContext(
             file_path=file_path,
             file_size=file_size,
-            file_ext=file_path_obj.suffix.lower(),
+            file_ext=file_ext,
             **kwargs,
         )
 

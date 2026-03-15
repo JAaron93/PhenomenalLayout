@@ -9,8 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from dolphin_ocr.layout import BoundingBox, FontInfo
-from dolphin_ocr.pdf_to_image import PDFToImageConverter
-from services.dolphin_ocr_service import DolphinOCRService
+# PDFToImageConverter and DolphinOCRService removed in favor of direct PDF submission via dolphin_client
 
 # Migrated off legacy PDF engine; uses pdf2image + Dolphin OCR (PDF-only)
 from .pdf_document_reconstructor import PDFDocumentReconstructor
@@ -88,8 +87,7 @@ class EnhancedDocumentProcessor:
         """
         self.dpi = dpi
         self.preserve_images = preserve_images
-        self.pdf_converter = PDFToImageConverter(dpi=dpi)
-        self.ocr = DolphinOCRService()
+        # Removed local pdf_converter and ocr service in favor of direct PDF submission
         self.reconstructor = PDFDocumentReconstructor()
 
     def _generate_text_preview(self, text: str, max_chars: int = 1000) -> str:
@@ -108,7 +106,7 @@ class EnhancedDocumentProcessor:
             return text[:max_chars] + "..."
         return text
 
-    def extract_content(self, file_path: str) -> dict[str, Any]:
+    async def extract_content(self, file_path: str) -> dict[str, Any]:
         """Extract content from document with format-specific processing.
 
         Args:
@@ -128,34 +126,27 @@ class EnhancedDocumentProcessor:
         )
 
         if file_ext == ".pdf":
-            return self._extract_pdf_content(file_path)
+            return await self._extract_pdf_content(file_path)
         elif file_ext in {".docx", ".txt"}:
             raise ValueError("Only PDF files are supported in this project")
         else:
             raise ValueError(f"Unsupported file format: {file_ext}")
 
-    def _extract_pdf_content(self, pdf_path: str) -> dict[str, Any]:
+    async def _extract_pdf_content(self, pdf_path: str) -> dict[str, Any]:
         """Extract content from PDF with advanced layout preservation."""
         import time
+        from services.dolphin_client import get_layout, validate_dolphin_layout_response
 
         start_time = time.time()
 
-        # Convert PDF to images and call Dolphin OCR
-        images = self.pdf_converter.convert_pdf_to_images(pdf_path)
+        # Call Dolphin OCR directly with the PDF path
         try:
-            dolphin_layout = self.ocr.process_document_images(images)
-        except (
-            OSError,
-            RuntimeError,
-            ValueError,
-        ) as e:  # Keep extraction resilient to OCR failures
+            dolphin_layout = await get_layout(pdf_path)
+        except Exception as e:
             logger.error("OCR processing failed for %s: %s", pdf_path, e, exc_info=True)
             # Graceful degradation: continue with empty layout
             dolphin_layout = {"pages": []}
 
-        # Validate Dolphin layout structure (best-effort)
-        if not isinstance(dolphin_layout, dict):
-            dolphin_layout = {"pages": []}
         # Build minimal text_by_page from Dolphin OCR
         text_by_page: dict[int, list[str]] = {}
         for i, page in enumerate(dolphin_layout.get("pages", [])):
@@ -352,7 +343,7 @@ class EnhancedDocumentProcessor:
 
     # DOCX/TXT conversion helpers removed (PDF-only)
 
-    def generate_preview(self, file_path: str, max_chars: int = 1000) -> str | None:
+    async def generate_preview(self, file_path: str, max_chars: int = 1000) -> str | None:
         """Generate a preview of the document content.
 
         Returns a short preview string when possible, None for expected
@@ -360,7 +351,7 @@ class EnhancedDocumentProcessor:
         exceptions bubble up after logging.
         """
         try:
-            content = self.extract_content(file_path)
+            content = await self.extract_content(file_path)
 
             if content.get("type") == "pdf_advanced":
                 preview = content.get("preview")

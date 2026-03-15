@@ -216,7 +216,7 @@ class PhilosophyEnhancedDocumentProcessor:
 
         logger.info("PhilosophyEnhancedDocumentProcessor initialized")
 
-    def extract_content(self, file_path: str) -> dict[str, Any]:
+    async def extract_content(self, file_path: str) -> dict[str, Any]:
         """Extract content from document with enhanced philosophy-aware processing.
 
         Args:
@@ -226,7 +226,7 @@ class PhilosophyEnhancedDocumentProcessor:
             Dictionary containing extracted content and metadata
         """
         # Use base processor for content extraction
-        content = self.base_processor.extract_content(file_path)
+        content = await self.base_processor.extract_content(file_path)
 
         # Add philosophy-enhanced metadata
         content["philosophy_enhanced"] = True
@@ -378,10 +378,8 @@ class PhilosophyEnhancedDocumentProcessor:
         progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> dict[str, Any]:
         """Extract content asynchronously with progress tracking."""
-        # Run extraction in thread to avoid blocking
-        content = await asyncio.to_thread(
-            self.base_processor.extract_content, file_path
-        )
+        # Await the now-async base processor's extraction
+        content = await self.base_processor.extract_content(file_path)
 
         # Update progress metrics
         if content.get("type") == "pdf_advanced" and "layouts" in content:

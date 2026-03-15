@@ -183,20 +183,32 @@ def start_translation_with_progress(
 ):
     """Start translation and update a subtle progress indicator.
 
-    Returns the same tuple as ``start_translation``.
+    Returns 4 values to update the UI:
+    (progress_status, upload_status, download_btn, progress_timer)
     """
     if progress is None:
         progress = gr.Progress(track_tqdm=False)
     with contextlib.suppress(Exception):
         progress(0.05, desc="Starting translation")
-        result = start_translation_sync(
+        
+    try:
+        status, upload_status, is_ready = start_translation_sync(
             target_language,
             pages_to_translate,
             philosophy_mode,
         )
+    except Exception as e:
+        status, upload_status, is_ready = f"❌ Error: {e!s}", "", False
+
     with contextlib.suppress(Exception):
         progress(0.2, desc="Submitted to backend")
-    return result
+        
+    return (
+        status,
+        upload_status,
+        gr.update(interactive=is_ready),
+        gr.Timer(active=not is_ready),
+    )
 
 
 def create_gradio_interface() -> gr.Blocks:

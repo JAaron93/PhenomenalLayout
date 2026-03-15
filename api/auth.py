@@ -3,6 +3,7 @@
 import os
 import random
 import secrets
+import threading
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 
@@ -77,6 +78,7 @@ class AuthConfig:
         self._config = config or {}
         self._jwt_secret: str | None = None
         self._api_key: str | None = None
+        self._lock = threading.Lock()
 
     def get(self, key: str, default=None):
         """Get configuration value from injected config or fallback to environment.
@@ -96,24 +98,30 @@ class AuthConfig:
     def jwt_secret(self) -> str:
         """Get JWT secret from configuration."""
         if self._jwt_secret is None:
-            secret = self.get("MEMORY_API_JWT_SECRET")
-            if not secret:
-                # Generate a secure default secret if not provided
-                secret = secrets.token_urlsafe(32)
-                logger.warning("Using auto-generated JWT secret. For production, set MEMORY_API_JWT_SECRET environment variable.")
-            self._jwt_secret = secret
+            with self._lock:
+                # Re-check inside lock (double-checked locking pattern)
+                if self._jwt_secret is None:
+                    secret = self.get("MEMORY_API_JWT_SECRET")
+                    if not secret:
+                        # Generate a secure default secret if not provided
+                        secret = secrets.token_urlsafe(32)
+                        logger.warning("Using auto-generated JWT secret. For production, set MEMORY_API_JWT_SECRET environment variable.")
+                    self._jwt_secret = secret
         return self._jwt_secret
 
     @property
     def api_key(self) -> str:
         """Get API key from configuration."""
         if self._api_key is None:
-            api_key = self.get("MEMORY_API_KEY")
-            if not api_key:
-                # Generate a secure default API key if not provided
-                api_key = secrets.token_urlsafe(16)
-                logger.warning("Using auto-generated API key. For production, set MEMORY_API_KEY environment variable.")
-            self._api_key = api_key
+            with self._lock:
+                # Re-check inside lock
+                if self._api_key is None:
+                    api_key = self.get("MEMORY_API_KEY")
+                    if not api_key:
+                        # Generate a secure default API key if not provided
+                        api_key = secrets.token_urlsafe(16)
+                        logger.warning("Using auto-generated API key. For production, set MEMORY_API_KEY environment variable.")
+                    self._api_key = api_key
         return self._api_key
 
     @property

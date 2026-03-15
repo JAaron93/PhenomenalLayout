@@ -595,7 +595,7 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
             )
 
         # Process with advanced extraction
-        content: dict[str, Any] = document_processor.extract_content(file_path)
+        content: dict[str, Any] = await document_processor.extract_content(file_path)
 
         # Detect language using the utility function
         sample_text: str = (

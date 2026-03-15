@@ -26,7 +26,7 @@ except Exception:  # Fallback to local logger if package not available
     logger.setLevel(logging.INFO)
 
 # Modal App Configuration
-app = modal.App("dolphin-ocr-service")
+app = modal.App("dolphin-ocr-service-v3")
 
 # Model and cache configuration
 MODEL_CACHE_PATH = "/models"
@@ -188,7 +188,9 @@ class DolphinOCRProcessor:
             logger.debug("Processing page %d/%d", page_num + 1, len(images))
 
             # Process the image with Dolphin using cached model and processor
-            inputs = self.processor(images=image, return_tensors="pt")
+            # Added prompt for document layout analysis
+            prompt = "Parse the reading order of this document."
+            inputs = self.processor(images=image, text=prompt, return_tensors="pt")
             
             # Move to device and cast precision for floats
             processed_inputs = {}
@@ -215,6 +217,10 @@ class DolphinOCRProcessor:
             generated_text = self.processor.batch_decode(
                 outputs, skip_special_tokens=True
             )[0]
+            
+            logger.info(f"Page {page_num+1} raw Dolphin output (first 100 chars): {generated_text[:100]!r}")
+            if not generated_text.strip():
+                logger.warning(f"Page {page_num+1} Dolphin returned empty text!")
 
             # Parse the Dolphin output into structured blocks with bbox/confidence
             blocks = parse_dolphin_output(generated_text, image.width, image.height)
@@ -529,12 +535,12 @@ def dolphin_ocr_endpoint():
         }
 
     @api.post("/")
-    async def ocr(request: Request, upload_file: UploadFile | None = File(None)) -> dict[str, Any]:
-        """OCR endpoint with backward compatibility for 'file' and 'pdf_file' parameters.
-
-        Supports both 'file' and 'pdf_file' form field names for backward compatibility.
-        When both are provided, 'file' is preferred.
-        """
+    async def ocr(
+        request: Request,
+        file: UploadFile | None = File(None),
+        pdf_file: UploadFile | None = File(None)
+    ) -> dict[str, Any]:
+        """OCR endpoint with backward compatibility for 'file' and 'pdf_file' parameters."""
         client_ip = request.client.host if request.client else "unknown"
 
         # Rate limiting
@@ -546,31 +552,40 @@ def dolphin_ocr_endpoint():
             raise HTTPException(status_code=401, detail="API key required")
 
         try:
-            # Backward compatibility: support both 'file' and 'pdf_file' form fields
-            # Prefer 'file' over 'pdf_file' when both are present
-            form = await request.form()
-            file = form.get("file") or form.get("pdf_file")
+            # Use the injected file or fall back to manual form parsing
+            upload_file = file or pdf_file
+            
+            if not upload_file:
+                form = await request.form()
+                upload_file = form.get("file") or form.get("pdf_file")
 
-            if file is None:
+            if upload_file is None:
                 raise HTTPException(
                     status_code=400,
                     detail="No file provided. Use 'file' or 'pdf_file' form field."
                 )
 
+            # Extra check for type if it came from form.get
+            if not hasattr(upload_file, "read"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Uploaded object must be a file upload. Got type: {type(upload_file)}"
+                )
+
             # Validate file upload
-            validate_pdf_file(file)
+            validate_pdf_file(upload_file)
 
             # Read and validate content
-            pdf_content = await file.read()
+            pdf_content = await upload_file.read()
             validate_pdf_content(pdf_content)
 
             logger.info(
-                f"Processing PDF: file={file.filename}, "
+                f"Processing PDF: file={getattr(upload_file, 'filename', 'unknown')}, "
                 f"size={len(pdf_content)}, ip={client_ip}"
             )
 
             # Process with Dolphin OCR
-            result = process_pdf_with_dolphin.remote(pdf_content)
+            result = await process_pdf_with_dolphin.remote.aio(pdf_content)
 
             logger.info(f"OCR completed: {file.filename}")
             return result
@@ -579,7 +594,7 @@ def dolphin_ocr_endpoint():
             raise
         except ValueError as e:
             logger.warning(f"Validation error: {e}")
-            raise HTTPException(status_code=400, detail=f"Validation error: {e}")
+            raise HTTPException(status_code=400, detail="Validation error: Invalid or corrupted PDF file")
         except Exception:
             logger.exception("Unexpected error in OCR endpoint")
             raise HTTPException(status_code=500, detail="Internal server error during OCR processing")
