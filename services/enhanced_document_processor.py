@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from dolphin_ocr.layout import BoundingBox, FontInfo
-# PDFToImageConverter and DolphinOCRService removed in favor of direct PDF submission via dolphin_client
 
+# PDFToImageConverter and DolphinOCRService removed in favor of direct PDF submission via dolphin_client
 # Migrated off legacy PDF engine; uses pdf2image + Dolphin OCR (PDF-only)
 from .pdf_document_reconstructor import PDFDocumentReconstructor
 
@@ -65,7 +65,7 @@ def _get_pdf_page_count(pdf_path: str) -> int | None:
     Returns ``None`` when the page count cannot be determined (e.g.
     pypdf is not installed, the file is missing, or the PDF is
     corrupted).  The caller should treat ``None`` as "unknown" and
-    skip any page-count–based validation.
+    skip any page-count-based validation.
     """
     try:
         import pypdf  # type: ignore[import-untyped]
@@ -73,9 +73,7 @@ def _get_pdf_page_count(pdf_path: str) -> int | None:
         reader = pypdf.PdfReader(pdf_path)
         return len(reader.pages)
     except Exception as exc:
-        logger.warning(
-            "Could not determine PDF page count for %s: %s", pdf_path, exc
-        )
+        logger.warning("Could not determine PDF page count for %s: %s", pdf_path, exc)
         return None
 
 
@@ -155,6 +153,7 @@ class EnhancedDocumentProcessor:
     async def _extract_pdf_content(self, pdf_path: str) -> dict[str, Any]:
         """Extract content from PDF with advanced layout preservation."""
         import time
+
         from services.dolphin_client import get_layout
 
         start_time = time.time()
@@ -195,7 +194,7 @@ class EnhancedDocumentProcessor:
         processing_time = time.time() - start_time
 
         metadata = DocumentMetadata(
-            filename=Path(pdf_path).name,
+            filename=str(pdf_path),
             file_type="PDF",
             total_pages=len(text_by_page),
             total_text_elements=total_text_elements,
@@ -387,7 +386,9 @@ class EnhancedDocumentProcessor:
 
     # DOCX/TXT conversion helpers removed (PDF-only)
 
-    async def generate_preview(self, file_path: str, max_chars: int = 1000) -> str | None:
+    async def generate_preview(
+        self, file_path: str, max_chars: int = 1000
+    ) -> str | None:
         """Generate a preview of the document content.
 
         Returns a short preview string when possible, None for expected

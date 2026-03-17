@@ -281,7 +281,7 @@ class SmartCachingMiddleware:
 
             return result
 
-        except Exception as e:
+        except Exception:
             duration_ms = (time.perf_counter() - start_time) * 1000
             self.monitor.record_operation(
                 cache_name, duration_ms, cache_hit=False, error=True
@@ -373,7 +373,7 @@ def performance_tracking(
             try:
                 result = func(*args, **kwargs)
                 return result
-            except Exception as e:
+            except Exception:
                 error_occurred = True
                 raise
             finally:

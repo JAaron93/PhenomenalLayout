@@ -8,6 +8,7 @@ that can be used across the codebase for performance optimization.
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import hashlib
 import heapq
@@ -16,7 +17,6 @@ import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Hashable
-import dataclasses
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Generic, TypeVar
@@ -456,7 +456,7 @@ class DynamicRegistry(Generic[T]):
         # Only use cache if explicitly enabled or using default behavior
         if cache_enabled or cache_enabled is None:
             cache_key = self._create_cache_key(key, args, kwargs)
-            
+
             # Try cache first
             start_time = time.perf_counter()
             cached_result = self._cache.get(cache_key)
@@ -475,17 +475,17 @@ class DynamicRegistry(Generic[T]):
 
             try:
                 result = self._registry[key](*args, **kwargs)
-                
+
                 # Only cache the result if explicitly enabled or using default behavior
                 if cache_enabled or cache_enabled is None:
-                    cache_key = self._create_cache_key(key, args, kwargs)
+                    # Reuse cache_key from earlier lookup
                     self._cache.put(cache_key, result)
 
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self._metrics[key].record_operation(duration_ms, cache_hit=False)
 
                 return result
-            except Exception as e:
+            except Exception:
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self._metrics[key].record_operation(duration_ms, cache_hit=False)
                 raise
@@ -719,7 +719,7 @@ def performance_monitor(operation_name: str | None = None):
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 metrics.record_operation(duration_ms)
                 return result
-            except Exception as e:
+            except Exception:
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 metrics.record_operation(duration_ms)
                 raise
@@ -759,28 +759,28 @@ class DynamicFactory(Generic[T]):
         # Only use cache if explicitly enabled or using default behavior
         if cache_enabled or cache_enabled is None:
             cache_key = self._create_cache_key(type_name, args, kwargs)
-            
+
             # Check cache first
             cached_result = self._cache.get(cache_key)
             if cached_result is not self._cache.MISS:
                 return cached_result
-            
+
         creator = self._creators.get(type_name)
         if creator:
             result = creator(*args, **kwargs)
-            
+
             # Only cache the result if explicitly enabled or using default behavior
             if cache_enabled or cache_enabled is None:
-                cache_key = self._create_cache_key(type_name, args, kwargs)
+                # Reuse cache_key from earlier lookup
                 self._cache.put(cache_key, result)
-                
+
             return result
         return None
-        
+
     def _create_cache_key(self, type_name: str, args: tuple, kwargs: dict) -> tuple:
         """Create a hashable cache key from arguments."""
         return _create_cache_key_from_args(type_name, args, kwargs)
-        
+
     def clear_cache(self) -> None:
         """Clear all cached instances."""
         self._cache.clear()

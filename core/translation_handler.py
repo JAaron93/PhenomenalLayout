@@ -6,9 +6,9 @@ import logging
 import os
 import uuid
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 # Migration note: Replaced legacy PDF engine with Dolphin OCR
 # for all PDF processing. Rationale: improved OCR accuracy, better layout
@@ -27,8 +27,16 @@ from services.enhanced_document_processor import EnhancedDocumentProcessor
 from services.neologism_detector import NeologismDetector
 from services.philosophy_enhanced_translation_service import (
     PhilosophyEnhancedTranslationService,
-    translate_with_philosophy_awareness,
 )
+
+class ProcessFileUploadResult(TypedDict):
+    """Structured result for file upload processing."""
+    preview: str
+    status: str
+    detected_language: str
+    preprocessing_info: str
+    processing_details: str
+    success: bool
 from services.translation_service import TranslationService
 from utils.file_handler import FileHandler
 from utils.language_utils import extract_text_sample_for_language_detection
@@ -135,21 +143,35 @@ def extract_file_info(file: FileObject) -> tuple[str, str, int]:
     return file_path, file_name, file_size
 
 
-async def process_file_upload(file: FileObject) -> tuple[str, str, str, str, str]:
+async def process_file_upload(file: Any) -> ProcessFileUploadResult:
     """Process uploaded PDF file with pre-processing display."""
     try:
         # Extract file information using the new function
         try:
             file_path, file_name, file_size = extract_file_info(file)
         except ValueError as e:
-            return "", f"❌ {e!s}", "", "", ""
+            return {
+                "preview": "",
+                "status": f"❌ {e!s}",
+                "detected_language": "",
+                "preprocessing_info": "",
+                "processing_details": "",
+                "success": False,
+            }
 
         # Validate file (includes PDF extension and size validation)
         validation_result: dict[str, Any] = file_validator.validate_file(
-            file_name, file_size
+            file_path, file_size
         )
         if not validation_result["valid"]:
-            return "", f"❌ {validation_result['error']}", "", "", ""
+            return {
+                "preview": "",
+                "status": f"❌ {validation_result['error']}",
+                "detected_language": "",
+                "preprocessing_info": "",
+                "processing_details": "",
+                "success": False,
+            }
 
         state.current_file = file_path
 
@@ -210,14 +232,28 @@ async def process_file_upload(file: FileObject) -> tuple[str, str, str, str, str
         processing_details: str = json.dumps(state.processing_info, indent=2)
 
         logger.info(f"Advanced processing complete: {file_name}")
-        return preview, status, detected_lang, preprocessing_info, processing_details
+        return {
+            "preview": preview,
+            "status": status,
+            "detected_language": detected_lang,
+            "preprocessing_info": preprocessing_info,
+            "processing_details": processing_details,
+            "success": True,
+        }
 
     except Exception as e:
         logger.error(f"File upload error: {e!s}")
-        return "", f"❌ Upload failed: {e!s}", "", "", ""
+        return {
+            "preview": "",
+            "status": f"❌ Upload failed: {e!s}",
+            "detected_language": "",
+            "preprocessing_info": "",
+            "processing_details": "",
+            "success": False,
+        }
 
 
-def process_file_upload_sync(file):
+def process_file_upload_sync(file: Any) -> ProcessFileUploadResult:
     """Synchronous wrapper for process_file_upload to work with Gradio."""
     try:
         # Check if we're already in an async context
@@ -260,10 +296,9 @@ async def start_translation(
             state.max_pages = 0
 
         # Create session for philosophy mode
-        if philosophy_mode:
             session = user_choice_manager.create_session(
                 session_name=(
-                    f"Philosophy Translation {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    f"Philosophy Translation {datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
                 ),
                 document_name=(
                     Path(state.current_file).name if state.current_file else "Unknown"

@@ -95,8 +95,17 @@ def on_file_upload(
             result_dict.get("status") or result_dict.get("upload_status") or ""
         )
         detected_language = result_dict.get("detected_language") or ""
-        preprocessing = result_dict.get("preprocessing") or ""
-        info_obj = result_dict.get("info") or result_dict.get("processing_info") or {}
+        preprocessing = (
+            result_dict.get("preprocessing_info")
+            or result_dict.get("preprocessing")
+            or ""
+        )
+        info_obj = (
+            result_dict.get("info")
+            or result_dict.get("processing_info")
+            or result_dict.get("processing_details")
+            or {}
+        )
         progress_obj = result_dict.get("progress") or {}
         metrics_obj = result_dict.get("metrics") or (
             info_obj.get("metrics") if isinstance(info_obj, dict) else None

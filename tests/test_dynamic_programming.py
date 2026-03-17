@@ -169,6 +169,50 @@ class TestDynamicProgrammingCore:
         stats = expensive_function.cache_stats()
         assert stats["size"] >= 2
 
+    def test_registry_cache_key_recomputation_optimization(self):
+        """Test that DynamicRegistry calls _create_cache_key only once per get operation."""
+        registry = DynamicRegistry(cache_size=5)
+
+        def factory(x):
+            return x
+
+        registry.register("test", factory)
+
+        with patch.object(
+            registry, "_create_cache_key", side_effect=registry._create_cache_key
+        ) as mock_key_gen:
+            # First call: miss, should call _create_cache_key once
+            registry.get("test", 1)
+            assert mock_key_gen.call_count == 1
+
+            # Second call: hit, should call _create_cache_key once
+            mock_key_gen.reset_mock()
+            registry.get("test", 1)
+            assert mock_key_gen.call_count == 1
+
+    def test_factory_cache_key_recomputation_optimization(self):
+        """Test that DynamicFactory calls _create_cache_key only once per create operation."""
+        from core.dynamic_programming import DynamicFactory
+
+        factory = DynamicFactory()
+
+        def creator(x):
+            return x
+
+        factory.register("test", creator)
+
+        with patch.object(
+            factory, "_create_cache_key", side_effect=factory._create_cache_key
+        ) as mock_key_gen:
+            # First call: miss, should call _create_cache_key once
+            factory.create("test", 1)
+            assert mock_key_gen.call_count == 1
+
+            # Second call: hit, should call _create_cache_key once
+            mock_key_gen.reset_mock()
+            factory.create("test", 1)
+            assert mock_key_gen.call_count == 1
+
 
 class TestDynamicLayoutEngine:
     """Test dynamic layout strategy engine."""
