@@ -228,7 +228,7 @@ pyjwt[crypto]==2.11.0
     #   -r requirements.in
     #   mcp
     #   pyjwt
-pypdf==6.7.3
+pypdf==6.10.2
     # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via pandas

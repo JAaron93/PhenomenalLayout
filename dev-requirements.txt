@@ -372,7 +372,7 @@ pyjwt[crypto]==2.11.0
     #   -r requirements.in
     #   mcp
     #   pyjwt
-pypdf==6.7.3
+pypdf==6.10.2
     # via
     #   -c requirements.txt
     #   -r requirements.in
