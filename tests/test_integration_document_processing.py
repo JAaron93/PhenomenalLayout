@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import pytest
 from core.dynamic_layout_engine import (
     OptimizedLayoutPreservationEngine as LayoutPreservationEngine,
 )
 from dolphin_ocr.monitoring import MonitoringService
-from dolphin_ocr.pdf_to_image import PDFToImageConverter
-from services.dolphin_ocr_service import DolphinOCRService
 from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
     McpLingoClient,
@@ -39,42 +38,6 @@ def _write_minimal_valid_pdf(path) -> None:
     path.write_bytes(pdf_content)
 
 
-class FakeOCR(DolphinOCRService):
-    def process_document_images(self, images: list[bytes]) -> dict:
-        # Minimal OCR result: one page with one block per image
-        pages = []
-        for _ in images:
-            pages.append(
-                {
-                    "text_blocks": [
-                        {
-                            "text": "Hello",
-                            "bbox": [10, 700, 300, 40],
-                            "font_info": {
-                                "family": "Helvetica",
-                                "size": 12,
-                                "weight": "normal",
-                                "style": "normal",
-                                "color": (0, 0, 0),
-                            },
-                            "confidence": 0.95,
-                        }
-                    ]
-                }
-            )
-        return {"pages": pages}
-
-
-class FakePDFToImage(PDFToImageConverter):
-    def convert_pdf_to_images(self, pdf_path) -> list[bytes]:
-        _ = pdf_path
-        # Return two fake images
-        return [b"img1", b"img2"]
-
-    def optimize_image_for_ocr(self, image_bytes: bytes) -> bytes:
-        return image_bytes
-
-
 class FakeLingo(McpLingoClient):
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         _ = source_lang, target_lang
@@ -99,13 +62,36 @@ class FakeLingo(McpLingoClient):
         return [(text + "_tx", 0.9) for text in texts]
 
 
-def test_complete_document_processing_workflow(tmp_path):
+def test_complete_document_processing_workflow(tmp_path, monkeypatch):
     # Create a minimal but structurally valid single-page PDF
     src_pdf = tmp_path / "sample.pdf"
     _write_minimal_valid_pdf(src_pdf)
 
-    converter = FakePDFToImage()
-    ocr = FakeOCR()
+    # Mock get_layout_sync
+    def fake_get_layout_sync(path):
+        return {
+            "pages": [
+                {
+                    "text_blocks": [
+                        {
+                            "text": "Hello",
+                            "bbox": [10, 700, 300, 40],
+                            "font_info": {
+                                "family": "Helvetica",
+                                "size": 12,
+                                "weight": "normal",
+                                "style": "normal",
+                                "color": (0, 0, 0),
+                            },
+                            "confidence": 0.95,
+                        }
+                    ]
+                }
+            ]
+        }
+
+    monkeypatch.setattr("services.dolphin_client.get_layout_sync", fake_get_layout_sync)
+
     engine = LayoutPreservationEngine()
     lts = LayoutAwareTranslationService(
         lingo_client=FakeLingo(),
@@ -115,8 +101,6 @@ def test_complete_document_processing_workflow(tmp_path):
     monitor = MonitoringService(window_seconds=60)
 
     processor = DocumentProcessor(
-        converter=converter,
-        ocr_service=ocr,
         translation_service=lts,
         reconstructor=recon,
         monitoring=monitor,
@@ -133,7 +117,8 @@ def test_complete_document_processing_workflow(tmp_path):
 
     assert result.success is True
     assert result.output_path and result.output_path.endswith("out.pdf")
-    assert result.processing_stats.pages_processed == 2
+    assert result.processing_stats.pages_processed == 1
     # Progress stages should include the core phases
-    assert result.progress[:2] == ["validated", "converted"]
+    assert result.progress[0] == "validated"
+    assert result.progress[1] == "ocr"
     assert result.progress[-1] == "completed"

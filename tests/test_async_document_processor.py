@@ -19,21 +19,6 @@ def process_pool() -> ThreadPoolExecutor:
     executor.shutdown(wait=True)
 
 
-class FakeConverters:
-    """Create per-test fakes; avoid global mutation and enable DI via monkeypatch."""
-
-    def __init__(self, pages: int = 1) -> None:
-        self.pages = pages
-
-    def convert(
-        self, pdf_path: str, dpi: int, fmt: str, poppler: str | None
-    ) -> list[bytes]:
-        return [b"img"] * self.pages
-
-    def optimize(self, img: bytes, fmt: str) -> bytes:
-        return img
-
-
 class FakeOCR:
     def __init__(self, blocks_per_page: int = 4) -> None:
         self.blocks_per_page = blocks_per_page
@@ -96,24 +81,20 @@ class DummyReconstructor:
         return None
 
 
-def _patch_converters(monkeypatch: pytest.MonkeyPatch, pages: int = 3) -> None:
-    fake = FakeConverters(pages=pages)
-    monkeypatch.setattr(adp, "_convert_pdf_to_images_proc", fake.convert)
-    monkeypatch.setattr(adp, "_optimize_image_proc", fake.optimize)
-
-
 @pytest.mark.asyncio
 async def test_async_translation_batching(
     monkeypatch: pytest.MonkeyPatch, process_pool: ThreadPoolExecutor
 ) -> None:
-    _patch_converters(monkeypatch, pages=4)
     ocr = FakeOCR(blocks_per_page=5)  # 20 blocks total
     translator = FakeTranslator()
     recon = DummyReconstructor()
 
+    async def fake_get_layout(path):
+        return ocr.process_document_images([b"dummy"] * 4)
+
+    monkeypatch.setattr("services.dolphin_client.get_layout", fake_get_layout)
+
     proc = adp.AsyncDocumentProcessor(
-        converter=adp.PDFToImageConverter(),
-        ocr_service=ocr,  # type: ignore[arg-type]
         translation_service=translator,  # type: ignore[arg-type]
         reconstructor=recon,  # type: ignore[arg-type]
         translation_batch_size=6,
@@ -138,14 +119,16 @@ async def test_async_translation_batching(
 async def test_token_bucket_is_used(
     monkeypatch: pytest.MonkeyPatch, process_pool: ThreadPoolExecutor
 ) -> None:
-    _patch_converters(monkeypatch, pages=1)
     ocr = FakeOCR(blocks_per_page=1)
     translator = FakeTranslator()
     recon = DummyReconstructor()
 
+    async def fake_get_layout(path):
+        return ocr.process_document_images([b"dummy"])
+
+    monkeypatch.setattr("services.dolphin_client.get_layout", fake_get_layout)
+
     proc = adp.AsyncDocumentProcessor(
-        converter=adp.PDFToImageConverter(),
-        ocr_service=ocr,  # type: ignore[arg-type]
         translation_service=translator,  # type: ignore[arg-type]
         reconstructor=recon,  # type: ignore[arg-type]
         ocr_rate_capacity=1,
@@ -172,14 +155,16 @@ async def test_token_bucket_is_used(
 async def test_concurrency_cap(
     monkeypatch: pytest.MonkeyPatch, process_pool: ThreadPoolExecutor
 ) -> None:
-    _patch_converters(monkeypatch, pages=1)
     ocr = FakeOCR(blocks_per_page=1)
     translator = FakeTranslator()
     recon = DummyReconstructor()
 
+    async def fake_get_layout(path):
+        return ocr.process_document_images([b"dummy"])
+
+    monkeypatch.setattr("services.dolphin_client.get_layout", fake_get_layout)
+
     proc = adp.AsyncDocumentProcessor(
-        converter=adp.PDFToImageConverter(),
-        ocr_service=ocr,  # type: ignore[arg-type]
         translation_service=translator,  # type: ignore[arg-type]
         reconstructor=recon,  # type: ignore[arg-type]
         max_concurrent_requests=2,

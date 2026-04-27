@@ -12,6 +12,7 @@ so the rest of the codebase doesn't need to know the wire format.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import os
@@ -271,3 +272,22 @@ async def get_layout(pdf_path: str | os.PathLike[str]) -> dict[str, Any]:
     # Validate the response using the dedicated validation function
     validate_dolphin_layout_response(data)
     return data
+
+
+def get_layout_sync(pdf_path: str | os.PathLike[str]) -> dict[str, Any]:
+    """Synchronous version of get_layout."""
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            # If we're in an async loop, we can't use asyncio.run
+            # This is a bit tricky for sync code called from async
+            # For now, we'll assume we can use asyncio.run if no loop is running
+            # or we use a thread-safe way.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, get_layout(pdf_path))
+                return future.result()
+    except RuntimeError:
+        return asyncio.run(get_layout(pdf_path))
+    
+    return asyncio.run(get_layout(pdf_path))

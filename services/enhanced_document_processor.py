@@ -194,7 +194,7 @@ class EnhancedDocumentProcessor:
         processing_time = time.time() - start_time
 
         metadata = DocumentMetadata(
-            filename=str(pdf_path),
+            filename=Path(pdf_path).name,
             file_type="PDF",
             total_pages=len(text_by_page),
             total_text_elements=total_text_elements,

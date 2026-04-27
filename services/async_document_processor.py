@@ -22,8 +22,6 @@ from pathlib import Path
 from typing import Self
 
 from dolphin_ocr.layout import BoundingBox, FontInfo
-from dolphin_ocr.pdf_to_image import PDFToImageConverter
-from services.dolphin_ocr_service import DolphinOCRService
 from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
     TextBlock,
@@ -106,18 +104,6 @@ class _TokenBucket:
             self.tokens_micro -= self._SCALE
 
 
-def _convert_pdf_to_images_proc(
-    pdf_path: str, dpi: int, image_format: str, poppler_path: str | None
-) -> list[bytes]:
-    converter = PDFToImageConverter(
-        dpi=dpi, image_format=image_format, poppler_path=poppler_path
-    )
-    return converter.convert_pdf_to_images(pdf_path)
-
-
-def _optimize_image_proc(image_bytes: bytes, image_format: str) -> bytes:
-    converter = PDFToImageConverter(image_format=image_format)
-    return converter.optimize_image_for_ocr(image_bytes)
 
 
 class AsyncDocumentProcessor:
@@ -133,8 +119,6 @@ class AsyncDocumentProcessor:
     def __init__(
         self,
         *,
-        converter: PDFToImageConverter,
-        ocr_service: DolphinOCRService,
         translation_service: LayoutAwareTranslationService,
         reconstructor: PDFDocumentReconstructor,
         max_concurrent_requests: int = 4,
@@ -149,8 +133,6 @@ class AsyncDocumentProcessor:
         Parameters mirror the synchronous processor but add concurrency and
         rate-limiting controls suitable for async execution.
         """
-        self._converter = converter
-        self._ocr = ocr_service
         self._translator = translation_service
         self._reconstructor = reconstructor
 
@@ -196,6 +178,8 @@ class AsyncDocumentProcessor:
         on_progress: Callable[[str, dict], object] | None = None,
     ) -> TranslatedLayout:
         """Run the full async pipeline and return a TranslatedLayout."""
+        from services.dolphin_client import get_layout
+
         async def _report(stage: str, payload: dict) -> None:
             if not on_progress:
                 return
@@ -216,47 +200,15 @@ class AsyncDocumentProcessor:
         async with self._req_sema:
             await _report("validated", {"path": request.file_path})
 
-            loop = asyncio.get_running_loop()
-
-            # 1) Convert PDF -> Images (process pool)
-            images = await loop.run_in_executor(
-                self._pool,
-                _convert_pdf_to_images_proc,
-                request.file_path,
-                request.options.dpi,
-                self._converter.image_format,
-                self._converter.poppler_path,
-            )
-
-            await _report("converted", {"pages": len(images)})
-
-            # Optimize each image (process pool map)
-            optimized = []
-            for b in images:
-                opt = await loop.run_in_executor(
-                    self._pool,
-                    _optimize_image_proc,
-                    b,
-                    self._converter.image_format,
-                )
-                optimized.append(opt)
-
-            # 2) OCR (rate-limited)
+            # 1) OCR (rate-limited, direct PDF submission)
             await self._ocr_bucket.acquire()
-            # Support both async and sync OCR service implementations
-            ocr_async = getattr(
-                self._ocr,
-                "process_document_images_async",
-                None,
-            )
-            if callable(ocr_async):
-                ocr_result = await ocr_async(optimized)  # type: ignore[misc]
-            else:
-                ocr_result = await asyncio.to_thread(
-                    self._ocr.process_document_images,
-                    optimized,
-                )
-            await _report("ocr", {"pages": len(optimized)})
+            try:
+                ocr_result = await get_layout(request.file_path)
+            except Exception as e:
+                logger.error("OCR processing failed for %s: %s", request.file_path, e)
+                raise
+                
+            await _report("ocr", {"pages": len(ocr_result.get("pages", []))})
 
             # 3) Build TextBlocks
             blocks_per_page = parse_ocr_result(ocr_result)

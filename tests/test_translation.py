@@ -31,11 +31,9 @@ async def run_test():
     success = False
     try:
         result = await process_file_upload(pdf_path)
-        _preview = result.get("preview", "")
         status = result.get("status", "")
         detected_lang = result.get("detected_language", "")
         preproc_info = result.get("preprocessing_info", "")
-        _proc_details = result.get("processing_details", "")
         success = result.get("success", False)
     except Exception:
         import traceback
@@ -86,13 +84,13 @@ async def run_test():
         curr_status, progress, is_done = get_translation_status()
         print(f"Status: {curr_status} | Progress: {progress}%")
 
+        if state.translation_status == "error":
+            print(f"\n❌ Translation failed: {state.error_message}")
+            break
+
         if is_done:
             print("\n✅ Translation completed successfully!")
             print(f"Output saved to: {state.output_file}")
-            break
-
-        if state.translation_status == "error":
-            print(f"\n❌ Translation failed: {state.error_message}")
             break
 
         await asyncio.sleep(2)

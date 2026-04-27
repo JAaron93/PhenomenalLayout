@@ -72,7 +72,7 @@ def test_upload_accepts_valid_pdf(
         # emulate returning a saved path
         return str(pdf)
 
-    def _extract_content(_path: str):
+    async def _extract_content(_path: str):
         return {"type": "pdf", "metadata": {}}
 
     monkeypatch.setattr(file_handler, "save_upload_file", _save_upload_file)

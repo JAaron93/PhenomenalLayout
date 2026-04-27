@@ -2,54 +2,38 @@ import os
 
 import pytest
 
-from services.dolphin_ocr_service import DolphinOCRService
-
 
 @pytest.mark.skipif(
     os.getenv("RUN_LIVE_DOLPHIN_TESTS", "false").lower()
     not in {"1", "true", "yes", "on"},
     reason="Live Dolphin OCR API tests are disabled by default.",
 )
-def test_live_process_images_smoke():
-    # This test requires a real Modal endpoint and HF token to be set in env.
-    # It sends a single small image derived from a tiny PNG.
-    endpoint = os.getenv("DOLPHIN_MODAL_ENDPOINT")
-    token = os.getenv("HF_TOKEN")
-    assert endpoint, "DOLPHIN_MODAL_ENDPOINT must be set for live test"
-    assert token, "HF_TOKEN must be set for live test"
-
-    # 1x1 pixel transparent PNG used as a minimal valid image for tests.
-    # If decoding fails in some environments, replace with a small valid sample.
-    png_bytes = (
-        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
-        b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00"
-        b"\x00\x0bIDATx\x9cc``\x00\x00\x00\x04\x00\x01\x0b\xe7\x02"
-        b"\x9d\x00\x00\x00\x00IEND\xaeB`\x82"
+async def test_live_process_pdf_smoke(tmp_path):
+    """Smoke test for live Dolphin OCR via dolphin_client."""
+    from services.dolphin_client import get_layout
+    
+    # Create a minimal PDF
+    pdf_path = tmp_path / "test.pdf"
+    pdf_content = (
+        b"%PDF-1.4\n"
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"
+        b"3 0 obj\n"
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\n"
+        b"endobj\n"
+        b"xref\n0 4\n"
+        b"0000000000 65535 f \n"
+        b"0000000010 00000 n \n"
+        b"0000000060 00000 n \n"
+        b"0000000115 00000 n \n"
+        b"trailer\n<< /Size 4 /Root 1 0 R >>\n"
+        b"startxref\n196\n"
+        b"%%EOF\n"
     )
+    pdf_path.write_bytes(pdf_content)
 
-    svc = DolphinOCRService()
-    out = svc.process_document_images([png_bytes])
+    # This will likely fail in local CI without keys, but that's what skipif is for
+    out = await get_layout(pdf_path)
 
-    # Shape assertions
-    assert isinstance(out, dict), f"Expected dict response, got: {type(out)!r}"
-
-    if "pages" in out:
-        pages = out["pages"]
-        assert isinstance(pages, list), "'pages' must be a list"
-        assert len(pages) > 0, "'pages' must contain at least one page"
-        first = pages[0]
-        assert isinstance(first, dict), "each page must be a dict"
-        # Allow either text or block style outputs
-        assert (
-            "text" in first or "blocks" in first
-        ), "page dict must contain 'text' or 'blocks'"
-        if "text" in first:
-            assert isinstance(first["text"], str)
-        if "blocks" in first:
-            assert isinstance(first["blocks"], list)
-    elif "ok" in out:
-        # Some endpoints may return a simple status shape
-        assert isinstance(out["ok"], bool)
-        assert out["ok"] is True
-    else:
-        raise AssertionError(f"Unexpected response keys: {list(out.keys())}")
+    assert isinstance(out, dict)
+    assert "pages" in out

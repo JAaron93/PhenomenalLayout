@@ -14,8 +14,6 @@ from pathlib import Path
 
 from dolphin_ocr.layout import BoundingBox, FontInfo
 from dolphin_ocr.monitoring import MonitoringService
-from dolphin_ocr.pdf_to_image import PDFToImageConverter
-from services.dolphin_ocr_service import DolphinOCRService
 from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
     TextBlock,
@@ -77,8 +75,6 @@ class DocumentProcessor:
     def __init__(
         self,
         *,
-        converter: PDFToImageConverter,
-        ocr_service: DolphinOCRService,
         translation_service: LayoutAwareTranslationService,
         reconstructor: PDFDocumentReconstructor,
         monitoring: MonitoringService | None = None,
@@ -86,8 +82,6 @@ class DocumentProcessor:
         logger: logging.Logger | None = None,
     ) -> None:
         """Initialize the processor with collaborating services."""
-        self._converter = converter
-        self._ocr = ocr_service
         self._translator = translation_service
         self._reconstructor = reconstructor
         self._monitor = monitoring
@@ -105,12 +99,13 @@ class DocumentProcessor:
 
         Progress events emitted (in order):
         - validated
-        - converted
         - ocr
         - translated
         - reconstructed
         - completed
         """
+        from services.dolphin_client import get_layout_sync
+        
         progress: list[str] = []
 
         def _emit(stage: str, **payload: object) -> None:
@@ -137,23 +132,16 @@ class DocumentProcessor:
                 success=True,
             )
 
-        # Convert PDF to images
-        start_convert = time.perf_counter()
-        images = self._converter.convert_pdf_to_images(request.file_path)
-        # Optional light optimization per image (safe, pure-python)
-        optimized: list[bytes] = [
-            self._converter.optimize_image_for_ocr(img) for img in images
-        ]
-        convert_ms = (time.perf_counter() - start_convert) * 1000.0
-        _emit("converted", pages=len(optimized))
-        if self._monitor is not None:
-            self._monitor.record_operation("convert", convert_ms, success=True)
-
-        # OCR processing (batch)
+        # OCR processing (direct PDF submission)
         start_ocr = time.perf_counter()
-        ocr_result = self._ocr.process_document_images(optimized)
+        try:
+            ocr_result = get_layout_sync(request.file_path)
+        except Exception as e:
+            self._logger.error("OCR processing failed for %s: %s", request.file_path, e)
+            raise
+            
         ocr_ms = (time.perf_counter() - start_ocr) * 1000.0
-        _emit("ocr", pages=len(optimized))
+        _emit("ocr", pages=len(ocr_result.get("pages", [])))
         if self._monitor is not None:
             self._monitor.record_operation("ocr", ocr_ms, success=True)
 
@@ -241,7 +229,7 @@ class DocumentProcessor:
         warnings = list(recon.warnings)
         stats = ProcessingStats(
             pages_processed=len(pages),
-            convert_ms=convert_ms,
+            convert_ms=0.0,
             ocr_ms=ocr_ms,
             translation_ms=translation_ms,
             reconstruction_ms=reconstruction_ms,
