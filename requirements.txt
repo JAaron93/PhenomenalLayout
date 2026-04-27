@@ -221,7 +221,7 @@ pydantic-settings==2.13.1
     # via mcp
 pydub==0.25.1
     # via gradio
-pygments==2.19.2
+pygments==2.20.0
     # via rich
 pyjwt[crypto]==2.11.0
     # via

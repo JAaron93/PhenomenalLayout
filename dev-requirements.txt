@@ -361,7 +361,7 @@ pydub==0.25.1
     # via
     #   -c requirements.txt
     #   gradio
-pygments==2.19.2
+pygments==2.20.0
     # via
     #   -c requirements.txt
     #   pytest
