@@ -66,7 +66,7 @@ catalogue==2.0.10
     #   spacy
     #   srsly
     #   thinc
-cbor2==5.8.0
+cbor2==5.9.0
     # via
     #   -c requirements.txt
     #   modal
