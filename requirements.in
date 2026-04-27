@@ -4,7 +4,7 @@
 # Web Framework & API
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.34,<1.0
-python-dotenv>=1.1,<2.0
+python-dotenv>=1.2.2,<2.0
 
 # UI Framework
 gradio>=5.9,<6.0
