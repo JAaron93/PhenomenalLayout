@@ -67,7 +67,7 @@ confection==0.1.5
     # via
     #   thinc
     #   weasel
-cryptography==46.0.5
+cryptography==47.0.0
     # via pyjwt
 cymem==2.0.13
     # via
@@ -224,7 +224,10 @@ pydub==0.25.1
 pygments==2.19.2
     # via rich
 pyjwt[crypto]==2.11.0
-    # via mcp
+    # via
+    #   -r requirements.in
+    #   mcp
+    #   pyjwt
 pypdf==6.7.3
     # via -r requirements.in
 python-dateutil==2.9.0.post0
