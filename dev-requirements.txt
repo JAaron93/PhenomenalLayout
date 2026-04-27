@@ -272,7 +272,7 @@ numpy==2.4.2
     #   pandas
     #   spacy
     #   thinc
-orjson==3.11.7
+orjson==3.11.8
     # via
     #   -c requirements.txt
     #   gradio
