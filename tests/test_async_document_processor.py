@@ -2,21 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import math
-from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 import services.async_document_processor as adp
 from dolphin_ocr.layout import LayoutStrategy, StrategyType
 from services.layout_aware_translation_service import TextBlock, TranslationResult
-
-
-@pytest.fixture
-def process_pool() -> ThreadPoolExecutor:
-    """Create a ThreadPoolExecutor for testing and ensure proper cleanup."""
-    executor = ThreadPoolExecutor(max_workers=4)
-    yield executor
-    executor.shutdown(wait=True)
 
 
 class FakeOCR:
@@ -83,13 +74,13 @@ class DummyReconstructor:
 
 @pytest.mark.asyncio
 async def test_async_translation_batching(
-    monkeypatch: pytest.MonkeyPatch, process_pool: ThreadPoolExecutor
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ocr = FakeOCR(blocks_per_page=5)  # 20 blocks total
     translator = FakeTranslator()
     recon = DummyReconstructor()
 
-    async def fake_get_layout(path):
+    async def fake_get_layout(_path):
         return ocr.process_document_images([b"dummy"] * 4)
 
     monkeypatch.setattr("services.dolphin_client.get_layout", fake_get_layout)
@@ -100,7 +91,6 @@ async def test_async_translation_batching(
         translation_batch_size=6,
         translation_concurrency=3,
         max_concurrent_requests=2,
-        process_pool=process_pool,
     )
 
     req = adp.AsyncDocumentRequest(
@@ -117,13 +107,13 @@ async def test_async_translation_batching(
 
 @pytest.mark.asyncio
 async def test_token_bucket_is_used(
-    monkeypatch: pytest.MonkeyPatch, process_pool: ThreadPoolExecutor
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ocr = FakeOCR(blocks_per_page=1)
     translator = FakeTranslator()
     recon = DummyReconstructor()
 
-    async def fake_get_layout(path):
+    async def fake_get_layout(_path):
         return ocr.process_document_images([b"dummy"])
 
     monkeypatch.setattr("services.dolphin_client.get_layout", fake_get_layout)
@@ -133,7 +123,6 @@ async def test_token_bucket_is_used(
         reconstructor=recon,  # type: ignore[arg-type]
         ocr_rate_capacity=1,
         ocr_rate_per_sec=100.0,
-        process_pool=process_pool,
     )
 
     calls = {"count": 0}
@@ -153,13 +142,13 @@ async def test_token_bucket_is_used(
 
 @pytest.mark.asyncio
 async def test_concurrency_cap(
-    monkeypatch: pytest.MonkeyPatch, process_pool: ThreadPoolExecutor
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ocr = FakeOCR(blocks_per_page=1)
     translator = FakeTranslator()
     recon = DummyReconstructor()
 
-    async def fake_get_layout(path):
+    async def fake_get_layout(_path):
         return ocr.process_document_images([b"dummy"])
 
     monkeypatch.setattr("services.dolphin_client.get_layout", fake_get_layout)
@@ -170,7 +159,6 @@ async def test_concurrency_cap(
         max_concurrent_requests=2,
         ocr_rate_capacity=100,
         ocr_rate_per_sec=1_000.0,
-        process_pool=process_pool,
     )
 
     active = 0
@@ -192,3 +180,24 @@ async def test_concurrency_cap(
 
     await asyncio.gather(*(run_one(i) for i in range(6)))
     assert max_active <= 2
+
+
+@pytest.mark.asyncio
+async def test_cleanup_methods_are_no_ops() -> None:
+    translator = FakeTranslator()
+    recon = DummyReconstructor()
+    proc = adp.AsyncDocumentProcessor(
+        translation_service=translator,  # type: ignore[arg-type]
+        reconstructor=recon,  # type: ignore[arg-type]
+    )
+
+    # Test context manager
+    async with proc as p:
+        assert p is proc
+
+    # Test explicit cleanup calls
+    await proc.aclose()
+    proc.close()
+
+    # Test destructor
+    del proc

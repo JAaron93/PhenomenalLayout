@@ -644,28 +644,30 @@ def generate_output_filename(original_filename: str, target_language: str) -> st
     return f"translated_{name}_{target_language.lower()}_advanced{ext}"
 
 
-def get_translation_status() -> tuple[str, int, bool]:
+def get_translation_status() -> tuple[str, int, bool, str | None]:
     """Get current translation status with detailed info."""
     if state.translation_status == "idle":
-        return "Ready for advanced translation", 0, False
+        return "Ready for advanced translation", 0, False, None
     elif state.translation_status == "starting":
-        return "🚀 Initializing advanced translation...", 5, False
+        return "🚀 Initializing advanced translation...", 5, False, None
     elif state.translation_status == "processing":
         return (
             f"🔄 Advanced translation in progress... ({state.translation_progress}%)",
             state.translation_progress,
             False,
+            None,
         )
     elif state.translation_status == "completed":
         return (
             "✅ Advanced translation completed with format preservation!",
             100,
             True,
+            state.output_file,
         )
     elif state.translation_status == "error":
-        return f"❌ Translation failed: {state.error_message}", 0, False
+        return f"❌ Translation failed: {state.error_message}", 0, False, None
     else:
-        return "Unknown status", 0, False
+        return "Unknown status", 0, False, None
 
 
 def download_translated_file(output_format: str) -> str:

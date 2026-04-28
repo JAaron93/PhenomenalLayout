@@ -8,6 +8,7 @@ import pytest
     not in {"1", "true", "yes", "on"},
     reason="Live Dolphin OCR API tests are disabled by default.",
 )
+@pytest.mark.asyncio
 async def test_live_process_pdf_smoke(tmp_path):
     """Smoke test for live Dolphin OCR via dolphin_client."""
     from services.dolphin_client import get_layout

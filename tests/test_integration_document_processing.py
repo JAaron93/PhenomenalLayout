@@ -68,7 +68,7 @@ def test_complete_document_processing_workflow(tmp_path, monkeypatch):
     _write_minimal_valid_pdf(src_pdf)
 
     # Mock get_layout_sync
-    def fake_get_layout_sync(path):
+    def fake_get_layout_sync(_path):
         return {
             "pages": [
                 {
@@ -90,7 +90,7 @@ def test_complete_document_processing_workflow(tmp_path, monkeypatch):
             ]
         }
 
-    monkeypatch.setattr("services.dolphin_client.get_layout_sync", fake_get_layout_sync)
+    monkeypatch.setattr("services.main_document_processor.get_layout_sync", fake_get_layout_sync)
 
     engine = LayoutPreservationEngine()
     lts = LayoutAwareTranslationService(

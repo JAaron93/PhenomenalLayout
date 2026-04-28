@@ -224,6 +224,7 @@ class EnhancedDocumentProcessor:
             "layouts": [],
             "text_by_page": text_by_page,
             "metadata": metadata,
+            "file_path": pdf_path,
             "backup_path": "",
             "preview": "",
             "dolphin_layout": dolphin_layout,
@@ -345,9 +346,7 @@ class EnhancedDocumentProcessor:
         try:
             result = reconstructor.reconstruct_pdf_document(
                 translated_layout=layout,
-                original_file_path=original_content.get("metadata").filename
-                if original_content.get("metadata")
-                else original_content.get("file_path", ""),
+                original_file_path=original_content.get("file_path", ""),
                 output_path=output_path,
             )
         except (DocumentReconstructionError, OSError, ValueError) as e:

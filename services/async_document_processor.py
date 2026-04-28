@@ -1,9 +1,8 @@
 """Asynchronous document processing orchestrator.
 
 Implements an async pipeline that coordinates:
-- PDF -> image conversion (CPU-bound) using a small process pool
-- OCR requests (IO-bound) with basic rate limiting
-- Layout-aware translation (IO-bound) using asyncio tasks and batching
+- Direct submission of document bytes/pages to OCR (IO-bound) with basic rate limiting
+- Layout-aware translation via asyncio batching
 - PDF reconstruction (CPU-bound)
 
 This module complements the synchronous processor by providing a drop-in
@@ -13,15 +12,17 @@ async alternative for higher throughput and responsive servers.
 import asyncio
 import inspect
 import logging
-import os
+import random
 import time
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
+import httpx
+
 from dolphin_ocr.layout import BoundingBox, FontInfo
+from services import dolphin_client
 from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
     TextBlock,
@@ -104,14 +105,26 @@ class _TokenBucket:
             self.tokens_micro -= self._SCALE
 
 
+class LayoutServiceError(Exception):
+    """Base class for errors related to the layout service."""
+    pass
+
+
+class LayoutServiceTransientError(LayoutServiceError):
+    """Transient errors that might succeed on retry (e.g., network issues, 5xx)."""
+    pass
+
+
+class LayoutServiceFatalError(LayoutServiceError):
+    """Fatal errors that should not be retried (e.g., 4xx, invalid file)."""
+    pass
 
 
 class AsyncDocumentProcessor:
     """Async orchestrator for document processing with basic concurrency.
 
     Concurrency model:
-    - CPU-bound conversion/optimization: process pool
-    - OCR and translation: asyncio tasks (IO-bound) with batching and limits
+    - IO-bound OCR/translation: asyncio tasks with batching and limits
     - Request concurrency: semaphore to cap concurrent requests
     - Provider rate-limiting: token bucket for OCR calls
     """
@@ -126,7 +139,6 @@ class AsyncDocumentProcessor:
         translation_concurrency: int = 4,
         ocr_rate_capacity: int = 2,
         ocr_rate_per_sec: float = 1.0,
-        process_pool: ProcessPoolExecutor | None = None,
     ) -> None:
         """Initialize the async processor.
 
@@ -161,15 +173,6 @@ class AsyncDocumentProcessor:
             validated_ocr_capacity,
             validated_ocr_rate,
         )
-        if process_pool is not None:
-            self._pool = process_pool
-            self._owns_pool = False
-        else:
-            # Use a conservative default based on CPU count
-            cpu = os.cpu_count() or 2
-            workers = max(1, cpu - 1)
-            self._pool = ProcessPoolExecutor(max_workers=workers)
-            self._owns_pool = True
 
     async def process_document(
         self,
@@ -178,7 +181,6 @@ class AsyncDocumentProcessor:
         on_progress: Callable[[str, dict], object] | None = None,
     ) -> TranslatedLayout:
         """Run the full async pipeline and return a TranslatedLayout."""
-        from services.dolphin_client import get_layout
 
         async def _report(stage: str, payload: dict) -> None:
             if not on_progress:
@@ -200,14 +202,48 @@ class AsyncDocumentProcessor:
         async with self._req_sema:
             await _report("validated", {"path": request.file_path})
 
-            # 1) OCR (rate-limited, direct PDF submission)
-            await self._ocr_bucket.acquire()
-            try:
-                ocr_result = await get_layout(request.file_path)
-            except Exception as e:
-                logger.error("OCR processing failed for %s: %s", request.file_path, e)
-                raise
-                
+            # 1) OCR (rate-limited, direct PDF submission with retry)
+            max_retries = 3
+            ocr_result = None
+            for attempt in range(max_retries):
+                await self._ocr_bucket.acquire()
+                try:
+                    ocr_result = await dolphin_client.get_layout(request.file_path)
+                    break
+                except FileNotFoundError as e:
+                    logger.error("OCR failed: PDF file not found at %s: %s", request.file_path, e)
+                    raise LayoutServiceFatalError(f"PDF not found: {request.file_path}") from e
+                except httpx.HTTPStatusError as e:
+                    status = e.response.status_code
+                    is_transient = (status == 429 or 500 <= status < 600)
+                    msg = f"OCR service returned status {status} for {request.file_path}: {e.response.text}"
+                    if is_transient and attempt < max_retries - 1:
+                        logger.warning("%s. Retrying (%d/%d)...", msg, attempt + 1, max_retries)
+                        await asyncio.sleep((2 ** attempt) + random.uniform(0, 1))
+                        continue
+                    logger.error(msg)
+                    if is_transient:
+                        raise LayoutServiceTransientError(msg) from e
+                    raise LayoutServiceFatalError(msg) from e
+                except (httpx.RequestError, asyncio.TimeoutError) as e:
+                    msg = f"OCR service network error for {request.file_path}: {type(e).__name__}: {e}"
+                    if attempt < max_retries - 1:
+                        logger.warning("%s. Retrying (%d/%d)...", msg, attempt + 1, max_retries)
+                        await asyncio.sleep((2 ** attempt) + random.uniform(0, 1))
+                        continue
+                    logger.error(msg)
+                    raise LayoutServiceTransientError(msg) from e
+                except ValueError as e:
+                    msg = f"OCR service returned invalid response for {request.file_path}: {e}"
+                    logger.error(msg)
+                    raise LayoutServiceFatalError(msg) from e
+                except Exception as e:
+                    logger.error("Unexpected OCR failure for %s: %s", request.file_path, e)
+                    raise LayoutServiceFatalError(f"Unexpected OCR failure: {e}") from e
+
+            if ocr_result is None:
+                raise LayoutServiceFatalError("OCR failed to return a result")
+
             await _report("ocr", {"pages": len(ocr_result.get("pages", []))})
 
             # 3) Build TextBlocks
@@ -305,35 +341,24 @@ class AsyncDocumentProcessor:
             return layout
 
     async def aclose(self) -> None:
-        """Async cleanup method to shutdown the process pool if owned."""
-        if self._owns_pool and hasattr(self, '_pool') and self._pool is not None:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self._pool.shutdown, True)
-            self._pool = None
+        """No-op: this processor holds no owned resources requiring explicit cleanup."""
+        pass
 
     def close(self) -> None:
-        """Synchronous cleanup method to shutdown the process pool if owned."""
-        if self._owns_pool and hasattr(self, '_pool') and self._pool is not None:
-            self._pool.shutdown(wait=True)
-            self._pool = None
+        """No-op: this processor holds no owned resources requiring explicit cleanup."""
+        pass
 
     async def __aenter__(self) -> Self:
         """Async context manager entry."""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Async context manager exit with cleanup."""
-        await self.aclose()
+        """Async context manager exit."""
+        pass
 
-    def __del__(self):
-        """Fallback cleanup in destructor."""
-        try:
-            if self._owns_pool and hasattr(self, '_pool') and self._pool is not None:
-                self._pool.shutdown(wait=False)
-                self._pool = None
-        except Exception:
-            # Ignore errors during cleanup in destructor
-            pass
+    def __del__(self) -> None:
+        """Safe no-op destructor."""
+        pass
 
     # -------------------------- Helpers --------------------------
 

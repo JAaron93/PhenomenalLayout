@@ -2,8 +2,8 @@ from __future__ import annotations
 
 """Main document processing orchestrator.
 
-Coordinates the PDF conversion, OCR, layout-aware translation, and
-reconstruction steps into a single `DocumentProcessor` pipeline.
+Coordinates OCR, layout-aware translation, and reconstruction steps
+into a single `DocumentProcessor` pipeline.
 """
 
 import logging
@@ -18,6 +18,7 @@ from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
     TextBlock,
 )
+from services.dolphin_client import get_layout_sync
 from services.ocr_utils import parse_ocr_result
 from services.pdf_document_reconstructor import (
     PDFDocumentReconstructor,
@@ -52,7 +53,7 @@ class ProcessingStats:
     """Timing and counters for the run (milliseconds for timing)."""
 
     pages_processed: int
-    convert_ms: float
+    convert_ms: float  # Deprecated: remains at 0.0 for backward compatibility
     ocr_ms: float
     translation_ms: float
     reconstruction_ms: float
@@ -104,8 +105,6 @@ class DocumentProcessor:
         - reconstructed
         - completed
         """
-        from services.dolphin_client import get_layout_sync
-        
         progress: list[str] = []
 
         def _emit(stage: str, **payload: object) -> None:
@@ -137,6 +136,10 @@ class DocumentProcessor:
         try:
             ocr_result = get_layout_sync(request.file_path)
         except Exception as e:
+            ocr_ms = (time.perf_counter() - start_ocr) * 1000.0
+            _emit("ocr", pages=0)
+            if self._monitor is not None:
+                self._monitor.record_operation("ocr", ocr_ms, success=False)
             self._logger.error("OCR processing failed for %s: %s", request.file_path, e)
             raise
             

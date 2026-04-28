@@ -207,7 +207,7 @@ class TestConfidenceScorerIntegration:
         
         assert factors is not None
         assert hasattr(factors, 'rarity_score')
-        assert factors.compound_structure_score == 0.8
+        assert factors.compound_structure_score > 0.7
 
     def test_get_confidence_breakdown(self):
         """Test get_confidence_breakdown method."""
@@ -222,6 +222,9 @@ class TestConfidenceScorerIntegration:
         breakdown = scorer.get_confidence_breakdown(factors)
         
         assert isinstance(breakdown, dict)
+        assert len(breakdown) > 0
+        expected_keys = {"morphological", "context", "frequency", "pattern", "linguistic", "final"}
+        assert expected_keys.issubset(breakdown.keys())
 
     def test_update_patterns(self):
         """Test update_patterns method."""

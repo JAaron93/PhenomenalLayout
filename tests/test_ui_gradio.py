@@ -159,7 +159,7 @@ def test_ui_translation_progress(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
         def fake_status():
-            return "processing 50%", 0.5, True
+            return "processing 50%", 0.5, True, None
 
         monkeypatch.setattr(gi, "start_translation_sync", fake_start)
         monkeypatch.setattr(gi, "get_translation_status", fake_status)
