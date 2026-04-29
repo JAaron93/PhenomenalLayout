@@ -408,8 +408,6 @@ def create_gradio_interface() -> gr.Blocks:
         def update_status(_progress: "gr.Progress | None" = None):
             if _progress is None:
                 _progress = gr.Progress(track_tqdm=False)
-            if _progress is None:
-                gr.Progress(track_tqdm=False)
             status, _unused, download_ready, _output_file = get_translation_status()
             timer_update = gr.Timer(active=not bool(download_ready))
             return status, gr.update(interactive=download_ready), timer_update

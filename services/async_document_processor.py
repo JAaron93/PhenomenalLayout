@@ -1,7 +1,8 @@
 """Asynchronous document processing orchestrator.
 
 Implements an async pipeline that coordinates:
-- Direct submission of document bytes/pages to OCR (IO-bound) with basic rate limiting
+- Direct submission of document bytes/pages to OCR (IO-bound) with basic
+- rate limiting
 - Layout-aware translation via asyncio batching
 - PDF reconstruction (CPU-bound)
 
@@ -60,7 +61,9 @@ class AsyncDocumentRequest:
     file_path: str
     source_language: str
     target_language: str
-    options: AsyncProcessingOptions = field(default_factory=AsyncProcessingOptions)
+    options: AsyncProcessingOptions = field(
+        default_factory=AsyncProcessingOptions
+    )
 
 
 class _TokenBucket:
@@ -111,12 +114,18 @@ class LayoutServiceError(Exception):
 
 
 class LayoutServiceTransientError(LayoutServiceError):
-    """Transient errors that might succeed on retry (e.g., network issues, 5xx)."""
+    """Transient errors that might succeed on retry.
+
+    Includes network issues, 5xx, etc.
+    """
     pass
 
 
 class LayoutServiceFatalError(LayoutServiceError):
-    """Fatal errors that should not be retried (e.g., 4xx, invalid file)."""
+    """Fatal errors that should not be retried.
+
+    Includes 4xx, invalid file, etc.
+    """
     pass
 
 
@@ -139,6 +148,7 @@ class AsyncDocumentProcessor:
         translation_concurrency: int = 4,
         ocr_rate_capacity: int = 2,
         ocr_rate_per_sec: float = 1.0,
+        ocr_max_retries: int = 3,
     ) -> None:
         """Initialize the async processor.
 
@@ -154,6 +164,7 @@ class AsyncDocumentProcessor:
         validated_batch_size = int(translation_batch_size)
         validated_ocr_capacity = int(ocr_rate_capacity)
         validated_ocr_rate = float(ocr_rate_per_sec)
+        validated_ocr_retries = int(ocr_max_retries)
 
         if validated_req_max <= 0:
             raise ValueError("max_concurrent_requests must be >= 1")
@@ -165,6 +176,8 @@ class AsyncDocumentProcessor:
             raise ValueError("ocr_rate_capacity must be >= 1")
         if validated_ocr_rate <= 0:
             raise ValueError("ocr_rate_per_sec must be > 0")
+        if validated_ocr_retries <= 0:
+            raise ValueError("ocr_max_retries must be >= 1")
 
         self._req_sema = asyncio.Semaphore(validated_req_max)
         self._tg_limit = validated_trans_conc
@@ -173,6 +186,7 @@ class AsyncDocumentProcessor:
             validated_ocr_capacity,
             validated_ocr_rate,
         )
+        self._ocr_max_retries = validated_ocr_retries
 
     async def process_document(
         self,
@@ -203,46 +217,83 @@ class AsyncDocumentProcessor:
             await _report("validated", {"path": request.file_path})
 
             # 1) OCR (rate-limited, direct PDF submission with retry)
-            max_retries = 3
+            max_retries = self._ocr_max_retries
             ocr_result = None
             for attempt in range(max_retries):
                 await self._ocr_bucket.acquire()
                 try:
-                    ocr_result = await dolphin_client.get_layout(request.file_path)
+                    ocr_result = await dolphin_client.get_layout(
+                        request.file_path
+                    )
                     break
                 except FileNotFoundError as e:
-                    logger.error("OCR failed: PDF file not found at %s: %s", request.file_path, e)
-                    raise LayoutServiceFatalError(f"PDF not found: {request.file_path}") from e
+                    logger.error(
+                        "OCR failed: PDF file not found at %s: %s",
+                        request.file_path,
+                        e,
+                    )
+                    raise LayoutServiceFatalError(
+                        f"PDF not found: {request.file_path}"
+                    ) from e
                 except httpx.HTTPStatusError as e:
                     status = e.response.status_code
-                    is_transient = (status == 429 or 500 <= status < 600)
-                    msg = f"OCR service returned status {status} for {request.file_path}: {e.response.text}"
+                    is_transient = status == 429 or 500 <= status < 600
+                    msg = (
+                        f"OCR service returned status {status} for "
+                        f"{request.file_path}: {e.response.text}"
+                    )
                     if is_transient and attempt < max_retries - 1:
-                        logger.warning("%s. Retrying (%d/%d)...", msg, attempt + 1, max_retries)
-                        await asyncio.sleep((2 ** attempt) + random.uniform(0, 1))
+                        logger.warning(
+                            "%s. Retrying (%d/%d)...",
+                            msg,
+                            attempt + 1,
+                            max_retries,
+                        )
+                        await asyncio.sleep(
+                            (2**attempt) + random.uniform(0, 1)
+                        )
                         continue
                     logger.error(msg)
                     if is_transient:
                         raise LayoutServiceTransientError(msg) from e
                     raise LayoutServiceFatalError(msg) from e
-                except (httpx.RequestError, asyncio.TimeoutError) as e:
-                    msg = f"OCR service network error for {request.file_path}: {type(e).__name__}: {e}"
+                except (httpx.RequestError, TimeoutError) as e:
+                    msg = (
+                        f"OCR service network error for {request.file_path}: "
+                        f"{type(e).__name__}: {e}"
+                    )
                     if attempt < max_retries - 1:
-                        logger.warning("%s. Retrying (%d/%d)...", msg, attempt + 1, max_retries)
-                        await asyncio.sleep((2 ** attempt) + random.uniform(0, 1))
+                        logger.warning(
+                            "%s. Retrying (%d/%d)...",
+                            msg,
+                            attempt + 1,
+                            max_retries,
+                        )
+                        await asyncio.sleep(
+                            (2**attempt) + random.uniform(0, 1)
+                        )
                         continue
                     logger.error(msg)
                     raise LayoutServiceTransientError(msg) from e
                 except ValueError as e:
-                    msg = f"OCR service returned invalid response for {request.file_path}: {e}"
+                    msg = (
+                        f"OCR service returned invalid response for "
+                        f"{request.file_path}: {e}"
+                    )
                     logger.error(msg)
                     raise LayoutServiceFatalError(msg) from e
                 except Exception as e:
-                    logger.error("Unexpected OCR failure for %s: %s", request.file_path, e)
-                    raise LayoutServiceFatalError(f"Unexpected OCR failure: {e}") from e
+                    logger.error(
+                        "Unexpected OCR failure for %s: %s",
+                        request.file_path,
+                        e,
+                    )
+                    raise LayoutServiceFatalError(
+                        f"Unexpected OCR failure: {e}"
+                    ) from e
 
-            if ocr_result is None:
-                raise LayoutServiceFatalError("OCR failed to return a result")
+            # defensive: should be unreachable; protects against refactors
+            assert ocr_result is not None
 
             await _report("ocr", {"pages": len(ocr_result.get("pages", []))})
 
@@ -279,7 +330,7 @@ class AsyncDocumentProcessor:
             sema = asyncio.Semaphore(self._tg_limit)
             async with asyncio.TaskGroup() as tg:  # Python 3.11+
                 for i in range(0, len(all_blocks), self._batch_size):
-                    batch = all_blocks[i : i + self._batch_size]
+                    batch = all_blocks[i:i + self._batch_size]
                     tg.create_task(_bounded_worker(i, batch, sema))
 
             await _report("translated", {"count": len(all_blocks)})
@@ -292,7 +343,9 @@ class AsyncDocumentProcessor:
                 for _ in page_blocks:
                     t = translations[ti]
                     if t is None:
-                        raise RuntimeError(f"Translation at index {ti} is None")
+                        raise RuntimeError(
+                            f"Translation at index {ti} is None"
+                        )
                     elems.append(
                         TranslatedElement(
                             original_text=t.source_text,
@@ -341,11 +394,11 @@ class AsyncDocumentProcessor:
             return layout
 
     async def aclose(self) -> None:
-        """No-op: this processor holds no owned resources requiring explicit cleanup."""
+        """No-op: this processor holds no owned resources."""
         pass
 
     def close(self) -> None:
-        """No-op: this processor holds no owned resources requiring explicit cleanup."""
+        """No-op: this processor holds no owned resources."""
         pass
 
     async def __aenter__(self) -> Self:

@@ -7,7 +7,10 @@ import pytest
 
 import services.async_document_processor as adp
 from dolphin_ocr.layout import LayoutStrategy, StrategyType
-from services.layout_aware_translation_service import TextBlock, TranslationResult
+from services.layout_aware_translation_service import (
+    TextBlock,
+    TranslationResult,
+)
 
 
 class FakeOCR:
@@ -42,12 +45,18 @@ class FakeTranslator:
         self.calls: list[int] = []
 
     def translate_document_batch(
-        self, *, text_blocks: list[TextBlock], source_lang: str, target_lang: str
+        self,
+        *,
+        text_blocks: list[TextBlock],
+        source_lang: str,
+        target_lang: str,
     ) -> list[TranslationResult]:
         self.calls.append(len(text_blocks))
         results: list[TranslationResult] = []
         for b in text_blocks:
-            strat = LayoutStrategy(type=StrategyType.NONE, font_scale=1.0, wrap_lines=1)
+            strat = LayoutStrategy(
+                type=StrategyType.NONE, font_scale=1.0, wrap_lines=1
+            )
             results.append(
                 TranslationResult(
                     source_text=b.text,
@@ -67,7 +76,11 @@ class FakeTranslator:
 
 class DummyReconstructor:
     def reconstruct_pdf_document(
-        self, *, translated_layout, original_file_path: str, output_path: str
+        self,
+        *,
+        translated_layout,
+        original_file_path: str,
+        output_path: str,
     ) -> None:
         return None
 
@@ -94,7 +107,9 @@ async def test_async_translation_batching(
     )
 
     req = adp.AsyncDocumentRequest(
-        file_path="/tmp/in.pdf", source_language="en", target_language="de"
+        file_path="/tmp/in.pdf",
+        source_language="en",
+        target_language="de",
     )
 
     layout = await proc.process_document(req)
@@ -127,14 +142,18 @@ async def test_token_bucket_is_used(
 
     calls = {"count": 0}
 
-    async def fake_acquire(self) -> None:  # type: ignore[override]
+    async def fake_acquire(_self) -> None:  # type: ignore[override]
         calls["count"] += 1
         await asyncio.sleep(0)
 
-    monkeypatch.setattr(adp._TokenBucket, "acquire", fake_acquire, raising=True)
+    monkeypatch.setattr(
+        adp._TokenBucket, "acquire", fake_acquire, raising=True
+    )
 
     req = adp.AsyncDocumentRequest(
-        file_path="/tmp/in.pdf", source_language="en", target_language="de"
+        file_path="/tmp/in.pdf",
+        source_language="en",
+        target_language="de",
     )
     await proc.process_document(req)
     assert calls["count"] == 1
@@ -174,9 +193,13 @@ async def test_concurrency_cap(
 
     async def run_one(idx: int) -> None:
         req = adp.AsyncDocumentRequest(
-            file_path=f"/tmp/in_{idx}.pdf", source_language="en", target_language="de"
+            file_path=f"/tmp/in_{idx}.pdf",
+            source_language="en",
+            target_language="de",
         )
-        await proc.process_document(req, on_progress=on_progress)  # type: ignore[arg-type]
+        await proc.process_document(
+            req, on_progress=on_progress
+        )  # type: ignore[arg-type]
 
     await asyncio.gather(*(run_one(i) for i in range(6)))
     assert max_active <= 2
@@ -198,6 +221,3 @@ async def test_cleanup_methods_are_no_ops() -> None:
     # Test explicit cleanup calls
     await proc.aclose()
     proc.close()
-
-    # Test destructor
-    del proc

@@ -81,16 +81,19 @@ async def run_test():
             print(f"\n⚠️ Translation timed out after {timeout_seconds} seconds")
             break
 
-        curr_status, progress, is_done, output_file = get_translation_status()
-        print(f"Status: {curr_status} | Progress: {progress}%")
+        status_result = get_translation_status()
+        print(f"Status: {status_result.message} | Progress: {status_result.progress}%")
 
-        if "❌" in curr_status:
-            print(f"\n{curr_status}")
+        if status_result.is_error:
+            print(f"\n{status_result.message}")
             break
 
-        if is_done:
-            print(f"\n{curr_status}")
-            print(f"Output saved to: {output_file}")
+        if status_result.is_done:
+            print(f"\n{status_result.message}")
+            if status_result.output_file:
+                print(f"Output saved to: {status_result.output_file}")
+            else:
+                print("Warning: No output file path returned")
             break
 
         await asyncio.sleep(2)

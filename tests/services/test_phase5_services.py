@@ -222,7 +222,6 @@ class TestConfidenceScorerIntegration:
         breakdown = scorer.get_confidence_breakdown(factors)
         
         assert isinstance(breakdown, dict)
-        assert len(breakdown) > 0
         expected_keys = {"morphological", "context", "frequency", "pattern", "linguistic", "final"}
         assert expected_keys.issubset(breakdown.keys())
 

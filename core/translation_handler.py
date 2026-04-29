@@ -6,22 +6,28 @@ import logging
 import os
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypedDict
 
-# Migration note: Replaced legacy PDF engine with Dolphin OCR
-# for all PDF processing. Rationale: improved OCR accuracy, better layout
-# preservation via pdf2image rendering + reconstruction pipeline, and removal of
-# heavyweight/unstable legacy PDF dependency. Scope: non-docs code no longer
-# imports or references the legacy engine; PDF handling is now PDF-only using
-# Dolphin OCR.
+# Migration note: Replaced legacy PDF engine with Dolphin OCR for all PDF 
+# processing. Rationale: improved OCR accuracy, better layout preservation via 
+# pdf2image rendering + reconstruction pipeline, and removal of heavyweight/unstable 
+# legacy PDF dependency. Scope: non-docs code no longer imports or references the 
+# legacy engine; PDF handling is now PDF-only using Dolphin OCR.
 from config.settings import Settings
 
 # Import optimized dynamic programming implementations
-from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
-from core.dynamic_language_engine import OptimizedLanguageDetector as LanguageDetector
-from core.dynamic_validation_engine import OptimizedFileValidator as FileValidator
+from core.dynamic_choice_engine import (
+    OptimizedUserChoiceManager as UserChoiceManager,
+)
+from core.dynamic_language_engine import (
+    OptimizedLanguageDetector as LanguageDetector,
+)
+from core.dynamic_validation_engine import (
+    OptimizedFileValidator as FileValidator,
+)
 from core.state_manager import state, translation_jobs
 from services.enhanced_document_processor import EnhancedDocumentProcessor
 from services.neologism_detector import NeologismDetector
@@ -80,6 +86,24 @@ FileObject = str | Any  # Gradio file object can be str, FileData, or file-like
 ProgressCallback = Callable[[int], None]
 ContentDict = dict[str, Any]
 TranslatedPageDict = dict[str, list[str]]
+
+
+@dataclass(frozen=True)
+class TranslationStatusResult:
+    """Structured result for translation status."""
+
+    message: str
+    progress: int
+    is_done: bool
+    is_error: bool
+    output_file: str | None = None
+
+    def __iter__(self):
+        """Allow unpacking for backward compatibility."""
+        yield self.message
+        yield self.progress
+        yield self.is_done
+        yield self.output_file
 
 
 def extract_file_info(file: FileObject) -> tuple[str, str, int]:
@@ -183,7 +207,9 @@ async def process_file_upload(file: Any) -> ProcessFileUploadResult:
         )
 
         # Extract content with advanced processing
-        content: ContentDict = await document_processor.extract_content(file_path)
+        content: ContentDict = await document_processor.extract_content(
+            file_path
+        )
         state.current_content = content
 
         # Generate preview
@@ -191,7 +217,9 @@ async def process_file_upload(file: Any) -> ProcessFileUploadResult:
 
         # Detect language using the centralized utility function
         sample_text: str = extract_text_sample_for_language_detection(content)
-        detected_lang: str = language_detector.detect_language_from_text(sample_text)
+        detected_lang: str = language_detector.detect_language_from_text(
+            sample_text
+        )
         state.source_language = detected_lang
 
         # Store processing info
@@ -644,30 +672,56 @@ def generate_output_filename(original_filename: str, target_language: str) -> st
     return f"translated_{name}_{target_language.lower()}_advanced{ext}"
 
 
-def get_translation_status() -> tuple[str, int, bool, str | None]:
+def get_translation_status() -> TranslationStatusResult:
     """Get current translation status with detailed info."""
     if state.translation_status == "idle":
-        return "Ready for advanced translation", 0, False, None
+        return TranslationStatusResult(
+            message="Ready for advanced translation",
+            progress=0,
+            is_done=False,
+            is_error=False,
+        )
     elif state.translation_status == "starting":
-        return "🚀 Initializing advanced translation...", 5, False, None
+        return TranslationStatusResult(
+            message="🚀 Initializing advanced translation...",
+            progress=5,
+            is_done=False,
+            is_error=False,
+        )
     elif state.translation_status == "processing":
-        return (
-            f"🔄 Advanced translation in progress... ({state.translation_progress}%)",
-            state.translation_progress,
-            False,
-            None,
+        return TranslationStatusResult(
+            message=(
+                f"🔄 Advanced translation in progress... "
+                f"({state.translation_progress}%)"
+            ),
+            progress=state.translation_progress,
+            is_done=False,
+            is_error=False,
         )
     elif state.translation_status == "completed":
-        return (
-            "✅ Advanced translation completed with format preservation!",
-            100,
-            True,
-            state.output_file,
+        return TranslationStatusResult(
+            message=(
+                "✅ Advanced translation completed with format preservation!"
+            ),
+            progress=100,
+            is_done=True,
+            is_error=False,
+            output_file=state.output_file,
         )
     elif state.translation_status == "error":
-        return f"❌ Translation failed: {state.error_message}", 0, False, None
+        return TranslationStatusResult(
+            message=f"❌ Translation failed: {state.error_message}",
+            progress=0,
+            is_done=False,
+            is_error=True,
+        )
     else:
-        return "Unknown status", 0, False, None
+        return TranslationStatusResult(
+            message="Unknown status",
+            progress=0,
+            is_done=False,
+            is_error=False,
+        )
 
 
 def download_translated_file(output_format: str) -> str:

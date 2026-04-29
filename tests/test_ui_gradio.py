@@ -159,6 +159,7 @@ def test_ui_translation_progress(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
         def fake_status():
+            # Returns (status_text, progress_fraction, is_processing, download_file)
             return "processing 50%", 0.5, True, None
 
         monkeypatch.setattr(gi, "start_translation_sync", fake_start)
@@ -175,7 +176,7 @@ def test_ui_translation_progress(monkeypatch: pytest.MonkeyPatch) -> None:
             api_name="/start_translation_with_progress",
         )
         assert isinstance(res, (list, tuple))
-        # Expect at least the 3 return values from fake_start
-        assert len(res) >= 3
+        # Expect 4 return values from fake_start: [status, upload_status, download_btn, progress_timer]
+        assert len(res) >= 4
     finally:
         _teardown_blocks(demo)
