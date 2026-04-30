@@ -293,7 +293,10 @@ class AsyncDocumentProcessor:
                     ) from e
 
             # defensive: should be unreachable; protects against refactors
-            assert ocr_result is not None
+            if ocr_result is None:
+                raise LayoutServiceFatalError(
+                    f"OCR failed after {max_retries} retries without result"
+                )
 
             await _report("ocr", {"pages": len(ocr_result.get("pages", []))})
 

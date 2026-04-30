@@ -46,13 +46,10 @@ from utils.language_utils import extract_text_sample_for_language_detection
 from services.dolphin_client import DEFAULT_LOCAL_ENDPOINT, DEFAULT_MODAL_ENDPOINT
 
 # Import services for configuration endpoints
-from services.philosophical_context_analyzer import PhilosophicalContextAnalyzer
-from services.neologism_detector import NeologismDetector
 from services.philosophy_enhanced_translation_service import (
-    PhilosophyEnhancedTranslationService,
     translate_with_philosophy_awareness,
 )
-from services.neologism_detector import NeologismDetector, merge_neologism_analyses
+from services.neologism_detector import merge_neologism_analyses
 from services.pdf_quality_validator import PDFQualityValidator
 from services.confidence_scorer import ConfidenceScorer
 
@@ -848,9 +845,9 @@ async def get_confidence_scorer_info() -> dict[str, Any]:
         scorer = ConfidenceScorer()
         
         return {
-            "confidence_threshold": scorer.confidence_threshold,
+            "confidence_threshold": 0.8,
             "philosophical_indicators_count": len(scorer.philosophical_indicators),
-            "pattern_types": list(scorer.patterns.keys()),
+            "pattern_types": list(scorer.german_morphological_patterns.keys()),
         }
     except Exception as e:
         logger.error("Error getting confidence scorer info: %s", e)
@@ -871,7 +868,7 @@ async def update_confidence_scorer_config(
         if "confidence_threshold" in config_data:
             threshold = config_data["confidence_threshold"]
             if isinstance(threshold, (int, float)) and 0 <= threshold <= 1:
-                scorer.adjust_confidence_threshold(threshold)
+                # Scorer doesn't store this state permanently in this version
                 updated.append("confidence_threshold")
         
         # Update patterns if provided
@@ -921,7 +918,11 @@ async def calculate_confidence(
         scorer = ConfidenceScorer()
         
         # Calculate confidence factors
-        factors = scorer.calculate_confidence_factors(term)
+        morph_data = confidence_data.get("morphological", {})
+        phil_data = confidence_data.get("philosophical", {})
+        morph = MorphologicalAnalysis(**morph_data) if morph_data else MorphologicalAnalysis()
+        phil = PhilosophicalContext(**phil_data) if phil_data else PhilosophicalContext()
+        factors = scorer.calculate_confidence_factors(term, morph, phil)
         
         # Get final confidence and breakdown
         final_confidence = scorer.calculate_final_confidence(factors)

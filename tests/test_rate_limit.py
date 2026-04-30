@@ -50,7 +50,7 @@ def test_client_async(test_app_async):
 
 
 @pytest.fixture
-def reset_rate_limiter():
+def _reset_rate_limiter():
     """Reset rate limiter state before and after each test."""
     # Reset before test
     shutdown_rate_limiter()
@@ -61,7 +61,7 @@ def reset_rate_limiter():
     shutdown_rate_limiter()
 
 
-def test_sync_function_decorator(test_client_sync, reset_rate_limiter):
+def test_sync_function_decorator(test_client_sync, _reset_rate_limiter):
     """Test that the rate limit decorator works with synchronous functions."""
     # Get the expected limit from configuration
     read_limit = RATE_LIMITS["read"]
@@ -87,7 +87,7 @@ def test_async_function_decorator(test_client_async):
     assert response.status_code == 429, "Rate limiting for async function"
 
 
-def test_shutdown_rate_limiter(reset_rate_limiter):
+def test_shutdown_rate_limiter(_reset_rate_limiter):
     """Test that shutdown_rate_limiter() function works correctly."""
     # Initialize rate limiter first by calling get_rate_limiter()
     limiter = get_rate_limiter()

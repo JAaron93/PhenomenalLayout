@@ -18,7 +18,6 @@ class TestDolphinClientEndpointConfiguration:
         monkeypatch.delenv("DOLPHIN_ENDPOINT", raising=False)
         monkeypatch.delenv("DOLPHIN_LOCAL_ENDPOINT", raising=False)
         
-        from services.dolphin_client import DEFAULT_MODAL_ENDPOINT, DEFAULT_LOCAL_ENDPOINT
         
         # The function should use Modal endpoint by default
         # (This tests the logic that will be used when get_layout is called)

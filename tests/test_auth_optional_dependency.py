@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def auth_env(monkeypatch):
+def _auth_env(monkeypatch):
     """Provide authentication environment variables for tests."""
     monkeypatch.setenv("MEMORY_API_JWT_SECRET", "test-secret-key-for-testing")
     monkeypatch.setenv("MEMORY_API_KEY", "test-admin-key-for-testing")
@@ -21,7 +21,7 @@ class MockRequest:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_optional_dependency(auth_env):
+async def test_get_current_user_optional_dependency(_auth_env):
     """Test the optional dependency function directly."""
     # Import after environment is set
     from api.auth import (
@@ -46,7 +46,7 @@ async def test_get_current_user_optional_dependency(auth_env):
     assert user["method"] == "jwt"
 
 
-def test_optional_dependency_via_fastapi_client(auth_env):
+def test_optional_dependency_via_fastapi_client(_auth_env):
     """Test optional dependency through FastAPI client."""
     # Import after environment is set
     from api.auth import UserRole, create_jwt_token
@@ -72,7 +72,7 @@ def test_optional_dependency_via_fastapi_client(auth_env):
     assert "current_memory_mb" in data["data"]
 
 
-def test_optional_dependency_no_token(auth_env):
+def test_optional_dependency_no_token(_auth_env):
     """Test optional dependency with no authentication token."""
     from app import create_app
 
@@ -88,7 +88,7 @@ def test_optional_dependency_no_token(auth_env):
 
 
 @pytest.mark.asyncio
-async def test_optional_dependency_invalid_token(auth_env):
+async def test_optional_dependency_invalid_token(_auth_env):
     """Test optional dependency with invalid authentication token."""
     from api.auth import get_current_user_optional_dependency
 

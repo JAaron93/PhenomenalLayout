@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import types
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -58,12 +57,11 @@ class TestGetPdfPageCount:
     def test_returns_page_count_for_valid_pdf(self, tmp_path) -> None:
         """Create a minimal valid PDF via pypdf and verify the count."""
         try:
-            import pypdf
+            from pypdf import PdfWriter
         except ImportError:
             pytest.skip("pypdf not installed")
 
         # Use pypdf's PdfWriter to create a 2-page PDF
-        from pypdf import PdfWriter
 
         writer = PdfWriter()
         writer.add_blank_page(width=612, height=792)

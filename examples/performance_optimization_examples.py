@@ -215,16 +215,6 @@ def instrument_cache(func):
             return cache[cache_key]
 
         # Cache miss - call the original function
-        try:
-            result = func(*args, **kwargs)
-            # Cache the result for future use
-            cache[cache_key] = result
-            return result
-        except KeyError as e:
-            # This is an actual cache miss (KeyError from cache lookup)
-            # Increment miss counter and re-raise
-            _metrics_collector.increment_cache_miss()
-            raise e
         _metrics_collector.increment_cache_miss()
         result = func(*args, **kwargs)
         # Cache the result for future use

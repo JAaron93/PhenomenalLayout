@@ -39,7 +39,7 @@ def monitor_with_long_interval():
 
 
 @pytest.fixture
-def reset_memory_monitor_singleton():
+def _reset_memory_monitor_singleton():
     """Pytest fixture to reset the memory monitor singleton state.
     
     This fixture ensures that each test gets a clean memory monitor instance
@@ -135,7 +135,7 @@ def test_cleanup_method(monitor):
 
     print("✓ Cleanup method working correctly")
 
-def test_cleanup_memory_monitor_function(reset_memory_monitor_singleton):
+def test_cleanup_memory_monitor_function(_reset_memory_monitor_singleton):
     """Test that cleanup_memory_monitor function works correctly."""
     print("\nTesting cleanup_memory_monitor function...")
 
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         finally:
             monitor4.cleanup()
 
-        test_cleanup_memory_monitor_function()
+        test_cleanup_memory_monitor_function(None)
         print("\n🎉 Memory monitor daemon thread cleanup fix verified successfully!")
         print("\nKey Improvements:")
         print("- Thread created as non-daemon for proper cleanup")

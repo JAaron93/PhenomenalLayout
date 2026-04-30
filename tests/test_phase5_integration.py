@@ -4,7 +4,7 @@ These tests verify that the "future-facing code" items from Phase 5
 of unused_code_report.md are properly integrated into the API.
 """
 
-import pytest
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

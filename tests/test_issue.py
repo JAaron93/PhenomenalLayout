@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test script to reproduce the issue with authentication disabled."""
 
-import os
+
 import sys
 from pathlib import Path
 from unittest.mock import patch

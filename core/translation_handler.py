@@ -105,6 +105,21 @@ class TranslationStatusResult:
         yield self.is_done
         yield self.output_file
 
+    def __len__(self) -> int:
+        return 5
+
+    def __getitem__(self, index: int) -> Any:
+        if index == 0:
+            return self.message
+        if index == 1:
+            return self.progress
+        if index == 2:
+            return self.is_done
+        if index == 3:
+            return self.is_error
+        if index == 4:
+            return self.output_file
+        raise IndexError("TranslationStatusResult index out of range")
 
 def extract_file_info(file: FileObject) -> tuple[str, str, int]:
     """Extract file information from various Gradio file formats.

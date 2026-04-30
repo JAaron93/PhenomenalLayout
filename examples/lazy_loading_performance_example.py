@@ -53,7 +53,7 @@ from typing import TYPE_CHECKING, Any
 import psutil
 
 if TYPE_CHECKING:
-    from services.neologism_detector import NeologismDetector
+    from services.neologism_detector import NeologismDetector  # noqa: F401
 
 # Robust absolute path resolution for project root
 # Uses Path.resolve() to handle symbolic links, relative path traversal,
@@ -138,7 +138,7 @@ def demonstrate_lazy_loading(
     """Demonstrate lazy loading performance benefits."""
     # Local import to avoid E402 after sys.path modification
     try:
-        from services.neologism_detector import NeologismDetector
+        from services.neologism_detector import NeologismDetector  # noqa: F401, F811
     except ModuleNotFoundError as e:
         raise RuntimeError(
             "Could not import services.neologism_detector.NeologismDetector. "
