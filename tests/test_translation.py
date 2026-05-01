@@ -1,6 +1,7 @@
 import asyncio
 import os
 import time
+import traceback
 
 import dotenv
 
@@ -36,8 +37,6 @@ async def run_test():
         preproc_info = result.get("preprocessing_info", "")
         success = result.get("success", False)
     except Exception:
-        import traceback
-
         traceback.print_exc()
         status = "❌ Exception occurred"
         success = False
@@ -81,7 +80,13 @@ async def run_test():
             print(f"\n⚠️ Translation timed out after {timeout_seconds} seconds")
             break
 
-        status_result = get_translation_status()
+        try:
+            status_result = get_translation_status()
+        except Exception:
+            traceback.print_exc()
+            print("\n❌ Failed to get translation status")
+            break
+
         print(f"Status: {status_result.message} | Progress: {status_result.progress}%")
 
         if status_result.is_error:

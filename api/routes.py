@@ -845,7 +845,7 @@ async def get_confidence_scorer_info() -> dict[str, Any]:
         scorer = ConfidenceScorer()
         
         return {
-            "confidence_threshold": 0.8,
+            "confidence_threshold": scorer.confidence_threshold,
             "philosophical_indicators_count": len(scorer.philosophical_indicators),
             "pattern_types": list(scorer.german_morphological_patterns.keys()),
         }
@@ -867,8 +867,8 @@ async def update_confidence_scorer_config(
         # Update threshold if provided
         if "confidence_threshold" in config_data:
             threshold = config_data["confidence_threshold"]
-            if isinstance(threshold, (int, float)) and 0 <= threshold <= 1:
-                # Scorer doesn't store this state permanently in this version
+            if isinstance(threshold, (int, float)):
+                scorer.set_confidence_threshold(threshold)
                 updated.append("confidence_threshold")
         
         # Update patterns if provided
@@ -920,8 +920,14 @@ async def calculate_confidence(
         # Calculate confidence factors
         morph_data = confidence_data.get("morphological", {})
         phil_data = confidence_data.get("philosophical", {})
-        morph = MorphologicalAnalysis(**morph_data) if morph_data else MorphologicalAnalysis()
-        phil = PhilosophicalContext(**phil_data) if phil_data else PhilosophicalContext()
+        try:
+            morph = MorphologicalAnalysis(**morph_data) if morph_data else MorphologicalAnalysis()
+            phil = PhilosophicalContext(**phil_data) if phil_data else PhilosophicalContext()
+        except (TypeError, ValueError) as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid morphological or philosophical data: {e}"
+            )
         factors = scorer.calculate_confidence_factors(term, morph, phil)
         
         # Get final confidence and breakdown

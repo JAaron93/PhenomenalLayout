@@ -103,12 +103,15 @@ class TranslationStatusResult:
         yield self.message
         yield self.progress
         yield self.is_done
+        yield self.is_error
         yield self.output_file
 
     def __len__(self) -> int:
+        """Return the number of fields in the result."""
         return 5
 
     def __getitem__(self, index: int) -> Any:
+        """Allow index-based access for backward compatibility."""
         if index == 0:
             return self.message
         if index == 1:

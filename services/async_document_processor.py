@@ -1,8 +1,7 @@
 """Asynchronous document processing orchestrator.
 
 Implements an async pipeline that coordinates:
-- Direct submission of document bytes/pages to OCR (IO-bound) with basic
-- rate limiting
+- Direct submission of document bytes/pages to OCR (IO-bound) with basic rate limiting
 - Layout-aware translation via asyncio batching
 - PDF reconstruction (CPU-bound)
 

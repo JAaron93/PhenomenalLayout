@@ -62,6 +62,8 @@ class ConfidenceScorer:
     # - Meaning: normalization scale for long-word penalty
     # - Example: words longer than ~30 chars hit the max length penalty
     # - Rationale: keeps length effect moderate and interpretable
+    # DEFAULT_THRESHOLD: default confidence threshold for neologism detection
+    DEFAULT_THRESHOLD: float = 0.8
     LENGTH_NORM_FACTOR: float = 30.0
 
     def __init__(
@@ -70,6 +72,7 @@ class ConfidenceScorer:
         german_morphological_patterns: dict[str, list[str]] | None = None,
         corpus_frequencies: dict[str, int] | None = None,
         corpus_total_tokens: int | None = None,
+        confidence_threshold: float | None = None,
     ):
         """Initialize the confidence scorer.
 
@@ -81,6 +84,7 @@ class ConfidenceScorer:
                 background corpus (keys are lowercase tokens, values are
                 counts)
             corpus_total_tokens: Optional total token count of the corpus.
+            confidence_threshold: Optional initial confidence threshold.
         """
         # Normalize indicators to lowercase to enable case-insensitive checks
         self.philosophical_indicators = {
@@ -94,6 +98,11 @@ class ConfidenceScorer:
             corpus_total_tokens
             if corpus_total_tokens is not None
             else int(sum(self._corpus_freq.values()))
+        )
+        self.confidence_threshold = (
+            confidence_threshold
+            if confidence_threshold is not None
+            else self.DEFAULT_THRESHOLD
         )
 
         logger.info("ConfidenceScorer initialized")
@@ -463,3 +472,17 @@ class ConfidenceScorer:
             "Updated philosophical indicators with %d new terms",
             len(new_indicators),
         )
+
+    def set_confidence_threshold(self, threshold: float) -> None:
+        """Update the confidence threshold.
+
+        Args:
+            threshold: New confidence threshold (must be between 0 and 1)
+
+        Raises:
+            ValueError: If threshold is not in the valid range [0, 1]
+        """
+        if not (0 <= threshold <= 1):
+            raise ValueError(f"Confidence threshold must be between 0 and 1, got {threshold}")
+        self.confidence_threshold = float(threshold)
+        logger.info(f"Updated confidence threshold to {self.confidence_threshold}")
