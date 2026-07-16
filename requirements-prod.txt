@@ -1076,9 +1076,9 @@ markupsafe==3.0.2 \
     # via
     #   gradio
     #   jinja2
-mcp==1.14.0 \
-    --hash=sha256:2e7d98b195e08b2abc1dc6191f6f3dc0059604ac13ee6a40f88676274787fac4 \
-    --hash=sha256:b2d27feba27b4c53d41b58aa7f4d090ae0cb740cbc4e339af10f8cbe54c4e19d
+mcp==1.27.2 \
+    --hash=sha256:8e02db104096d1c25b28e64bde29a5c32b31bc241710213e12fd4d84985bdfef \
+    --hash=sha256:d6ff5160c6ca65d93013626efb3fc249de683c30b2d8570755ceddd490344de5
     # via -r requirements.in
 mdurl==0.1.2 \
     --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8 \
@@ -1869,6 +1869,7 @@ pyjwt[crypto]==2.12.1 \
     --hash=sha256:c74a7a2adf861c04d002db713dd85f84beb242228e671280bf709d765b03672b
     # via
     #   -r requirements.in
+    #   mcp
     #   pyjwt
 pypdf==6.10.2 \
     --hash=sha256:7d09ce108eff6bf67465d461b6ef352dcb8d84f7a91befc02f904455c6eea11d \
@@ -2366,6 +2367,7 @@ typing-extensions==4.15.0 \
     #   gradio
     #   gradio-client
     #   huggingface-hub
+    #   mcp
     #   modal
     #   pydantic
     #   pydantic-core
@@ -2376,6 +2378,7 @@ typing-inspection==0.4.1 \
     --hash=sha256:389055682238f53b04f7badcb49b989835495a96700ced5dab2d8feae4b26f51 \
     --hash=sha256:6ae134cc0203c33377d43188d4064e9b357dba58cff3185f22924610e70a9d28
     # via
+    #   mcp
     #   pydantic
     #   pydantic-settings
 tzdata==2025.2 \
