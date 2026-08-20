@@ -47,20 +47,15 @@ When reviewing new code or refactors, verify compliance with these components:
 * Include interactive 6-step walkthrough modal data for non-technical translators.
 
 ### 3.3 Zero Host Storage & Google Drive GIS Export
-* Modal persistent volume (`/data`) must store **zero book PDF bytes** (reserved strictly for user vocabulary DBs $\le 5\text{MB}$).
+* Modal persistent volume (`/data`) must store **zero book PDF bytes** (reserved strictly for user vocabulary DBs and job handles $\le 5\text{MB}$).
 * Google Drive export must use native client-side **Google Identity Services (GIS)** with restricted `https://www.googleapis.com/auth/drive.file` scope.
 
-### 3.4 User Vocabulary Memory Store
-* User preferences (translations, untranslated terms, notes) must be persisted per `user_id` on the Modal Volume (`/data/user_vocabularies/`).
-* Pre-scanner must cross-reference user vocabulary to auto-populate terminology choices.
-
-### 3.5 Pre-Auth Zero-Credential Cost Estimator
-* Must allow unauthenticated users to upload PDFs on Modal CPU and receive itemized quotes (including GCS retention and 5GB Free Tier status) within a $\pm \$5.00$ margin of error before logging in or entering GCP keys.
-
-### 3.6 Dual-Tier Glossary Synchronization
-* **Tier 1 (Persistent Base Glossary)**: Static philosophical foundation dictionaries (`config/klages_terminology.json`) provisioned once as regional GCP Glossaries (`us-central1`).
-* **Tier 2 (Dynamic Book Session Glossary)**: Dynamic user choices compiled into RFC 4180 TSVs (`de\ten`), uploaded to GCS, and registered with Cloud Translation before the batch job executes.
-* **Lifecycle**: Session glossaries must have cleanup/TTL handlers.
+### 3.4 Scholarly Resilience Architecture
+* **Fraktur Script Assessment**: `FrakturClassifier` must analyze font properties and return OCR script confidence ratings for pre-1945 editions.
+* **Batch Job Resumption**: `BatchJobRecoveryManager` must persist active LRO states in `/data/sessions/` so translators can reconnect without job abandonment.
+* **Partial Page Failure Fallback**: `FallbackPageTranslator` must handle `metadata.failed_pages > 0` by extracting and translating raw text to deliver a 98% layout + 100% translated book.
+* **Glossary Lifecycle**: `SessionGlossaryLifecycleManager` must prune transient Tier 2 session glossaries upon job completion.
+* **Dual-Pane Viewer**: `DualPaneViewerController` must serve synchronized German/English page pairs for reading and verification.
 
 ---
 

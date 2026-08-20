@@ -27,7 +27,7 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 ### 2.2 Dual-Tier Glossary Synchronization
 * **Tier 1 (Persistent Base Glossary)**: Static philosophical foundation dictionaries (`config/klages_terminology.json`) provisioned once as regional GCP Glossaries in `us-central1`.
 * **Tier 2 (Dynamic Book Session Glossary)**: Dynamic user choices and novel coined compounds compiled into RFC 4180 TSVs (`de\ten`), uploaded to GCS, and registered with Cloud Translation before the batch job executes.
-* **Glossary Lifecycle**: Temporary book session glossaries must have automated TTL/cleanup policies upon job completion.
+* **Glossary Lifecycle & Quota Management**: Temporary book session glossaries must have automated cleanup handlers upon job completion to respect the regional 1,000 glossary quota.
 
 ### 2.3 Bring Your Own Key (BYOK) & Billing Isolation
 * **User-Billed Cloud Compute**: All Google Cloud Document Translation charges ($0.08/page) and GCS bucket storage are billed directly to each user's personal GCP billing account. The host maintains zero translation API or cloud storage costs.
@@ -51,6 +51,12 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 * The application must support 1-click export to the user's personal Google Drive using native client-side **Google Identity Services (GIS)** OAuth.
 * Must request restricted `https://www.googleapis.com/auth/drive.file` scope (zero access to unrelated user Drive files).
 * Prohibits heavy third-party authentication middleware (no Auth0, no Clerk).
+
+### 2.8 Scholarly Resilience & Production Invariants
+* **Fraktur OCR Assessment**: Must evaluate font characteristics and emit an OCR script confidence rating for pre-1945 German editions.
+* **Job Resumption**: Active LRO state must be persisted to allow seamless reconnection after browser closing or Modal container scale-down.
+* **Fallback Plaintext Translation**: If complex diagram pages fail layout parsing (`failed_pages > 0`), the engine must offer 1-click plaintext extraction and translation to guarantee a 98% layout-preserved, 100% translated book.
+* **Side-by-Side Dual-Pane Viewer**: Must support synchronized bilingual reading for scholars verifying translations against the German original.
 
 ---
 

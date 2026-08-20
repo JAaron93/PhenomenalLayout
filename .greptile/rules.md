@@ -15,14 +15,16 @@
    * Introducing third-party SaaS auth (Auth0, Clerk) instead of native client-side Google Identity Services (GIS).
 5. **Excessive Google Drive Permissions**:
    * Requesting broad `https://www.googleapis.com/auth/drive` scope instead of restricted `https://www.googleapis.com/auth/drive.file`.
-6. **Broken Async / Blocking Network Calls**:
+6. **Fatal Handling of Partial Page Failures**:
+   * Crashing the batch pipeline when `metadata.failed_pages > 0` instead of delegating to `FallbackPageTranslator`.
+7. **Broken Async / Blocking Network Calls**:
    * Running synchronous, blocking HTTP requests or blocking `time.sleep()` loops inside `async` coroutines.
-7. **Invalid LRO Progress Contract**:
+8. **Invalid LRO Progress Contract**:
    * Checking invalid status fields (`SUCCESS`, `pages_completed`) instead of the official Translation v3 contract (`metadata.translated_pages`, `metadata.total_pages`, `SUCCEEDED` state).
-8. **Absolute Worktree Links**:
+9. **Absolute Worktree Links**:
    * Using machine-specific `file:///Users/...` links instead of repository-relative markdown paths.
-9. **Missing Test Coverage**:
-   * Adding new service or client logic without accompanying unit/integration tests (`tests/test_*.py`).
+10. **Missing Test Coverage**:
+    * Adding new service or client logic without accompanying unit/integration tests (`tests/test_*.py`).
 
 ### Warnings (Score: 3/5 or 4/5 - Suggestions / Minor Fixes)
 1. **Missing Type Annotations**:
@@ -35,7 +37,7 @@
    * Public classes or methods missing descriptions of arguments and return types.
 
 ### Approval (Score: 5/5 - Ready to Merge)
-* Zero blocking issues, clean test coverage ($\ge 90\%$), strict compliance with GCP Document Translation, BYOK, Zero Host Storage, Google Drive GIS export, and Modal serverless architecture.
+* Zero blocking issues, clean test coverage ($\ge 90\%$), strict compliance with GCP Document Translation, BYOK, Zero Host Storage, Google Drive GIS export, and Scholarly Resilience architecture.
 
 ---
 

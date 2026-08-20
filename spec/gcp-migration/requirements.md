@@ -13,9 +13,14 @@ The core system consists of:
 6. **Zero Host Storage**: Source and translated PDF files are stored strictly in the user's GCS bucket or Google Drive; Modal backend stores zero book PDFs.
 7. **Persistent user vocabulary storage** for remembering terminology decisions across sessions and books.
 8. **Pre-auth zero-credential GCP cost & GCS storage retention estimator** providing an itemized quote within a $\pm \$5.00$ tolerance margin.
-9. **Seamless Google Drive Export**: 1-click export via client-side Google Identity Services (GIS) OAuth (`drive.file` scope) with no third-party auth middleware (no Auth0 / no Clerk).
-10. **Interactive GCP Onboarding Walkthrough Modal** guiding translators through setting up their GCP account, APIs, bucket, and service account key.
-11. **Serverless deployment on Modal Labs** with scale-to-zero idle compute.
+9. **Interactive GCP Onboarding Walkthrough Modal** guiding translators through setting up their GCP account, APIs, bucket, and service account key.
+10. **Seamless Google Drive Export**: 1-click export via client-side Google Identity Services (GIS) OAuth (`drive.file` scope) with no third-party auth middleware (no Auth0 / no Clerk).
+11. **Fraktur / Blackletter OCR Script Assessment**: Evaluates historical printings and outputs confidence ratings.
+12. **Long Batch Job Recovery & Resumption**: Preserves LRO progress across browser disconnects and container scale-downs.
+13. **Partial Page Failure Resilience & Fallback Plaintext Translation**: Translates unformatted raw text for complex skipped pages to produce a 98% layout-preserved, 100% translated book.
+14. **Tier 2 Session Glossary Lifecycle & Quota Auto-Cleanup**: Prevents GCP project glossary bloat.
+15. **Synchronized Side-by-Side Dual-Pane Reading Mode**: Bilingual reading environment for scholarly translation verification.
+16. **Serverless deployment on Modal Labs** with scale-to-zero idle compute.
 
 ---
 
@@ -65,6 +70,26 @@ The core system consists of:
 > **As a** user who completed a book translation,  
 > **I want** to click "Save to Google Drive" and authenticate with a simple Google popup to have the translated PDF saved directly into my personal Google Drive,  
 > **So that** I can access my translated books anywhere without having to manually download large files to local storage or register for third-party auth platforms.
+
+### US-10: Fraktur & Historical German OCR Script Assessment
+> **As a** scholar translating an early 20th-century Fraktur / Gothic printed treatise,  
+> **I want** the system to evaluate font characteristics and report an OCR Script Confidence Rating during pre-scanning,  
+> **So that** I know whether my historical scan will produce clean translations or if I should test sample preview pages first.
+
+### US-11: Long-Running Batch Job Recovery & Disconnect Resilience
+> **As a** user translating an 800-page book taking 25 minutes,  
+> **I want** to be able to close my laptop, leave the website, and reopen PhenomenalLayout later to find my translation progress still active,  
+> **So that** browser disconnects or Modal container scale-downs never cancel or lose track of my GCP batch job.
+
+### US-12: Fallback Plaintext Translation for Complex Skipped Pages
+> **As a** translator whose book contains an ancient foldout chart or complex plate that GCP skipped during layout preservation,  
+> **I want** a 1-click fallback option to translate the raw extracted text of those skipped pages without layout preservation,  
+> **So that** I receive a 98% layout-preserved, 100% completely translated book with zero untranslated pages.
+
+### US-13: Synchronized Side-by-Side Dual-Pane Reading Mode
+> **As a** philosopher verifying a translated treatise,  
+> **I want** an interactive side-by-side reading view showing the German original alongside the translated English page with synchronized scrolling and neologism highlighting,  
+> **So that** I can closely compare and verify complex philosophical terminology in context.
 
 ---
 
@@ -222,15 +247,78 @@ Feature: Google Drive Export
 
 ---
 
-### FR-11: Single-Page Rapid Preview Translation (Secondary Mode)
-* **Description**: Allow translators to test translation quality on 1–3 sample pages using synchronous `translateDocument` with `enableShadowRemovalNativePdf=True` using their BYOK credentials before committing to a full book batch run.
-* **Traceability**: US-01, US-02, US-05
+### FR-11: Historical German OCR & Fraktur Script Classifier
+* **Description**: During pre-scan, inspect font descriptors and Fraktur unicode patterns to emit a `ScriptAnalysisResult` with `script_type` (`Antiqua` vs. `Fraktur` vs. `Hybrid`) and `ocr_confidence_score` ($0.0–1.0$). If score $< 0.85$, prompt translator to review sample preview pages.
+* **Traceability**: US-10
+
+#### BDD Scenario FR-11.1: Detect Fraktur Font in Historical Treatise
+```gherkin
+Feature: Fraktur Script Classification
+  Scenario: Analyze 1929 Fraktur edition of Klages
+    Given a scanned PDF of Klages' 1929 edition containing long-s (ſ) ligatures
+    When FrakturClassifier evaluates the document stream
+    Then script_type is detected as "Fraktur"
+    And ocr_confidence_score is calculated as 0.88
+    And a prompt recommends "Preview 2 sample pages before full batch"
+```
 
 ---
 
-### FR-12: Modal Labs Serverless Web Deployment & Scale-to-Zero
+### FR-12: Long-Running Batch Job Recovery & Resumption
+* **Description**: Persist active GCP LRO Operation metadata, session ID, user ID, and GCS output path to `/data/sessions/{user_id}_{book_id}.json`. When a user reconnects, restore active LRO monitoring without restarting or abandoning running cloud jobs.
+* **Traceability**: US-11
+
+#### BDD Scenario FR-12.1: Re-attach to Long-Running LRO After Browser Reconnect
+```gherkin
+Feature: Job Resumption
+  Scenario: User reconnects while 800-page job is in progress
+    Given user "translator-01" dispatched an 800-page batch job with LRO "operations/op-789"
+    And user closed browser tab and Modal container scaled to zero
+    When user re-opens PhenomenalLayout with session "book-sess-800"
+    Then the active job is recalled from "/data/sessions/translator-01_book-sess-800.json"
+    And the UI live progress bar instantly displays current progress (e.g. 520/800 pages)
+```
+
+---
+
+### FR-13: Partial Page Failure Resilience & Fallback Plaintext Translation
+* **Description**: When GCP Document Translation completes with `metadata.failed_pages > 0`, extract the text content of the failed page indices, translate them via Cloud Translation Text API v3 using the active glossary, and stitch them back into the final document, delivering a 98% layout-preserved, 100% translated book.
+* **Traceability**: US-12
+
+#### BDD Scenario FR-13.1: Fallback Raw Translation for Skipped Plate Page
+```gherkin
+Feature: Fallback Page Translation
+  Scenario: Translate skipped diagram page as raw text
+    Given a 500-page book where Page 214 failed complex layout parsing (failed_pages = 1)
+    When the user triggers "Translate Failed Pages as Raw Text"
+    Then raw text from Page 214 is extracted and translated via Cloud Translation Text v3
+    And the translated text page replaces the placeholder in the output PDF
+    And the final PDF contains 500 fully translated pages (499 layout-preserved + 1 plaintext-translated)
+```
+
+---
+
+### FR-14: Tier 2 Session Glossary Lifecycle & GCP Quota Auto-Cleanup
+* **Description**: Automatically register cleanup triggers upon job completion to prune dynamic book session glossaries from Google Cloud Translation and delete temporary TSV files in GCS, keeping project glossary count under the regional 1,000 quota.
+* **Traceability**: US-02
+
+---
+
+### FR-15: Synchronized Side-by-Side Dual-Pane Reading Mode
+* **Description**: Render an embedded bilingual reading view displaying the original German scan on the left and the translated English layout PDF on the right with synchronized page turns and neologism highlighting.
+* **Traceability**: US-13
+
+---
+
+### FR-16: Single-Page Rapid Preview Translation (Secondary Mode)
+* **Description**: Allow translators to test translation quality on 1–3 sample pages using synchronous `translateDocument` with `enableShadowRemovalNativePdf=True` using their BYOK credentials before committing to a full book batch run.
+* **Traceability**: US-01, US-02, US-05, US-10
+
+---
+
+### FR-17: Modal Labs Serverless Web Deployment & Scale-to-Zero
 * **Description**: The application must be deployable as a serverless ASGI/WSGI web app on Modal Labs (`modal_app.py`). When no requests or batch monitoring jobs are active, the container scales to zero.
-* **Traceability**: US-01, US-03, US-05, US-07, US-08, US-09
+* **Traceability**: US-01 to US-13
 
 ---
 
@@ -245,9 +333,10 @@ Feature: Google Drive Export
 | **NFR-05** | **Cost Efficiency** | Host compute must remain within Modal Labs' $30/month free tier with near-zero idle cost. | Scaledown window $\le 300\text{s}$; zero GPU requirement for host. |
 | **NFR-06** | **Cost Precision** | Pre-auth cost estimate must deviate from actual GCP bill by no more than \$5.00. | Estimate variance $\le \pm \$5.00$ per document. |
 | **NFR-07** | **Zero Host Storage** | Modal persistent storage is restricted to user metadata; zero book PDF bytes stored on host disk. | Host PDF disk usage $= 0\text{ MB}$ persistent. |
-| **NFR-08** | **Test Coverage** | New BYOK credentials manager, user vocabulary store, cost estimator, Google Drive exporter, GCS batch client, and orchestrator modules must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
-| **NFR-09** | **TDD 3-Strike Gate** | All feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
-| **NFR-10** | **Onboarding Usability**| Walkthrough modal must enable non-technical users to complete GCP credential creation in under 5 minutes. | 6 clear steps with visual instructions and direct Google Cloud Console links. |
+| **NFR-08** | **Job Resumption Time**| Reconnecting to an active cloud batch job must take less than 1.0 second. | Session restoration latency $\le 1000\text{ms}$. |
+| **NFR-09** | **Test Coverage** | All services, classifiers, recovery managers, and translators must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
+| **NFR-10** | **TDD 3-Strike Gate** | All feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
+| **NFR-11** | **Onboarding Usability**| Walkthrough modal must enable non-technical users to complete GCP credential creation in under 5 minutes. | 6 clear steps with visual instructions and direct Google Cloud Console links. |
 
 ---
 
@@ -255,13 +344,17 @@ Feature: Google Drive Export
 
 | User Story | Functional Requirement | Non-Functional Requirement | Test Target |
 | :--- | :--- | :--- | :--- |
-| **US-01** | FR-01, FR-11 | NFR-01 | `tests/test_book_pre_scanner.py` |
-| **US-02** | FR-02 | NFR-03, NFR-04 | `tests/test_glossary_sync_manager.py` |
-| **US-03** | FR-03, FR-04, FR-10 | NFR-01, NFR-02, NFR-07, NFR-08 | `tests/test_gcp_batch_translation_service.py` |
+| **US-01** | FR-01, FR-16 | NFR-01 | `tests/test_book_pre_scanner.py` |
+| **US-02** | FR-02, FR-14 | NFR-03, NFR-04 | `tests/test_glossary_sync_manager.py` |
+| **US-03** | FR-03, FR-04, FR-10 | NFR-01, NFR-02, NFR-07, NFR-09 | `tests/test_gcp_batch_translation_service.py` |
 | **US-04** | FR-04 | NFR-02 | `tests/test_lro_progress_monitor.py` |
-| **US-05** | FR-05, FR-12 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
-| **US-06** | FR-06 | NFR-03, NFR-08 | `tests/test_user_vocabulary_store.py` |
+| **US-05** | FR-05, FR-17 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
+| **US-06** | FR-06 | NFR-03, NFR-09 | `tests/test_user_vocabulary_store.py` |
 | **US-07** | FR-07 | NFR-05, NFR-06 | `tests/test_cost_estimator.py` |
-| **US-08** | FR-08 | NFR-10 | `tests/test_app_routes.py` |
-| **US-09** | FR-09, FR-10 | NFR-03, NFR-07, NFR-08 | `tests/test_google_drive_exporter.py` |
-| **All** | FR-01 to FR-12 | NFR-08, NFR-09, NFR-10 | `tests/test_book_translation_e2e.py` |
+| **US-08** | FR-08 | NFR-11 | `tests/test_app_routes.py` |
+| **US-09** | FR-09, FR-10 | NFR-03, NFR-07, NFR-09 | `tests/test_google_drive_exporter.py` |
+| **US-10** | FR-11 | NFR-01, NFR-09 | `tests/test_fraktur_classifier.py` |
+| **US-11** | FR-12 | NFR-02, NFR-08 | `tests/test_batch_job_recovery.py` |
+| **US-12** | FR-13 | NFR-02, NFR-09 | `tests/test_fallback_translator.py` |
+| **US-13** | FR-15 | NFR-05, NFR-09 | `tests/test_dual_pane_viewer.py` |
+| **All** | FR-01 to FR-17 | NFR-09, NFR-10, NFR-11 | `tests/test_book_translation_e2e.py` |

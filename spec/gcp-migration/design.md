@@ -11,6 +11,7 @@ PhenomenalLayout is deployed as a **serverless cloud application on Modal Labs**
 * **Zero Host API/Compute Cost**: Translation ($0.08/page) and GCS storage are billed directly to the user's personal GCP project. Modal Labs operates strictly within its $30/month free tier with automatic scale-to-zero.
 * **Seamless Google Drive Export**: Uses native **Google Identity Services (GIS)** client-side OAuth (`drive.file` scope) for 1-click cloud export without requiring heavy third-party SaaS auth (no Auth0, no Clerk).
 * **Pre-Auth Zero-Credential Cost Estimator**: Calculates translation costs and monthly GCS retention schedules within a $\pm \$5.00$ tolerance margin before login.
+* **Scholarly Resilience**: Includes **Job Resumption** for long 10–35 min batch jobs, **Fraktur / Blackletter OCR confidence rating**, **Partial Page Failure resilience with Fallback Plaintext translation** (achieving 98% layout + 100% text translation), **Glossary Quota auto-cleanup**, and a **Side-by-Side Dual-Pane Reading Mode**.
 
 ---
 
@@ -31,9 +32,12 @@ flowchart TB
         UI["Web UI & Fast API Endpoint (Gradio / FastAPI)"]
         AUTH["BYOK Credentials Manager (Session-Scoped Vault)"]
         NEO["Neologism & Morphological Detector (spaCy de_core_news_sm)"]
+        FRAK["Fraktur & OCR Confidence Classifier (services/fraktur_classifier.py)"]
         VOCAB[("User Vocabulary Store on Modal Volume /data/users/")]
+        JOB_REC[("Job Recovery Store /data/sessions/")]
         GLOSS_COMP["Dual-Tier TSV Glossary Compiler"]
         LRO_MON["Async LRO Poller & Progress Monitor"]
+        FALLBACK["Fallback Plaintext Page Translator (services/fallback_translator.py)"]
     end
 
     subgraph GCP_Zone["User's GCP Cloud Project (BYOK Billed to User's Account)"]
@@ -41,10 +45,12 @@ flowchart TB
         GCP_GLOSS["Cloud Translation v3 Regional Glossaries (us-central1)"]
         GCP_BATCH["Cloud Document Translation API (batchTranslateDocument)"]
         GCP_OCR["Google Cloud Native OCR & Layout Preservation Engine"]
+        GCP_TEXT["Cloud Translation Text API (Fallback Translation)"]
     end
 
     subgraph User_Personal_Cloud["User's Personal Google Ecosystem"]
         GDRIVE["User's Personal Google Drive (via Google Identity Services OAuth)"]
+        DUAL_PANE["Side-by-Side Dual-Pane Scholarly Viewer"]
         LOCAL_DL["Direct Browser Download (Local Machine)"]
     end
 
@@ -52,7 +58,9 @@ flowchart TB
     UI --> AUTH
     AUTH -->|Validate Credentials| GCP_BATCH
     UI --> NEO
+    UI --> FRAK
     NEO <--> VOCAB
+    UI <--> JOB_REC
     NEO --> GLOSS_COMP
     VOCAB --> GLOSS_COMP
     AUTH -->|Upload TSV & Book PDF| GCS_BUCKET
@@ -62,25 +70,13 @@ flowchart TB
     GCP_BATCH --> GCP_OCR
     GCP_BATCH -->|LRO State| LRO_MON
     GCP_OCR -->|Output PDF| GCS_BUCKET
-    LRO_MON --> UI
+    LRO_MON -->|State Updates| UI
+    LRO_MON -->|Failed Pages Detection| FALLBACK
+    FALLBACK -->|Translate Skipped Pages| GCP_TEXT
     GCS_BUCKET -->|Stream Download| LOCAL_DL
     GCS_BUCKET -->|1-Click GIS Export| GDRIVE
+    GCS_BUCKET -->|Bilingual Pages| DUAL_PANE
 ```
-
-### 2.1 Workload & Storage Allocation Matrix
-
-| Workload Component | Host Layer | Storage Location | Cost & Scaling Model |
-| :--- | :--- | :--- | :--- |
-| **Pre-Auth Cost Estimator** | Modal Labs Web Endpoint | Zero storage (ephemeral in-memory inspect) | Executes in < 500ms on Modal CPU. No login or GCP key needed. |
-| **BYOK Setup Walkthrough Modal** | Modal Labs Web Endpoint | Zero storage (rendered client-side) | Zero compute overhead. |
-| **Web Interface & API** | Modal Labs Web Endpoint | Ephemeral container | Auto-scales down to 0 when idle (< $2–$5/mo of Modal's $30 free tier). |
-| **Neologism Pre-Scanning & Parsing** | Modal CPU Worker | Ephemeral RAM (< 256MB) | ~2–5 seconds CPU burst per chapter. |
-| **User Account & Vocabulary Store** | Modal Persistent Volume | Modal Volume (`/data/user_profiles/`) | Tiny SQLite/JSON store (< 5MB total). |
-| **Source Book PDF & Glossaries** | User's GCP Project | User's GCS Bucket (`gs://<user_bucket>/inputs/`) | Billed directly to User's GCP account (~$0.02/GB/mo; 5GB free tier). Host stores 0 MB. |
-| **Translated Book PDF** | User's GCP Project | User's GCS Bucket (`gs://<user_bucket>/outputs/`) | Billed directly to User's GCP account (~$0.02/GB/mo). Host stores 0 MB. |
-| **Google Drive Delivery** | Google Drive v3 API | User's Personal Google Drive | Direct client/GCS stream to user's Drive. Zero host storage or bandwidth cost. |
-| **Document Translation & OCR** | User's GCP Project | Google Cloud Document API | Billed directly to User's GCP billing account ($0.08/page). |
-| **LRO Progress Monitoring** | Modal Async Worker | Ephemeral state | Near-zero CPU overhead while waiting for GCP LRO completion. |
 
 ---
 
@@ -90,7 +86,7 @@ flowchart TB
 
 Google Cloud Platform pricing for Document Translation and Storage consists of:
 1. **Document Translation Rate**: Flat **$0.080 per page** for native and scanned PDF layouts.
-2. **GCS "Always Free" Tier**: Google Cloud provides **5 GB-months of Standard Storage free of charge** in US multi-regions/regions (`us-central1`, `us-east1`, `us-west1`).
+2. **GCS "Always Free" Tier**: Google Cloud provides **5 GB-months of Standard Storage free of charge** in US regions (`us-central1`, `us-east1`, `us-west1`).
 3. **Paid GCS Storage Tiers (Beyond 5 GB free limit)**:
    * Standard Regional Storage: **$0.020 per GB / month** (or ~$0.00067 / GB / day).
    * Archive Storage (Long-Term Archival): **$0.0012 per GB / month** (or ~$0.0144 / GB / year).
@@ -117,31 +113,11 @@ The cost estimator outputs an itemized breakdown:
 
 ### 4.1 Zero-SaaS Authentication Architecture (No Auth0 / No Clerk)
 
-Rather than introducing heavy third-party authentication middleware (Auth0, Clerk, Firebase), PhenomenalLayout implements **native client-side Google Identity Services (GIS)** OAuth 2.0 Token Flow:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Translator as User / Translator
-    participant UI as Gradio / FastAPI Web UI
-    participant GIS as Google Identity Services (Client-Side GIS)
-    participant GoogleAuth as Google OAuth2 Endpoint
-    participant GDrive as Google Drive API v3 (files.create)
-    participant UserGCS as User GCS Bucket (gs://user-bucket/)
-
-    Note over Translator,GDrive: 1-Click Seamless Google Drive Export
-    Translator->>UI: Click "📁 Save to Google Drive"
-    UI->>GIS: Request Access Token (scope: drive.file)
-    GIS->>GoogleAuth: Trigger Native Google OAuth Popup
-    Translator->>GoogleAuth: Approve Permission (1 Click)
-    GoogleAuth-->>GIS: Return Scoped Access Token (1-hour TTL)
-    GIS-->>UI: Pass Access Token
-    UI->>UserGCS: Stream Translated PDF from gs://user-bucket/outputs/book.pdf
-    UserGCS-->>UI: Return PDF Byte Stream
-    UI->>GDrive: POST /upload/drive/v3/files?uploadType=multipart (drive.file)
-    GDrive-->>UI: 200 OK (File ID & WebLink)
-    UI-->>Translator: Render Success Message with Direct Google Drive Link
-```
+PhenomenalLayout implements **native client-side Google Identity Services (GIS)** OAuth 2.0 Token Flow:
+1. User clicks **"📁 Save to Google Drive"**.
+2. A native Google OAuth popup requests permission for scope `https://www.googleapis.com/auth/drive.file`.
+3. Upon 1-click user authorization, the client receives a short-lived token.
+4. The translated PDF streams directly from the user's GCS bucket to Google Drive API v3 (`files.create`).
 
 ### 4.2 Security & Privacy: Restricted `drive.file` Scope
 * **Scope**: `https://www.googleapis.com/auth/drive.file`.
@@ -153,66 +129,66 @@ sequenceDiagram
 ## 5. Bring Your Own Key (BYOK) Architecture & Onboarding Walkthrough
 
 ### 5.1 Credential Ingestion & Security Model
-1. **Inputs Required**:
-   * **Google Cloud Project ID** (e.g. `philosophy-translation-prod`).
-   * **Target GCS Bucket Name** (e.g. `gs://my-klages-translations`).
-   * **GCP Service Account Key (JSON)**.
-2. **Session-Scoped Isolation**:
-   * Credentials are held strictly in memory for the active browser session.
-   * Credentials are never logged, never exposed to other users, and never persisted to public storage.
-3. **Instant Validation**:
-   * Tests connectivity with a zero-cost API check (`projects.locations.glossaries.list`) to verify IAM permissions and regional endpoint availability (`us-central1`).
+1. **Inputs Required**: GCP Project ID, Target GCS Bucket Name, and GCP Service Account JSON key.
+2. **Session-Scoped Isolation**: Held strictly in memory for the active session; zero disk writes, zero logging.
+3. **Instant Validation**: Non-billable check (`projects.locations.glossaries.list`) verifies IAM roles and regional endpoint availability (`us-central1`).
 
 ### 5.2 Interactive GCP Onboarding Walkthrough Modal
-
-The BYOK panel includes a **"📖 Step-by-Step GCP Setup Guide"** modal that opens directly in the browser:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 🚀 Google Cloud Setup Guide (Step-by-Step BYOK Walkthrough)               [X]│
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 1️⃣  Create GCP Account & Claim Free Credits                                 │
-│     • Go to console.cloud.google.com (New users receive $300 in free credit)│
-│                                                                             │
-│ 2️⃣  Create a Project                                                       │
-│     • Click Project Selector ➔ "New Project" ➔ Name it e.g. "phenomenal-book"│
-│                                                                             │
-│ 3️⃣  Enable Required APIs (1-Click Link)                                    │
-│     • Cloud Translation API (translate.googleapis.com)                      │
-│     • Cloud Storage API (storage.googleapis.com)                            │
-│                                                                             │
-│ 4️⃣  Create a Cloud Storage Bucket                                          │
-│     • Go to Cloud Storage ➔ Create Bucket in region 'us-central1'           │
-│                                                                             │
-│ 5️⃣  Create Service Account & Download JSON Key                              │
-│     • Go to IAM & Admin ➔ Service Accounts ➔ "Create Service Account"       │
-│     • Grant Roles:                                                          │
-│       - Cloud Translation API User / Editor (roles/cloudtranslate.editor)   │
-│       - Storage Object Admin (roles/storage.objectAdmin)                    │
-│     • Keys tab ➔ Add Key ➔ Create New Key ➔ JSON (downloads credentials.json)│
-│                                                                             │
-│ 6️⃣  Upload & Validate                                                       │
-│     • Drag & drop credentials.json into PhenomenalLayout and click 'Connect' │
-│                                                                             │
-│ ⚡ Power User? Run this 1-line gcloud script:                                │
-│    curl -fsSL https://phenomenal.app/scripts/setup-gcp.sh | bash             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+The BYOK panel includes a **"📖 Step-by-Step GCP Setup Guide"** modal that opens directly in the browser with 6 progressive steps, direct Google Cloud Console links, and a 1-line copyable `gcloud` setup script.
 
 ---
 
-## 6. User-Tied Neologism Memory & Vocabulary Persistence
+## 6. Scholarly Resilience & Production Enhancements
 
-Philosophical translators build specific terminology preferences over time. PhenomenalLayout introduces the **Persistent User Vocabulary Engine**:
+### 6.1 Historical German OCR & Fraktur / Blackletter Confidence Engine
+* **Context**: Pre-1945 philosophical editions are frequently typeset in Fraktur (Gothic / Blackletter).
+* **Module**: [`services/fraktur_classifier.py`](services/fraktur_classifier.py) (`FrakturClassifier`).
+* **Mechanism**:
+  1. Inspects font descriptors, unicode ligature patterns (e.g. `ſ` long-s, `tz`, `ch`, `ck` Fraktur ligatures), and page bitmap histograms.
+  2. Emits an **OCR Script Confidence Rating**:
+     * `script_type`: `Antiqua` (Modern Latin) vs. `Fraktur` (Blackletter) vs. `Hybrid`.
+     * `ocr_confidence_score`: $0.0 \text{ to } 1.0$.
+     * `recommended_action`: Direct batch translation vs. 2-page sample preview recommendation for degraded scans.
 
-1. **User Identity & Storage**:
-   * Managed on a persistent Modal Volume: `modal.Volume.from_name("phenomenal-user-data", create_if_missing=True)`.
-   * Stored under `/data/user_vocabularies/{user_id}.sqlite` or `.json`.
-2. **Translation Choice Memory**:
-   * Whenever a user selects a translation (e.g. `Geist` $\rightarrow$ `Spirit`, `Wirklichkeit` $\rightarrow$ `Actuality`, or `Schauung` $\rightarrow$ `[Preserve Untranslated: Schauung]`), the preference is saved to their persistent profile.
-3. **Smart Auto-Populate for New Books**:
-   * When the user uploads a subsequent book, the Neologism Pre-Scanner checks the user's saved vocabulary first.
-   * Saved terms are automatically pre-selected in the terminology review table with high confidence, drastically reducing repetitive translator input across a multi-volume treatise.
+---
+
+### 6.2 Long-Running Batch Job Resilience & Session Recovery
+* **Context**: 500–1,000 page batch translations take 10–35 minutes. Users may close their browser, and Modal containers scale to zero after 300s of inactivity.
+* **Module**: [`services/batch_job_recovery.py`](services/batch_job_recovery.py) (`BatchJobRecoveryManager`).
+* **Mechanism**:
+  1. Active LRO Operation URI, user ID, book metadata, and target GCS output path are saved to `/data/sessions/{user_id}_{book_id}.json`.
+  2. When the user returns to the application (or opens a bookmark with `?session_id=...`), the orchestrator re-connects directly to the GCP LRO and restores the live progress bar without restarting the job or losing state.
+
+---
+
+### 6.3 Partial Page Failure Resilience & Fallback Plaintext Translation Engine
+* **Context**: Ancient charts, foldout plates, or damaged pages may fail complex layout preservation in GCP Document Translation (`metadata.failed_pages > 0`).
+* **Module**: [`services/fallback_translator.py`](services/fallback_translator.py) (`FallbackPageTranslator`).
+* **Mechanism**:
+  1. When GCP batch translation finishes with `failed_pages > 0`, the monitor flags the specific failed page indices.
+  2. The user is offered a 1-click option: **"Translate Failed Pages as Raw Text"**.
+  3. The engine strips complex non-text vector elements, extracts raw textual content via PyPDF / Cloud Vision, translates the text using Cloud Translation Text v3 (with the session glossary applied), and compiles the translated text page into the output PDF.
+  4. **Outcome**: The user receives a **98% layout-preserved, 100% fully translated book**.
+
+---
+
+### 6.4 Tier 2 Session Glossary Lifecycle & GCP Quota Auto-Cleanup
+* **Context**: Google Cloud regional glossary quota is 1,000 glossaries per project.
+* **Module**: [`services/session_glossary_lifecycle.py`](services/session_glossary_lifecycle.py) (`SessionGlossaryLifecycleManager`).
+* **Mechanism**:
+  1. Permanent Tier 1 foundation dictionaries (`klages-philosophical-base-v1`) remain active in `us-central1`.
+  2. Dynamic Tier 2 session glossaries (`projects/.../glossaries/book_sess_xxx`) are tagged with creation timestamps.
+  3. Upon job completion, downloading, or session expiration, the manager invokes non-blocking `delete_glossary` and deletes the transient GCS TSV file, keeping the user's GCP project completely clean.
+
+---
+
+### 6.5 Synchronized Side-by-Side Dual-Pane Reading Mode
+* **Context**: Philosophers and scholars cross-reference the original German sentence against the English translation.
+* **Module**: Embedded UI component with synchronized viewer controller.
+* **Mechanism**:
+  * **Left Pane**: Original German source page rendered at high resolution.
+  * **Right Pane**: Translated English layout-preserved page.
+  * **Synchronized Controls**: Dual-page flipping, synchronized zoom, jump-to-chapter, and search highlighting for neologism compounds.
 
 ---
 
@@ -223,14 +199,33 @@ classDiagram
     class GCPCostEstimator {
         +estimate_book_cost(pdf_path_or_bytes) CostQuote
         +calculate_storage_retention(file_size_mb) StorageRetentionSchedule
-        +calculate_page_breakdown(pdf_path) PageBreakdown
-        +get_pricing_schedule() PricingSchedule
+    }
+
+    class FrakturClassifier {
+        +classify_script(pdf_path_or_stream) ScriptAnalysisResult
+        +get_ocr_confidence_rating(pdf_path) OCRConfidence
+    }
+
+    class BatchJobRecoveryManager {
+        +save_active_job(user_id, book_id, lro_operation_name, gcs_output_uri) str
+        +resume_active_job(session_id) ActiveJobState
+        +list_user_jobs(user_id) list
+    }
+
+    class FallbackPageTranslator {
+        +extract_failed_pages(source_pdf_path, failed_page_indices) list
+        +translate_raw_pages(user_id, pages_text, glossary_name) list
+        +splice_fallback_pages(layout_pdf_path, fallback_pages, output_path) Path
+    }
+
+    class SessionGlossaryLifecycleManager {
+        +register_session_glossary(user_id, glossary_resource_name, gcs_tsv_uri) void
+        +cleanup_completed_job_glossaries(user_id, session_id) bool
+        +audit_project_glossaries(user_id) list
     }
 
     class GoogleDriveExporter {
-        +initiate_gis_auth() GISAuthClient
-        +export_pdf_to_drive(access_token, file_bytes, filename, folder_name) DriveFileResult
-        +get_drive_status(file_id) DriveStatus
+        +export_stream_to_drive(access_token, file_stream, filename) DriveExportResult
     }
 
     class BYOKCredentialsManager {
@@ -239,178 +234,33 @@ classDiagram
         +get_storage_client(user_id) StorageClient
         +validate_gcp_access(user_id) ValidationResult
         +get_onboarding_guide() OnboardingGuideData
-        +clear_session(user_id) void
     }
 
     class UserVocabularyStore {
         +get_user_preferences(user_id) dict
         +save_preference(user_id, term, translation, note) void
         +bulk_save_preferences(user_id, preferences_dict) void
-        +export_user_dictionary(user_id) bytes
-    }
-
-    class GCPBatchTranslationService {
-        +submit_batch_job(gcs_input_uri, gcs_output_uri, source_lang, target_lang, glossary_resource_name, credentials) str
-        +poll_operation(operation_name, credentials) LROStatus
-        +download_translated_book(gcs_output_uri, local_dest_path, credentials) Path
-    }
-
-    class GlossarySyncManager {
-        +sync_base_glossary(glossary_name, terms_dict, credentials) str
-        +sync_book_session_glossary(session_id, user_choices, base_glossary_name, credentials) str
-        +compile_tsv(base_terms, user_terms, book_terms) bytes
-        +upload_glossary_to_gcs(tsv_bytes, gcs_path, credentials) str
-        +ensure_glossary_ready(glossary_resource_name, credentials) bool
-        +delete_session_glossary(glossary_resource_name, credentials) bool
-    }
-
-    class NeologismDetector {
-        +analyze_book_stream(pdf_path, chunk_size, user_saved_vocab) NeologismAnalysis
-        +extract_candidates(text) list
-        +analyze_morphology(term) MorphologicalAnalysis
-        +analyze_philosophical_context(term, text) PhilosophicalContext
     }
 
     class BookTranslationOrchestrator {
         +pre_scan_book(user_id, book_pdf_path) BookScanResult
         +start_book_translation(user_id, book_id, session_id) JobHandle
-        +get_job_progress(job_handle) JobProgress
+        +handle_job_completion(job_handle) CompletionSummary
+        +trigger_fallback_page_translation(job_handle) Path
     }
 
+    BookTranslationOrchestrator --> FrakturClassifier
+    BookTranslationOrchestrator --> BatchJobRecoveryManager
+    BookTranslationOrchestrator --> FallbackPageTranslator
+    BookTranslationOrchestrator --> SessionGlossaryLifecycleManager
     BookTranslationOrchestrator --> BYOKCredentialsManager
     BookTranslationOrchestrator --> UserVocabularyStore
-    BookTranslationOrchestrator --> NeologismDetector
-    BookTranslationOrchestrator --> GlossarySyncManager
-    BookTranslationOrchestrator --> GCPBatchTranslationService
-    GlossarySyncManager --> GCPBatchTranslationService
+    BookTranslationOrchestrator --> GoogleDriveExporter
 ```
 
 ---
 
-## 8. Subsystem Deep-Dive
-
-### 8.1 Subsystem 1: Book-Scale Text Ingestion & Neologism Pre-Scanning
-* **Stream-Based Chunking**: Full books (100–1,000 pages) are processed in streaming chunks via `pypdf` without loading entire uncompressed page bitmaps into memory.
-* **Linguistic Analysis**:
-  * [`NeologismDetector`](services/neologism_detector.py) identifies German compounds, prefixes, and suffixes.
-  * [`PhilosophicalContextAnalyzer`](services/philosophical_context_analyzer.py) scores term frequency, chapter distribution, and philosophical relevance.
-  * Pre-populates suggestions using:
-    1. User's saved preferences from `UserVocabularyStore`.
-    2. Built-in domain foundation dictionary ([`config/klages_terminology.json`](config/klages_terminology.json)).
-    3. Morphological root decomposition for novel coined compounds.
-
----
-
-### 8.2 Subsystem 2: Dual-Tier Glossary Synchronization & Lifecycle Management
-Translating books requires strict terminology consistency across thousands of paragraphs. The **Glossary Sync Manager** operates two tiers:
-
-1. **Tier 1: Persistent Domain Glossaries (Base Tier)**
-   * Static foundation dictionaries (e.g. `klages-philosophical-base-v1`) provisioned once in Google Cloud Translation in user's project (`projects/<user_proj>/locations/us-central1/glossaries/klages-philosophical-base-v1`).
-   * Reused across all translations of related treatises to avoid redundant GCS uploads.
-
-2. **Tier 2: Dynamic Book Session Glossaries (Overlay Tier)**
-   * Merges Tier 1 + User Saved Vocabulary + Book-Specific Choices.
-   * Compiles the mapping into a RFC 4180-compliant TSV (`source_code\ttarget_code`).
-   * Stages the file in user's GCS: `gs://<user_bucket>/glossaries/sessions/<book_id>_<timestamp>.tsv`.
-   * Invokes Cloud Translation v3 `create_glossary` in `us-central1` and polls until status is active.
-   * Automatic TTL/cleanup policies prune transient session glossaries after job completion.
-
----
-
-### 8.3 Subsystem 3: Primary Default Pipeline - Asynchronous GCS Batch Translation
-Because books exceed inline API payload and timeout limits, **Asynchronous Batch Translation (`batchTranslateDocument`) is the primary, default execution engine**:
-
-1. **Book Upload to User GCS**:
-   * The source book PDF is streamed to `gs://<user_bucket>/inputs/<book_id>/source.pdf`.
-2. **Batch Request Dispatch**:
-   * Constructs `BatchTranslateDocumentRequest`:
-     * `parent = f"projects/{user_project_id}/locations/{location}"`
-     * `source_language_code = "de"`
-     * `target_language_codes = ["en"]`
-     * `input_configs = [{"gcs_source": {"input_uri": "gs://<user_bucket>/inputs/<book_id>/source.pdf"}, "mime_type": "application/pdf"}]`
-     * `output_config = {"gcs_destination": {"output_uri_prefix": "gs://<user_bucket>/outputs/<book_id>/"}}`
-     * `glossaries = {"en": {"glossary": glossary_resource_name}}`
-   * Dispatches asynchronous request via `TranslationServiceClient.batch_translate_document`.
-3. **Long-Running Operation (LRO) Monitoring**:
-   * Tracks operation progress metadata via `BatchTranslateDocumentMetadata` (`metadata.state == SUCCEEDED`, `metadata.translated_pages / metadata.total_pages`, `metadata.failed_pages`).
-   * Emits progress events to the Gradio/FastAPI interface for live chapter/page tracking.
-4. **Automated Delivery & Export**:
-   * Once LRO transitions to `SUCCEEDED`, the translated PDF resides safely in `gs://<user_bucket>/outputs/<book_id>/`.
-   * Translators can download directly or click **"Save to Google Drive"** to export via GIS OAuth without intermediate Modal server storage.
-
----
-
-## 9. Sequence Diagram: Modal BYOK Book Translation & Google Drive Export
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Translator as User / Translator
-    participant CostUI as Zero-Auth Cost Calculator
-    participant CostEst as GCPCostEstimator (Modal)
-    participant UI as Modal Web App (Gradio / FastAPI)
-    participant BYOK as BYOKCredentialsManager
-    participant Vocab as UserVocabularyStore (Modal Volume)
-    participant Orch as BookTranslationOrchestrator
-    participant UserGCS as User GCS Bucket (gs://user-bucket/)
-    participant UserGCP as User Cloud Translation API v3
-    participant GIS as Google Identity Services (GIS)
-    participant GDrive as Google Drive API v3
-
-    rect rgb(255, 245, 238)
-    Note over Translator,CostEst: Zero-Auth Cost Quote & Retention Estimate
-    Translator->>CostUI: Upload PDF (No Auth / No GCP Keys)
-    CostUI->>CostEst: Inspect Page Count, File Size & Density
-    CostEst-->>CostUI: Return Itemized GCP Quote ($0.08/page + GCS 5GB Free Tier status)
-    CostUI-->>Translator: Display Budget Estimate (e.g. 350 pages = $28.00; Storage = $0.00)
-    end
-
-    rect rgb(240, 255, 240)
-    Note over Translator,BYOK: Authenticated BYOK Session Setup
-    Translator->>UI: Input GCP Project ID, GCS Bucket & Upload SA Key JSON
-    UI->>BYOK: Set & Validate Credentials
-    BYOK->>UserGCP: Test Connection (List Glossaries)
-    UserGCP-->>BYOK: Access Confirmed (200 OK)
-    BYOK-->>UI: BYOK Connected Ready
-    end
-
-    Translator->>UI: Upload Book PDF for Translation
-    UI->>Vocab: Load User's Saved Terminology Preferences
-    Vocab-->>Orch: Return User Neologism Dictionary
-    UI->>Orch: Submit Book for Pre-Scan & Translation Job
-    
-    rect rgb(255, 250, 240)
-    Note over Orch,UserGCP: Primary Asynchronous Batch Translation (Stored in User GCS)
-    Orch->>UserGCS: Upload Book to gs://user-bucket/inputs/book_101/source.pdf
-    Orch->>UserGCP: batchTranslateDocument(inputs, output_prefix)
-    UserGCP-->>Orch: Return LRO Operation
-    
-    loop Every 10s until Complete
-        Orch->>UserGCP: get_operation(LRO)
-        UserGCP-->>Orch: Operation Metadata (translated_pages / total_pages)
-        Orch-->>UI: Update Live Progress Bar (e.g. 142/350 Pages)
-    end
-    
-    UserGCP-->>Orch: LRO State = SUCCEEDED
-    UserGCP->>UserGCS: Write output PDF to gs://user-bucket/outputs/book_101/
-    end
-
-    alt Option A: Direct Local Download
-        Translator->>UI: Click "Download PDF"
-        UI->>UserGCS: Stream PDF to Browser
-    else Option B: Seamless Google Drive Export
-        Translator->>UI: Click "📁 Save to Google Drive"
-        UI->>GIS: Request OAuth Token (drive.file scope)
-        Translator->>GIS: Approve 1-Click Popup
-        GIS-->>UI: Token Granted
-        UI->>GDrive: Stream PDF from GCS to Google Drive
-        GDrive-->>Translator: File Saved in Google Drive (Direct Link)
-    end
-```
-
----
-
-## 10. Modal Labs Serverless Deployment Architecture
+## 8. Modal Labs Serverless Deployment Architecture
 
 ```python
 # modal_app.py architecture outline
@@ -428,6 +278,7 @@ image = (
         "pypdf>=6.14.0",
         "google-cloud-translate>=3.15.0",
         "google-cloud-storage>=2.14.0",
+        "google-api-python-client>=2.120.0",
         "spacy>=3.7.0",
         "pydantic>=2.10.0",
     )
@@ -448,11 +299,11 @@ def web_entrypoint():
 
 ---
 
-## 11. Configuration & Environment Variables
+## 9. Configuration & Environment Variables
 
 | Variable | Description | Source / Scope |
 | :--- | :--- | :--- |
-| `MODAL_VOLUME_PATH` | Path for persistent user profiles and vocabularies | Modal Container (`/data`) |
+| `MODAL_VOLUME_PATH` | Path for persistent user profiles and session recovery | Modal Container (`/data`) |
 | `GCP_DOC_TRANSLATION_PRICE_PER_PAGE` | Flat GCP Document Translation rate per page | Constant (`0.080`) |
 | `GCS_STANDARD_STORAGE_PER_GB_MO` | Rate per GB per month for standard storage | Constant (`0.020`) |
 | `GCS_ALWAYS_FREE_STORAGE_GB` | Monthly free storage allowance in US region | Constant (`5.0`) |
@@ -460,6 +311,7 @@ def web_entrypoint():
 | `GCP_LOCATION` | Regional endpoint for Translation & Glossaries | User Config (`us-central1`) |
 | `BATCH_POLL_INTERVAL_SEC`| Interval in seconds for checking batch LRO status | System Default (`10s`) |
 | `MAX_INLINE_PREVIEW_PAGES`| Max pages allowed for synchronous sample previews | System Default (`3`) |
+| `FRAKTUR_CONFIDENCE_THRESHOLD` | Threshold below which sample preview is recommended | System Default (`0.85`) |
 | `USER_BYOK_PROJECT_ID` | Google Cloud Project ID | User BYOK Input |
 | `USER_BYOK_BUCKET` | Google Cloud Storage Bucket Name | User BYOK Input |
 | `USER_BYOK_CREDENTIALS` | Google Service Account Key JSON | User BYOK Input / Vault |
