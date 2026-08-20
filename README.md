@@ -77,9 +77,9 @@ flowchart TD
 
 > [!NOTE]
 > For complete architectural details, see the [Architecture Decision Record (ADR 0001)](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/docs/adr/0001-migrate-to-google-cloud-document-translation.md) and the formal specification suite:
-> - [System Design Spec](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/design.md)
-> - [Requirements & BDD Spec](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/requirements.md)
-> - [Actionable Tasks & TDD Plan](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/tasks.md)
+> - [System Design Spec](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/design.md)
+> - [Requirements & BDD Spec](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/requirements.md)
+> - [Actionable Tasks & TDD Plan](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/tasks.md)
 
 ### Core Components
 

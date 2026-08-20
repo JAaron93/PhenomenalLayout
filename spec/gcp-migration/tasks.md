@@ -2,7 +2,7 @@
 
 ## 1. Plan Overview & Book-Scale Execution Strategy
 
-This implementation plan decomposes the requirements from [`requirements.md`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**.
+This implementation plan decomposes the requirements from [`requirements.md`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**.
 
 The tasks are organized into four **Execution Tracks**:
 * **Track 1: GCP Batch Translation Engine & GCS File Staging** (Primary pipeline infrastructure)
