@@ -35,20 +35,29 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 * **Zero-Cost Validation**: Credentials must be validated upon entry using non-billable API calls (`projects.locations.glossaries.list`).
 * **Onboarding Walkthrough Modal**: The BYOK setup panel must include an interactive 6-step guided walkthrough modal with direct GCP console links and a copyable `gcloud` setup script.
 
-### 2.4 Pre-Auth Zero-Credential Cost Estimator
+### 2.4 Pre-Auth Zero-Credential Cost & Storage Estimator
 * The web interface must provide an unauthenticated PDF cost quote calculation on Modal CPU without requiring user sign-in or GCP credentials.
-* Pricing estimates must include per-page translation rates ($0.080/page), GCS staging buffers, and sample preview allowances with variance within $\pm \$5.00$.
+* Pricing estimates must include per-page translation rates ($0.080/page), GCS 5 GB Always Free tier checks, and monthly/annual storage retention schedules with variance within $\pm \$5.00$.
 
 ### 2.5 Persistent User Neologism Vocabulary Store
 * User translation choices (translated equivalents, untranslated directives, notes) must be persisted per `user_id` on the Modal Volume (`modal.Volume.from_name("phenomenal-user-data")` mounted at `/data`).
 * When pre-scanning subsequent books, the engine must automatically recall and pre-fill saved user vocabulary.
+
+### 2.6 Zero Host PDF Storage Invariant
+* Modal Labs backend instances and volumes must store **zero** book PDF files. The source PDF and translated outputs reside strictly in the user's GCS bucket or personal Google Drive.
+* Modal Volume storage (`/data/`) is reserved strictly for lightweight user vocabulary databases ($\le 5\text{MB}$).
+
+### 2.7 Seamless Google Drive Export (Zero-SaaS GIS)
+* The application must support 1-click export to the user's personal Google Drive using native client-side **Google Identity Services (GIS)** OAuth.
+* Must request restricted `https://www.googleapis.com/auth/drive.file` scope (zero access to unrelated user Drive files).
+* Prohibits heavy third-party authentication middleware (no Auth0, no Clerk).
 
 ---
 
 ## 3. Modal Labs Serverless Deployment Architecture
 * **Framework**: Deployable as a serverless ASGI web app (`modal_app.py`, `@modal.asgi_app()`).
 * **Compute Tier**: Must operate efficiently within Modal Labs' $30/month free compute tier by enforcing automatic scale-to-zero when idle (`scaledown_window=300`).
-* **Storage**: Persistent storage must utilize `modal.Volume` for user profile and database storage (`/data/`).
+* **Storage**: Persistent storage must utilize `modal.Volume` strictly for user metadata and terminology storage (`/data/`).
 
 ---
 
@@ -61,6 +70,8 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | **Custom Canvas Reconstruction** (`services/pdf_document_reconstructor.py`, ReportLab canvas drawing) | Heuristic font-scaling and box expansion broke tables and figures. | Rely on Google Cloud Document Translation, which natively generates complete, layout-preserved PDFs. |
 | **Dedicated GPU OCR Workers** (Modal Dolphin OCR instances, `services/dolphin_client.py`) | High operational complexity and cost. | Outsource OCR and document layout parsing directly to Google Cloud. |
 | **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py`, `core/dynamic_programming.py`) | Fragile heuristics and technical debt. | Cloud Translation handles typography scaling and line wrapping natively. |
+| **Third-Party Auth Middleware** (Auth0, Clerk, Firebase) | Unnecessary SaaS dependency, cost, and complexity. | Use native client-side Google Identity Services (GIS) OAuth with `drive.file` scope. |
+| **Storing Book PDFs on Host Disk** | Memory exhaustion and disk bloat on serverless instances. | Stream directly to/from user GCS bucket and Google Drive. |
 | **Absolute Local Worktree Links** (`file:///Users/...`) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`spec/gcp-migration/design.md`). |
 | **Blocking Sync I/O in Async Paths** | Degrades throughput on multi-chapter books. | Use `asyncio` and non-blocking streaming I/O for GCS uploads and LRO polling. |
 | **Hardcoded Credentials or `.env` Commits** | Security vulnerability. | Use session-scoped BYOK vaults or Google Cloud Application Default Credentials (ADC). |

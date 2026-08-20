@@ -2,10 +2,10 @@
 
 ## 1. Plan Overview & Book-Scale Execution Strategy
 
-This implementation plan decomposes the requirements from [`requirements.md`](spec/gcp-migration/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**, deployed on **Modal Labs** under a **Bring Your Own Key (BYOK)** model with **Pre-Auth Cost Estimation** and an **Interactive GCP Onboarding Walkthrough Modal**.
+This implementation plan decomposes the requirements from [`requirements.md`](spec/gcp-migration/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**, deployed on **Modal Labs** under a **Bring Your Own Key (BYOK)** model with **Pre-Auth Cost & Storage Estimation**, **Zero Host Storage**, and **Seamless Google Drive Export**.
 
 The tasks are organized into four **Execution Tracks**:
-* **Track 1: GCP Batch Translation Engine, BYOK & Cost Estimator** (Primary pipeline, auth vault & quote engine)
+* **Track 1: GCP Batch Translation Engine, BYOK & Exporters** (Primary pipeline, auth vault, quote engine & Drive exporter)
 * **Track 2: Dual-Tier Glossary Sync & Persistent User Vocabulary Store** (Runs in parallel with Track 1)
 * **Track 3: Deprecation & Codebase Streamlining** (Independent cleanup)
 * **Track 4: Book Orchestrator, Modal Deployment, UI & E2E Validation** (Sequential integration)
@@ -16,11 +16,12 @@ The tasks are organized into four **Execution Tracks**:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│ Track 1: GCP Batch Translation Engine, BYOK & Cost Estimator           │
+│ Track 1: GCP Batch Translation Engine, BYOK & Exporters                │
 │ [Task 1.1: Config & Deps] ──> [Task 1.2: BYOK Credentials Manager]    │
 │                           ──> [Task 1.3: GCS Batch Service]            │
 │                           ──> [Task 1.4: LRO Progress Monitor]         │
-│                           ──> [Task 1.5: Pre-Auth Cost Estimator]      │
+│                           ──> [Task 1.5: Pre-Auth Cost & Storage Est]  │
+│                           ──> [Task 1.6: Google Drive Exporter (GIS)]  │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
@@ -39,27 +40,27 @@ The tasks are organized into four **Execution Tracks**:
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │ Track 4: Book Orchestrator, Modal Deployment, UI & E2E Validation      │
-│ [Task 4.1: Book Orchestrator] ──> [Task 4.2: UI with BYOK, Modal Guide]│
+│ [Task 4.1: Book Orchestrator] ──> [Task 4.2: UI with Drive Export]     │
 │                               ──> [Task 4.3: Modal App Scaffolding]    │
 │                               ──> [Task 4.4: Full-Book E2E Test Suite] │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 > [!TIP] PARALLEL EXECUTION
-> **Track 1** (GCP Batch Translation, BYOK Vault & Cost Estimator) and **Track 2** (User Vocabulary Store & Glossary Sync) are decoupled and can be built and tested concurrently.
+> **Track 1** (GCP Batch Translation, BYOK Vault & Drive Exporter) and **Track 2** (User Vocabulary Store & Glossary Sync) are decoupled and can be built and tested concurrently.
 
 ---
 
 ## 3. Detailed Task Specifications
 
-### Track 1: GCP Batch Translation Engine, BYOK & Cost Estimator
+### Track 1: GCP Batch Translation Engine, BYOK & Exporters
 
 #### Task 1.1: Configure Dependencies and Environment Defaults
 * **ID**: `TASK-1.1`
 * **Traceability**: FR-03, NFR-03
 * **Dependencies**: None
 * **Description**:
-  Add `google-cloud-translate>=3.15.0`, `google-cloud-storage>=2.14.0`, and `modal>=0.60.0` to `requirements.txt`. Add configuration dataclasses in `config/settings.py` for default GCP locations (`us-central1`), pricing constants (`$0.080/page`), poll intervals, and Modal volume paths (`/data`).
+  Add `google-cloud-translate>=3.15.0`, `google-cloud-storage>=2.14.0`, `google-api-python-client>=2.120.0`, and `modal>=0.60.0` to `requirements.txt`. Add configuration dataclasses in `config/settings.py` for default GCP locations (`us-central1`), pricing constants (`$0.080/page`, `$0.020/GB/mo`, 5GB free tier), poll intervals, and Modal volume paths (`/data`).
 * **Acceptance Criteria (TDD)**:
   * Unit test verifies settings dataclasses load defaults cleanly without requiring hardcoded secrets in the environment.
 
@@ -67,7 +68,7 @@ The tasks are organized into four **Execution Tracks**:
 
 #### Task 1.2: Implement `BYOKCredentialsManager` with Onboarding Guide Data
 * **ID**: `TASK-1.2`
-* **Traceability**: FR-05, FR-08, NFR-03, NFR-05, NFR-09
+* **Traceability**: FR-05, FR-08, NFR-03, NFR-05, NFR-10
 * **Dependencies**: `TASK-1.1`
 * **Description**:
   Develop [`services/byok_credentials_manager.py`](services/byok_credentials_manager.py):
@@ -89,15 +90,15 @@ The tasks are organized into four **Execution Tracks**:
 
 ---
 
-#### Task 1.3: Implement `GCPBatchTranslationService` with GCS Staging
+#### Task 1.3: Implement `GCPBatchTranslationService` (Zero Host Storage)
 * **ID**: `TASK-1.3`
-* **Traceability**: FR-03, NFR-01, NFR-02
+* **Traceability**: FR-03, FR-10, NFR-01, NFR-02, NFR-07
 * **Dependencies**: `TASK-1.2`
 * **Description**:
   Develop [`services/gcp_batch_translation_service.py`](services/gcp_batch_translation_service.py):
-  1. `upload_book_to_gcs(user_id: str, local_pdf_path: Path, gcs_destination_uri: str) -> str`: Streams PDF to user's GCS bucket.
+  1. `upload_book_to_gcs(user_id: str, local_pdf_path_or_stream, gcs_destination_uri: str) -> str`: Streams PDF directly to user's GCS bucket without caching on host disk.
   2. `submit_batch_job(user_id: str, gcs_input_uri: str, gcs_output_uri_prefix: str, source_lang: str, target_lang: str, glossary_resource_name: str) -> str`: Dispatches `batch_translate_document` and returns LRO operation name.
-  3. `download_translated_book(user_id: str, gcs_output_prefix: str, local_output_path: Path) -> Path`: Downloads completed translated book from user's GCS bucket.
+  3. `stream_translated_book(user_id: str, gcs_output_uri: str) -> BinaryIO`: Returns non-blocking stream directly from user GCS bucket.
 * **Acceptance Criteria (TDD & BDD)**:
   ```gherkin
   Scenario: Dispatch full-book batch translation request
@@ -122,25 +123,49 @@ The tasks are organized into four **Execution Tracks**:
 
 ---
 
-#### Task 1.5: Implement Pre-Auth Zero-Credential `GCPCostEstimator`
+#### Task 1.5: Implement Pre-Auth `GCPCostEstimator` with GCS Retention Schedules
 * **ID**: `TASK-1.5`
 * **Traceability**: FR-07, NFR-06
 * **Dependencies**: `TASK-1.1`
 * **Description**:
   Develop [`services/cost_estimator.py`](services/cost_estimator.py):
   1. `estimate_book_cost(pdf_path_or_bytes: Path | bytes) -> CostQuote`: Inspects PDF page count, file size, and text density without requiring user authentication or GCP credentials.
-  2. Computes itemized pricing based on GCP Translation v3 document rate ($0.080/page), GCS 7-day staging ($0.02/GB/mo), and sample preview allowance.
-  3. Returns `CostQuote` dataclass with `total_pages`, `base_cost`, `storage_cost`, `preview_cost`, `total_estimate`, and `tolerance_range` ($\pm \$5.00$).
+  2. Computes itemized pricing:
+     - Document Translation ($0.080/page).
+     - GCS Always Free 5 GB Tier eligibility check.
+     - 1-Month and 12-Month GCS storage retention schedule ($0.020/GB/mo Standard, $0.0012/GB/mo Archive).
+  3. Returns `CostQuote` dataclass with `total_pages`, `base_cost`, `storage_cost_1mo`, `storage_cost_12mo`, `free_tier_covered`, `total_estimate`, and `tolerance_range` ($\pm \$5.00$).
 * **Acceptance Criteria (TDD & BDD)**:
   ```gherkin
-  Scenario: Estimate translation costs for 350-page book
-    Given a 350-page PDF file
+  Scenario: Estimate translation & storage costs for 350-page book
+    Given a 350-page PDF file (15MB)
     When estimate_book_cost is called
-    Then the estimate returns exactly $28.00 base cost ($0.080 * 350)
-    And the total quote is within $28.00 - $28.50
-    And the calculation runs in < 500ms
+    Then base cost is $28.00 ($0.080 * 350)
+    And 1-month GCS storage is estimated as $0.00 (under 5GB Free Tier)
+    And total quote is within $28.00 - $28.50
   ```
-  * Test suite: `tests/test_cost_estimator.py` with synthetic multi-page PDFs ($\ge 90\%$ coverage).
+  * Test suite: `tests/test_cost_estimator.py` ($\ge 90\%$ coverage).
+
+---
+
+#### Task 1.6: Implement `GoogleDriveExporter` (Google Identity Services GIS)
+* **ID**: `TASK-1.6`
+* **Traceability**: FR-09, FR-10, NFR-03, NFR-07, NFR-08
+* **Dependencies**: `TASK-1.1`
+* **Description**:
+  Develop [`services/google_drive_exporter.py`](services/google_drive_exporter.py):
+  1. `export_stream_to_drive(access_token: str, file_stream: BinaryIO, filename: str, mime_type: str = "application/pdf") -> DriveExportResult`: Streams PDF directly into the user's Google Drive via Drive v3 API `files.create` using the client's `drive.file` scoped token.
+  2. Zero temporary files on host disk: Uses non-blocking memory/streaming pipes.
+* **Acceptance Criteria (TDD & BDD)**:
+  ```gherkin
+  Scenario: Stream translated PDF to Google Drive
+    Given a valid GIS OAuth access token with scope "drive.file"
+    When export_stream_to_drive is called with PDF stream
+    Then Drive v3 multipart upload creates the file in the user's Drive
+    And the returned result contains the file ID and webViewLink
+    And zero PDF bytes are written to host disk
+  ```
+  * Test suite: `tests/test_google_drive_exporter.py` with mock Google Drive v3 API ($\ge 90\%$ coverage).
 
 ---
 
@@ -151,7 +176,7 @@ The tasks are organized into four **Execution Tracks**:
 
 #### Task 2.1: Implement `UserVocabularyStore` (Persistent Memory)
 * **ID**: `TASK-2.1`
-* **Traceability**: FR-06, NFR-03, NFR-07
+* **Traceability**: FR-06, NFR-03, NFR-08
 * **Dependencies**: None
 * **Description**:
   Develop [`services/user_vocabulary_store.py`](services/user_vocabulary_store.py) to manage user-specific terminology dictionaries stored persistently on Modal Volume (`/data/user_vocabularies/{user_id}.sqlite` or `.json`):
@@ -214,7 +239,7 @@ The tasks are organized into four **Execution Tracks**:
 
 #### Task 4.1: Build `BookTranslationOrchestrator`
 * **ID**: `TASK-4.1`
-* **Traceability**: FR-01, FR-02, FR-03, FR-04, FR-05, FR-06
+* **Traceability**: FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-10
 * **Dependencies**: `TASK-1.3`, `TASK-1.4`, `TASK-2.1`, `TASK-2.3`, `TASK-3.1`
 * **Description**:
   Develop [`services/book_translation_orchestrator.py`](services/book_translation_orchestrator.py) integrating the end-to-end book workflow:
@@ -228,18 +253,18 @@ The tasks are organized into four **Execution Tracks**:
 
 ---
 
-#### Task 4.2: Update UI with Pre-Auth Cost Quote, BYOK Walkthrough Modal & User Vocab
+#### Task 4.2: Update UI with BYOK Panel, Google Drive Export & Cost Quote
 * **ID**: `TASK-4.2`
-* **Traceability**: US-01 to US-08, FR-05, FR-07, FR-08
-* **Dependencies**: `TASK-1.2`, `TASK-1.5`, `TASK-4.1`
+* **Traceability**: US-01 to US-09, FR-05, FR-07, FR-08, FR-09
+* **Dependencies**: `TASK-1.2`, `TASK-1.5`, `TASK-1.6`, `TASK-4.1`
 * **Description**:
   Update [`app.py`](app.py) and [`api/routes.py`](api/routes.py):
-  1. **Zero-Auth Cost Estimator Widget**: Instant upload zone generating itemized GCP budget quotes ($\pm \$5.00$ variance) without login.
+  1. **Zero-Auth Cost Estimator Widget**: Instant upload zone generating itemized GCP budget quotes (translation + monthly GCS retention) without login.
   2. **Interactive GCP Onboarding Walkthrough Modal**: Accessible via "📖 How to get your GCP credentials" button, rendering the 6-step guided walkthrough with direct console links and `gcloud` copyable script.
   3. **BYOK Setup Panel**: Input GCP Project ID, GCS Bucket, Service Account JSON upload with instant validation indicator.
   4. **Book Upload & Pre-Scan View**: Streaming page index and chapter estimation.
   5. **Terminology Memory Table**: Visual indicator of terms auto-populated from saved user vocabulary vs. new novel coined compounds.
-  6. **Live Batch LRO Progress**: Real-time progress bar displaying page count (e.g. `142/350 Pages Translated`) and download button.
+  6. **Live Batch LRO Progress & Delivery Actions**: Real-time progress bar displaying page count (e.g. `142/350 Pages Translated`), direct download button, and 1-click **"Save to Google Drive"** GIS OAuth button.
 * **Acceptance Criteria (TDD)**:
   * Test suite: `tests/test_app_routes.py`.
 
@@ -247,12 +272,12 @@ The tasks are organized into four **Execution Tracks**:
 
 #### Task 4.3: Implement Modal Labs Serverless Web Deployment
 * **ID**: `TASK-4.3`
-* **Traceability**: FR-10, NFR-05
+* **Traceability**: FR-12, NFR-05, NFR-07
 * **Dependencies**: `TASK-4.2`
 * **Description**:
   Create `modal_app.py` defining:
   1. `modal.App("phenomenallayout")`.
-  2. `modal.Volume.from_name("phenomenal-user-data")` mounted to `/data` for user vocabulary databases.
+  2. `modal.Volume.from_name("phenomenal-user-data")` mounted to `/data` for lightweight user vocabulary databases ($\le 5\text{MB}$).
   3. `@app.function` with `@modal.asgi_app()` serving the FastAPI/Gradio app.
   4. Configured with 300s scale-to-zero idle timeout.
 * **Acceptance Criteria (TDD)**:
@@ -262,10 +287,10 @@ The tasks are organized into four **Execution Tracks**:
 
 #### Task 4.4: End-to-End Book Translation & BYOK Integration Test Suite
 * **ID**: `TASK-4.4`
-* **Traceability**: NFR-01, NFR-03, NFR-05, NFR-06, NFR-07, NFR-08, NFR-09
+* **Traceability**: NFR-01, NFR-03, NFR-05, NFR-06, NFR-07, NFR-08, NFR-09, NFR-10
 * **Dependencies**: `TASK-4.3`
 * **Description**:
-  Create full end-to-end test suite `tests/test_book_translation_e2e.py` verifying zero-auth cost quote generation, walkthrough modal data delivery, full BYOK credential validation, user vocabulary recall, glossary sync, batch job dispatch, simulated LRO polling, and final PDF output.
+  Create full end-to-end test suite `tests/test_book_translation_e2e.py` verifying zero-auth cost quote generation with storage retention, walkthrough modal data delivery, full BYOK credential validation, user vocabulary recall, glossary sync, batch job dispatch, simulated LRO polling, Google Drive GIS export, and zero host PDF disk footprint.
 * **Acceptance Criteria (TDD)**:
   * All tests pass with $\ge 90\%$ code coverage.
 
@@ -276,15 +301,16 @@ The tasks are organized into four **Execution Tracks**:
 | Task ID | Component | Upstream Dependencies | FR / NFR Traceability | Execution Mode |
 | :--- | :--- | :--- | :--- | :--- |
 | **TASK-1.1** | Config & Deps | None | FR-03, NFR-03 | Sequential |
-| **TASK-1.2** | BYOK Credentials Manager| TASK-1.1 | FR-05, FR-08, NFR-03, NFR-09 | Sequential (Track 1) |
-| **TASK-1.3** | GCS Batch Service | TASK-1.2 | FR-03, NFR-01, NFR-02 | Sequential (Track 1) |
+| **TASK-1.2** | BYOK Credentials Manager| TASK-1.1 | FR-05, FR-08, NFR-03, NFR-10 | Sequential (Track 1) |
+| **TASK-1.3** | GCS Batch Service | TASK-1.2 | FR-03, FR-10, NFR-01, NFR-07 | Sequential (Track 1) |
 | **TASK-1.4** | LRO Progress Monitor| TASK-1.3 | FR-04, NFR-02 | Sequential (Track 1) |
-| **TASK-1.5** | Pre-Auth Cost Estimator | TASK-1.1 | FR-07, NFR-06 | **Parallel (Track 1)** |
-| **TASK-2.1** | User Vocabulary Store | None | FR-06, NFR-03, NFR-07 | **Parallel (Track 2)** |
+| **TASK-1.5** | Pre-Auth Cost & Storage| TASK-1.1 | FR-07, NFR-06 | **Parallel (Track 1)** |
+| **TASK-1.6** | Google Drive Exporter | TASK-1.1 | FR-09, FR-10, NFR-03, NFR-07 | **Parallel (Track 1)** |
+| **TASK-2.1** | User Vocabulary Store | None | FR-06, NFR-03, NFR-08 | **Parallel (Track 2)** |
 | **TASK-2.2** | TSV Compiler | TASK-2.1 | FR-02, NFR-04 | Sequential (Track 2) |
 | **TASK-2.3** | Glossary Sync Mgr | TASK-1.2, TASK-2.2 | FR-02, FR-06, NFR-04 | Sequential (Track 2) |
 | **TASK-3.1** | Deprecation | None | Cleanup | **Parallel (Track 3)** |
 | **TASK-4.1** | Book Orchestrator | TASK-1.4, TASK-2.3, TASK-3.1 | FR-01, FR-02, FR-03, FR-04 | Sequential (Track 4) |
-| **TASK-4.2** | BYOK UI & Live LRO | TASK-1.2, TASK-1.5, TASK-4.1 | US-01 to US-08, FR-05, FR-07, FR-08 | Sequential (Track 4) |
-| **TASK-4.3** | Modal App Deployment| TASK-4.2 | FR-10, NFR-05 | Sequential (Track 4) |
-| **TASK-4.4** | Full-Book E2E Test | TASK-4.3 | NFR-01, NFR-05, NFR-07, NFR-08, NFR-09 | Sequential (Track 4) |
+| **TASK-4.2** | BYOK UI, Drive & LRO | TASK-1.2, TASK-1.5, TASK-1.6, TASK-4.1 | US-01 to US-09, FR-05, FR-07, FR-09 | Sequential (Track 4) |
+| **TASK-4.3** | Modal App Deployment| TASK-4.2 | FR-12, NFR-05, NFR-07 | Sequential (Track 4) |
+| **TASK-4.4** | Full-Book E2E Test | TASK-4.3 | NFR-01, NFR-05, NFR-07, NFR-08, NFR-10 | Sequential (Track 4) |

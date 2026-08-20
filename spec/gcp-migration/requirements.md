@@ -10,10 +10,12 @@ The core system consists of:
 3. **Primary Default Pipeline: Asynchronous batch document translation (`batchTranslateDocument`) via Google Cloud Storage (GCS)**.
 4. Live Long-Running Operation (LRO) progress monitoring for book translation jobs.
 5. **Bring Your Own Key (BYOK) credential management** for user-billed GCP translation and storage.
-6. **Persistent user vocabulary storage** for remembering terminology decisions across sessions and books.
-7. **Pre-auth zero-credential GCP cost estimator** providing an itemized quote within a $\pm \$5.00$ tolerance margin.
-8. **Interactive GCP Onboarding Walkthrough Modal** guiding translators through setting up their GCP account, APIs, bucket, and service account key.
-9. **Serverless deployment on Modal Labs** with scale-to-zero idle compute.
+6. **Zero Host Storage**: Source and translated PDF files are stored strictly in the user's GCS bucket or Google Drive; Modal backend stores zero book PDFs.
+7. **Persistent user vocabulary storage** for remembering terminology decisions across sessions and books.
+8. **Pre-auth zero-credential GCP cost & GCS storage retention estimator** providing an itemized quote within a $\pm \$5.00$ tolerance margin.
+9. **Seamless Google Drive Export**: 1-click export via client-side Google Identity Services (GIS) OAuth (`drive.file` scope) with no third-party auth middleware (no Auth0 / no Clerk).
+10. **Interactive GCP Onboarding Walkthrough Modal** guiding translators through setting up their GCP account, APIs, bucket, and service account key.
+11. **Serverless deployment on Modal Labs** with scale-to-zero idle compute.
 
 ---
 
@@ -49,15 +51,20 @@ The core system consists of:
 > **I want** my translation decisions (e.g. mapping *Schauung* or leaving *Dasein* untranslated) to be saved to my user profile on the persistent storage volume,  
 > **So that** when I upload subsequent books, my previously chosen terminology is automatically pre-filled.
 
-### US-07: Instant Pre-Auth GCP Translation Cost Estimation
+### US-07: Instant Pre-Auth GCP Translation & GCS Retention Cost Estimation
 > **As a** prospective user visiting the website without signing in or supplying GCP credentials,  
-> **I want** to upload my book PDF and receive an immediate, itemized GCP bill estimate within a $\pm \$5.00$ margin of error,  
+> **I want** to upload my book PDF and receive an immediate, itemized GCP bill estimate (including document translation and monthly GCS storage retention) within a $\pm \$5.00$ margin of error,  
 > **So that** I know exactly how much budget to allocate in my Google Cloud billing account before setting up BYOK.
 
 ### US-08: Interactive GCP Setup Walkthrough Modal
 > **As a** translator who is new to Google Cloud,  
 > **I want** a step-by-step interactive onboarding modal in the web interface that guides me through creating a GCP account, enabling the Translation and Storage APIs, creating a bucket, and generating a Service Account JSON key,  
 > **So that** I can configure my BYOK credentials without confusion or cloud friction.
+
+### US-09: Seamless Personal Google Drive Export
+> **As a** user who completed a book translation,  
+> **I want** to click "Save to Google Drive" and authenticate with a simple Google popup to have the translated PDF saved directly into my personal Google Drive,  
+> **So that** I can access my translated books anywhere without having to manually download large files to local storage or register for third-party auth platforms.
 
 ---
 
@@ -125,7 +132,7 @@ Feature: Batch Translation LRO Monitoring
     Given an active batch translation LRO "projects/p1/locations/us-central1/operations/op-99"
     When the progress monitor polls the operation
     Then progress metadata is emitted (e.g. 150/300 pages translated)
-    And when the LRO reaches state "SUCCEEDED", the translated PDF is downloaded from GCS outputs
+    And when the LRO reaches state "SUCCEEDED", the translated PDF is located in GCS outputs
     And output PDF page count is verified to equal 300
 ```
 
@@ -164,19 +171,22 @@ Feature: User Vocabulary Persistence
 
 ---
 
-### FR-07: Pre-Auth Zero-Credential GCP Translation Cost Estimator
-* **Description**: The application must provide a publicly accessible endpoint and UI widget allowing users to upload a PDF without signing in or providing GCP credentials, computing page-level counts and emitting an itemized GCP billing estimate with variance within $\pm \$5.00$.
+### FR-07: Pre-Auth Zero-Credential Cost & GCS Retention Estimator
+* **Description**: The application must provide a publicly accessible endpoint and UI widget allowing users to upload a PDF without signing in or providing GCP credentials, computing page-level counts and emitting an itemized GCP billing estimate with:
+  1. Base Document Translation cost ($0.080/page).
+  2. GCS Always Free 5 GB Tier eligibility and 1-month / 12-month retention cost schedules.
+  3. Total variance strictly within $\pm \$5.00$.
 * **Traceability**: US-07
 
-#### BDD Scenario FR-07.1: Calculate Zero-Auth Translation Quote
+#### BDD Scenario FR-07.1: Calculate Zero-Auth Translation & Storage Quote
 ```gherkin
-Feature: Pre-Auth Cost Estimation
-  Scenario: Generate itemized quote for a 350-page PDF
+Feature: Pre-Auth Cost & Storage Estimation
+  Scenario: Generate itemized quote for a 350-page PDF with GCS retention
     Given an unauthenticated user uploads a 350-page PDF "klages_der_mensch.pdf" (12MB)
     When the GCPCostEstimator analyzes the document
     Then the calculated base translation cost is $28.00 (350 * $0.080)
-    And the storage overhead is estimated as $0.0006
-    And the total quote is returned as $28.24 with tolerance range "$28.00 - $28.50"
+    And the 1-month GCS storage cost is estimated as $0.00 (Covered by GCP Always Free 5GB Tier)
+    And the total quote is returned as $28.00 with tolerance range "$28.00 - $28.50"
     And the estimation completes in less than 1.0 second on Modal CPU
 ```
 
@@ -188,15 +198,39 @@ Feature: Pre-Auth Cost Estimation
 
 ---
 
-### FR-09: Single-Page Rapid Preview Translation (Secondary Mode)
+### FR-09: Seamless Personal Google Drive Export Subsystem
+* **Description**: The application must integrate client-side **Google Identity Services (GIS)** OAuth 2.0. When a user clicks "Save to Google Drive", a native Google OAuth popup requests permission for scope `https://www.googleapis.com/auth/drive.file`. Upon authorization, the translated PDF is streamed directly from the user's GCS bucket to Google Drive v3 API (`files.create`) without requiring third-party authentication middleware (no Auth0 / no Clerk) and without saving the file on the Modal backend.
+* **Traceability**: US-09
+
+#### BDD Scenario FR-09.1: Export Translated Book to Google Drive via GIS
+```gherkin
+Feature: Google Drive Export
+  Scenario: 1-Click export to personal Google Drive
+    Given a completed translation in "gs://user-bucket/outputs/book-101/source_de_en.pdf"
+    When the user clicks "Save to Google Drive" and approves the GIS OAuth prompt (drive.file)
+    Then the translated PDF is streamed to Google Drive v3 API
+    And the file is created in the user's Google Drive root or "PhenomenalLayout Translations" folder
+    And the direct Google Drive file link is returned to the user
+    And zero book PDF bytes are stored on the Modal backend disk
+```
+
+---
+
+### FR-10: Zero Host PDF Storage Invariant
+* **Description**: Modal Labs backend containers and persistent volumes must never store full-length source or translated PDF files. All PDF storage is strictly isolated to the user's GCS bucket and personal Google Drive. Modal Volume storage is restricted strictly to lightweight user vocabulary and metadata databases ($\le 5\text{MB}$).
+* **Traceability**: US-03, US-05, US-09
+
+---
+
+### FR-11: Single-Page Rapid Preview Translation (Secondary Mode)
 * **Description**: Allow translators to test translation quality on 1–3 sample pages using synchronous `translateDocument` with `enableShadowRemovalNativePdf=True` using their BYOK credentials before committing to a full book batch run.
 * **Traceability**: US-01, US-02, US-05
 
 ---
 
-### FR-10: Modal Labs Serverless Web Deployment & Scale-to-Zero
+### FR-12: Modal Labs Serverless Web Deployment & Scale-to-Zero
 * **Description**: The application must be deployable as a serverless ASGI/WSGI web app on Modal Labs (`modal_app.py`). When no requests or batch monitoring jobs are active, the container scales to zero.
-* **Traceability**: US-01, US-03, US-05, US-07, US-08
+* **Traceability**: US-01, US-03, US-05, US-07, US-08, US-09
 
 ---
 
@@ -205,14 +239,15 @@ Feature: Pre-Auth Cost Estimation
 | ID | Category | Requirement Description | Metric / Standard |
 | :--- | :--- | :--- | :--- |
 | **NFR-01** | **Scalability** | Batch pipeline must support translating long books up to 1,000 pages without memory starvation. | Peak RAM usage $\le 256\text{ MB}$; streaming file handling. |
-| **NFR-02** | **Reliability** | Long-running operation polling and GCS downloads must recover from network disconnects. | Exponential backoff retry with up to 5 attempts. |
-| **NFR-03** | **Security & Privacy** | Zero credential leaks: BYOK credentials held strictly in encrypted session memory and never logged, leaked across sessions, or committed. | Zero credentials stored on disk; isolated per session token. |
+| **NFR-02** | **Reliability** | Long-running operation polling, GCS downloads, and Drive uploads must recover from transient network disconnects. | Exponential backoff retry with up to 5 attempts. |
+| **NFR-03** | **Security & Privacy** | Zero credential leaks: BYOK credentials held strictly in encrypted session memory. Google Drive OAuth uses restricted `drive.file` scope. | Zero credentials stored on disk; zero access to unrelated user Drive files. |
 | **NFR-04** | **Glossary Consistency** | 100% of defined glossary terms must be supplied in compliant UTF-8 TSV format. | Zero TSV syntax errors; validation pass prior to GCS upload. |
 | **NFR-05** | **Cost Efficiency** | Host compute must remain within Modal Labs' $30/month free tier with near-zero idle cost. | Scaledown window $\le 300\text{s}$; zero GPU requirement for host. |
 | **NFR-06** | **Cost Precision** | Pre-auth cost estimate must deviate from actual GCP bill by no more than \$5.00. | Estimate variance $\le \pm \$5.00$ per document. |
-| **NFR-07** | **Test Coverage** | New BYOK credentials manager, user vocabulary store, cost estimator, GCS batch client, and orchestrator modules must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
-| **NFR-08** | **TDD 3-Strike Gate** | All feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
-| **NFR-09** | **Onboarding Usability**| Walkthrough modal must enable non-technical users to complete GCP credential creation in under 5 minutes. | 6 clear steps with visual instructions and direct Google Cloud Console links. |
+| **NFR-07** | **Zero Host Storage** | Modal persistent storage is restricted to user metadata; zero book PDF bytes stored on host disk. | Host PDF disk usage $= 0\text{ MB}$ persistent. |
+| **NFR-08** | **Test Coverage** | New BYOK credentials manager, user vocabulary store, cost estimator, Google Drive exporter, GCS batch client, and orchestrator modules must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
+| **NFR-09** | **TDD 3-Strike Gate** | All feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
+| **NFR-10** | **Onboarding Usability**| Walkthrough modal must enable non-technical users to complete GCP credential creation in under 5 minutes. | 6 clear steps with visual instructions and direct Google Cloud Console links. |
 
 ---
 
@@ -220,12 +255,13 @@ Feature: Pre-Auth Cost Estimation
 
 | User Story | Functional Requirement | Non-Functional Requirement | Test Target |
 | :--- | :--- | :--- | :--- |
-| **US-01** | FR-01, FR-09 | NFR-01 | `tests/test_book_pre_scanner.py` |
+| **US-01** | FR-01, FR-11 | NFR-01 | `tests/test_book_pre_scanner.py` |
 | **US-02** | FR-02 | NFR-03, NFR-04 | `tests/test_glossary_sync_manager.py` |
-| **US-03** | FR-03, FR-04 | NFR-01, NFR-02, NFR-07 | `tests/test_gcp_batch_translation_service.py` |
+| **US-03** | FR-03, FR-04, FR-10 | NFR-01, NFR-02, NFR-07, NFR-08 | `tests/test_gcp_batch_translation_service.py` |
 | **US-04** | FR-04 | NFR-02 | `tests/test_lro_progress_monitor.py` |
-| **US-05** | FR-05, FR-10 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
-| **US-06** | FR-06 | NFR-03, NFR-07 | `tests/test_user_vocabulary_store.py` |
+| **US-05** | FR-05, FR-12 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
+| **US-06** | FR-06 | NFR-03, NFR-08 | `tests/test_user_vocabulary_store.py` |
 | **US-07** | FR-07 | NFR-05, NFR-06 | `tests/test_cost_estimator.py` |
-| **US-08** | FR-08 | NFR-09 | `tests/test_app_routes.py` |
-| **All** | FR-01 to FR-10 | NFR-07, NFR-08, NFR-09 | `tests/test_book_translation_e2e.py` |
+| **US-08** | FR-08 | NFR-10 | `tests/test_app_routes.py` |
+| **US-09** | FR-09, FR-10 | NFR-03, NFR-07, NFR-08 | `tests/test_google_drive_exporter.py` |
+| **All** | FR-01 to FR-12 | NFR-08, NFR-09, NFR-10 | `tests/test_book_translation_e2e.py` |
