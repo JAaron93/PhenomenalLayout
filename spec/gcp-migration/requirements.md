@@ -11,7 +11,8 @@ The core system consists of:
 4. Live Long-Running Operation (LRO) progress monitoring for book translation jobs.
 5. **Bring Your Own Key (BYOK) credential management** for user-billed GCP translation and storage.
 6. **Persistent user vocabulary storage** for remembering terminology decisions across sessions and books.
-7. **Serverless deployment on Modal Labs** with scale-to-zero idle compute.
+7. **Pre-auth zero-credential GCP cost estimator** providing an itemized quote within a $\pm \$5.00$ tolerance margin.
+8. **Serverless deployment on Modal Labs** with scale-to-zero idle compute.
 
 ---
 
@@ -46,6 +47,11 @@ The core system consists of:
 > **As a** recurring translator translating multiple philosophical volumes,  
 > **I want** my translation decisions (e.g. mapping *Schauung* or leaving *Dasein* untranslated) to be saved to my user profile on the persistent storage volume,  
 > **So that** when I upload subsequent books, my previously chosen terminology is automatically pre-filled.
+
+### US-07: Instant Pre-Auth GCP Translation Cost Estimation
+> **As a** prospective user visiting the website without signing in or supplying GCP credentials,  
+> **I want** to upload my book PDF and receive an immediate, itemized GCP bill estimate within a $\pm \$5.00$ margin of error,  
+> **So that** I know exactly how much budget to allocate in my Google Cloud billing account before setting up BYOK.
 
 ---
 
@@ -152,15 +158,33 @@ Feature: User Vocabulary Persistence
 
 ---
 
-### FR-07: Single-Page Rapid Preview Translation (Secondary Mode)
+### FR-07: Pre-Auth Zero-Credential GCP Translation Cost Estimator
+* **Description**: The application must provide a publicly accessible endpoint and UI widget allowing users to upload a PDF without signing in or providing GCP credentials, computing page-level counts and emitting an itemized GCP billing estimate with variance within $\pm \$5.00$.
+* **Traceability**: US-07
+
+#### BDD Scenario FR-07.1: Calculate Zero-Auth Translation Quote
+```gherkin
+Feature: Pre-Auth Cost Estimation
+  Scenario: Generate itemized quote for a 350-page PDF
+    Given an unauthenticated user uploads a 350-page PDF "klages_der_mensch.pdf" (12MB)
+    When the GCPCostEstimator analyzes the document
+    Then the calculated base translation cost is $28.00 (350 * $0.080)
+    And the storage overhead is estimated as $0.0006
+    And the total quote is returned as $28.24 with tolerance range "$28.00 - $28.50"
+    And the estimation completes in less than 1.0 second on Modal CPU
+```
+
+---
+
+### FR-08: Single-Page Rapid Preview Translation (Secondary Mode)
 * **Description**: Allow translators to test translation quality on 1–3 sample pages using synchronous `translateDocument` with `enableShadowRemovalNativePdf=True` using their BYOK credentials before committing to a full book batch run.
 * **Traceability**: US-01, US-02, US-05
 
 ---
 
-### FR-08: Modal Labs Serverless Web Deployment & Scale-to-Zero
+### FR-09: Modal Labs Serverless Web Deployment & Scale-to-Zero
 * **Description**: The application must be deployable as a serverless ASGI/WSGI web app on Modal Labs (`modal_app.py`). When no requests or batch monitoring jobs are active, the container scales to zero.
-* **Traceability**: US-01, US-03, US-05
+* **Traceability**: US-01, US-03, US-05, US-07
 
 ---
 
@@ -173,8 +197,9 @@ Feature: User Vocabulary Persistence
 | **NFR-03** | **Security & Privacy** | Zero credential leaks: BYOK credentials held strictly in encrypted session memory and never logged, leaked across sessions, or committed. | Zero credentials stored on disk; isolated per session token. |
 | **NFR-04** | **Glossary Consistency** | 100% of defined glossary terms must be supplied in compliant UTF-8 TSV format. | Zero TSV syntax errors; validation pass prior to GCS upload. |
 | **NFR-05** | **Cost Efficiency** | Host compute must remain within Modal Labs' $30/month free tier with near-zero idle cost. | Scaledown window $\le 300\text{s}$; zero GPU requirement for host. |
-| **NFR-06** | **Test Coverage** | New BYOK credentials manager, user vocabulary store, GCS batch client, and orchestrator modules must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
-| **NFR-07** | **TDD 3-Strike Gate** | All feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
+| **NFR-06** | **Cost Precision** | Pre-auth cost estimate must deviate from actual GCP bill by no more than \$5.00. | Estimate variance $\le \pm \$5.00$ per document. |
+| **NFR-07** | **Test Coverage** | New BYOK credentials manager, user vocabulary store, cost estimator, GCS batch client, and orchestrator modules must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
+| **NFR-08** | **TDD 3-Strike Gate** | All feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
 
 ---
 
@@ -182,10 +207,11 @@ Feature: User Vocabulary Persistence
 
 | User Story | Functional Requirement | Non-Functional Requirement | Test Target |
 | :--- | :--- | :--- | :--- |
-| **US-01** | FR-01, FR-07 | NFR-01 | `tests/test_book_pre_scanner.py` |
+| **US-01** | FR-01, FR-08 | NFR-01 | `tests/test_book_pre_scanner.py` |
 | **US-02** | FR-02 | NFR-03, NFR-04 | `tests/test_glossary_sync_manager.py` |
-| **US-03** | FR-03, FR-04 | NFR-01, NFR-02, NFR-06 | `tests/test_gcp_batch_translation_service.py` |
+| **US-03** | FR-03, FR-04 | NFR-01, NFR-02, NFR-07 | `tests/test_gcp_batch_translation_service.py` |
 | **US-04** | FR-04 | NFR-02 | `tests/test_lro_progress_monitor.py` |
-| **US-05** | FR-05, FR-08 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
-| **US-06** | FR-06 | NFR-03, NFR-06 | `tests/test_user_vocabulary_store.py` |
-| **All** | FR-01 to FR-08 | NFR-05, NFR-06, NFR-07 | `tests/test_book_translation_e2e.py` |
+| **US-05** | FR-05, FR-09 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
+| **US-06** | FR-06 | NFR-03, NFR-07 | `tests/test_user_vocabulary_store.py` |
+| **US-07** | FR-07 | NFR-05, NFR-06 | `tests/test_cost_estimator.py` |
+| **All** | FR-01 to FR-09 | NFR-07, NFR-08 | `tests/test_book_translation_e2e.py` |

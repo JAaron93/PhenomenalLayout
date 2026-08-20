@@ -6,7 +6,7 @@
 
 Because books range from 50 to 1,000+ pages with complex multi-column layouts, footnotes, diagrams, and dense terminology, PhenomenalLayout establishes **Asynchronous Google Cloud Document Batch Translation (`batchTranslateDocument`) using Google Cloud Storage (GCS) buckets as the primary/default translation pipeline**.
 
-PhenomenalLayout is deployed as a **serverless cloud application on Modal Labs** under a **Bring Your Own Key (BYOK)** model. Users provide their own Google Cloud credentials and project billing, while Modal Labs orchestrates the web interface, text streaming, German morphological analysis, dynamic glossary compilation, and persistent user-level neologism preferences.
+PhenomenalLayout is deployed as a **serverless cloud application on Modal Labs** under a **Bring Your Own Key (BYOK)** model. Users provide their own Google Cloud credentials and project billing, while Modal Labs orchestrates the web interface, text streaming, German morphological analysis, dynamic glossary compilation, persistent user-level neologism preferences, and **pre-auth zero-credential GCP cost estimation**.
 
 ---
 
@@ -16,6 +16,13 @@ To maximize efficiency and operate within Modal Labs' free compute tier ($30/mon
 
 ```mermaid
 flowchart TB
+    subgraph PreAuth_Zone["Zero-Auth Public Tier (Modal Labs Free Backend)"]
+        PUB_UI["Public Web Portal (No Login Required)"]
+        COST_EST["Pre-Auth PDF Cost Estimator (services/cost_estimator.py)"]
+        PUB_UI -->|Upload PDF for Quote| COST_EST
+        COST_EST -->|Instant GCP Cost Breakdown (±$5 Margin)| PUB_UI
+    end
+
     subgraph Modal_Zone["Modal Labs Serverless Cloud (Host: Near-Zero Compute / Auto-Scale to 0)"]
         UI["Web UI & Fast API Endpoint (Gradio / FastAPI)"]
         AUTH["BYOK Credentials Manager (Session-Scoped Vault)"]
@@ -32,6 +39,7 @@ flowchart TB
         GCP_OCR["Google Cloud Native OCR & Layout Preservation Engine"]
     end
 
+    PUB_UI -.->|Proceed with BYOK| UI
     UI --> AUTH
     AUTH -->|Validate Credentials| GCP_BATCH
     UI --> NEO
@@ -53,6 +61,7 @@ flowchart TB
 
 | Workload Component | Host Layer | Resource Profile | Cost & Scaling Model |
 | :--- | :--- | :--- | :--- |
+| **Pre-Auth Cost Estimator** | Modal Labs Web Endpoint | Lightweight PDF metadata & page inspection | Executes in < 500ms on Modal CPU. No login or GCP key needed. |
 | **Web Interface & API** | Modal Labs Web Endpoint | Lightweight Python FastAPI / Gradio | Auto-scales down to 0 when idle. Consumes < $2–$5/mo of Modal's $30 free compute tier. |
 | **Neologism Pre-Scanning & Parsing** | Modal CPU Worker | Python streaming chunk reader + spaCy NLP | ~2–5 seconds CPU burst per chapter. Highly optimized memory footprint (< 256MB RAM). |
 | **User Account & Vocabulary Store** | Modal Persistent Volume (`modal.Volume`) | SQLite / JSON store on `/data/user_profiles/` | Persistent storage across user sessions. Zero recurring compute cost when idle. |
@@ -63,7 +72,40 @@ flowchart TB
 
 ---
 
-## 3. Bring Your Own Key (BYOK) Architecture & Security Model
+## 3. Pre-Auth Zero-Credential GCP Translation Cost Estimator
+
+PhenomenalLayout provides an **instant, zero-auth cost estimator** allowing users to upload a book PDF *before* creating an account, translating, or entering GCP credentials:
+
+### 3.1 Cost Estimation Model & Formula
+
+Google Cloud Translation v3 Document Translation pricing is deterministic on a per-page basis for formatted PDF documents:
+$$\text{GCP Document Translation Rate} = \$0.080 \text{ per page}$$
+$$\text{GCS Storage Rate} \approx \$0.020 \text{ per GB / month}$$
+$$\text{Regional Glossary Query} = \$0.00 \text{ (included in document translation)}$$
+
+The **`GCPCostEstimator`** calculates:
+$$\text{Estimated Base Cost} = N_{\text{billable\_pages}} \times \$0.080$$
+$$\text{Storage Overhead} = \left(\frac{\text{File Size in MB}}{1024}\right) \times \$0.020 \times \left(\frac{7 \text{ days}}{30 \text{ days}}\right)$$
+$$\text{Preview Buffer} = N_{\text{sample\_pages}} \times \$0.080 \quad (\text{typically } 3 \times \$0.08 = \$0.24)$$
+$$\text{Total Expected GCP Bill} = \text{Estimated Base Cost} + \text{Storage Overhead} + \text{Preview Buffer}$$
+
+### 3.2 Precision & Variance Margin ($\le \$5.00$ Margin of Error)
+
+Because PDF page counts are fixed and GCP Document Translation charges an exact flat rate ($0.080/page), the estimate achieves extreme precision with variance well within a **$\pm \$5.00$ tolerance band**:
+* **100-page book**: Expected \$8.00 (Tolerance range: \$8.00 – \$8.50).
+* **300-page book**: Expected \$24.00 (Tolerance range: \$24.00 – \$24.50).
+* **500-page book**: Expected \$40.00 (Tolerance range: \$40.00 – \$41.00).
+* **1,000-page treatise**: Expected \$80.00 (Tolerance range: \$80.00 – \$81.50).
+
+The output provides the user with an itemized quote:
+* Scanned physical page count vs. billable text pages.
+* Primary batch translation estimate.
+* Optional sample preview allowance.
+* Recommended GCP project billing budget to set aside.
+
+---
+
+## 4. Bring Your Own Key (BYOK) Architecture & Security Model
 
 PhenomenalLayout provides a dedicated **BYOK Setup & Credentials Vault**:
 
@@ -78,7 +120,7 @@ PhenomenalLayout provides a dedicated **BYOK Setup & Credentials Vault**:
 
 ---
 
-## 4. User-Tied Neologism Memory & Vocabulary Persistence
+## 5. User-Tied Neologism Memory & Vocabulary Persistence
 
 Philosophical translators build specific terminology preferences over time. PhenomenalLayout introduces the **Persistent User Vocabulary Engine**:
 
@@ -93,10 +135,16 @@ Philosophical translators build specific terminology preferences over time. Phen
 
 ---
 
-## 5. Component Architecture & System Boundaries
+## 6. Component Architecture & System Boundaries
 
 ```mermaid
 classDiagram
+    class GCPCostEstimator {
+        +estimate_book_cost(pdf_path_or_bytes) CostQuote
+        +calculate_page_breakdown(pdf_path) PageBreakdown
+        +get_pricing_schedule() PricingSchedule
+    }
+
     class BYOKCredentialsManager {
         +set_credentials(user_id, project_id, gcs_bucket, sa_json) bool
         +get_client(user_id) TranslationServiceClient
@@ -150,9 +198,9 @@ classDiagram
 
 ---
 
-## 6. Subsystem Deep-Dive
+## 7. Subsystem Deep-Dive
 
-### 6.1 Subsystem 1: Book-Scale Text Ingestion & Neologism Pre-Scanning
+### 7.1 Subsystem 1: Book-Scale Text Ingestion & Neologism Pre-Scanning
 * **Stream-Based Chunking**: Full books (100–1,000 pages) are processed in streaming chunks via `pypdf` without loading entire uncompressed page bitmaps into memory.
 * **Linguistic Analysis**:
   * [`NeologismDetector`](services/neologism_detector.py) identifies German compounds, prefixes, and suffixes.
@@ -164,7 +212,7 @@ classDiagram
 
 ---
 
-### 6.2 Subsystem 2: Dual-Tier Glossary Synchronization & Lifecycle Management
+### 7.2 Subsystem 2: Dual-Tier Glossary Synchronization & Lifecycle Management
 Translating books requires strict terminology consistency across thousands of paragraphs. The **Glossary Sync Manager** operates two tiers:
 
 1. **Tier 1: Persistent Domain Glossaries (Base Tier)**
@@ -180,7 +228,7 @@ Translating books requires strict terminology consistency across thousands of pa
 
 ---
 
-### 6.3 Subsystem 3: Primary Default Pipeline - Asynchronous GCS Batch Translation
+### 7.3 Subsystem 3: Primary Default Pipeline - Asynchronous GCS Batch Translation
 Because books exceed inline API payload and timeout limits, **Asynchronous Batch Translation (`batchTranslateDocument`) is the primary, default execution engine**:
 
 1. **Book Upload to User GCS**:
@@ -205,12 +253,14 @@ Because books exceed inline API payload and timeout limits, **Asynchronous Batch
 
 ---
 
-## 7. Sequence Diagram: Modal BYOK Book Translation Lifecycle
+## 8. Sequence Diagram: Modal BYOK Book Translation Lifecycle
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Translator as User / Translator
+    participant CostUI as Zero-Auth Cost Calculator
+    participant CostEst as GCPCostEstimator (Modal)
     participant UI as Modal Web App (Gradio / FastAPI)
     participant BYOK as BYOKCredentialsManager
     participant Vocab as UserVocabularyStore (Modal Volume)
@@ -220,13 +270,24 @@ sequenceDiagram
     participant UserGCS as User GCS Bucket
     participant UserGCP as User Cloud Translation API v3
 
+    rect rgb(255, 245, 238)
+    Note over Translator,CostEst: Zero-Auth Pre-Translation Cost Quote
+    Translator->>CostUI: Upload PDF (No Auth / No GCP Keys)
+    CostUI->>CostEst: Inspect Page Count & Density
+    CostEst-->>CostUI: Return Itemized GCP Quote ($0.08/page, ±$5 variance)
+    CostUI-->>Translator: Display Budget Estimate (e.g. 350 pages = $28.00)
+    end
+
+    rect rgb(240, 255, 240)
+    Note over Translator,BYOK: Authenticated BYOK Session Setup
     Translator->>UI: Input GCP Project ID, GCS Bucket & Upload SA Key JSON
     UI->>BYOK: Set & Validate Credentials
     BYOK->>UserGCP: Test Connection (List Glossaries)
     UserGCP-->>BYOK: Access Confirmed (200 OK)
     BYOK-->>UI: BYOK Connected Ready
+    end
 
-    Translator->>UI: Upload Book PDF (e.g. 350-page Klages Treatise)
+    Translator->>UI: Upload Book PDF for Translation
     UI->>Vocab: Load User's Saved Terminology Preferences
     Vocab-->>Orch: Return User Neologism Dictionary
     UI->>Orch: Submit Book for Pre-Scan
@@ -268,7 +329,7 @@ sequenceDiagram
 
 ---
 
-## 8. Modal Labs Serverless Deployment Architecture
+## 9. Modal Labs Serverless Deployment Architecture
 
 ```python
 # modal_app.py architecture outline
@@ -306,11 +367,12 @@ def web_entrypoint():
 
 ---
 
-## 9. Configuration & Environment Variables
+## 10. Configuration & Environment Variables
 
 | Variable | Description | Source / Scope |
 | :--- | :--- | :--- |
 | `MODAL_VOLUME_PATH` | Path for persistent user profiles and vocabularies | Modal Container (`/data`) |
+| `GCP_DOC_TRANSLATION_PRICE_PER_PAGE` | Flat GCP Document Translation rate per page | Constant (`0.080`) |
 | `GCP_LOCATION` | Regional endpoint for Translation & Glossaries | User Config (`us-central1`) |
 | `BATCH_POLL_INTERVAL_SEC`| Interval in seconds for checking batch LRO status | System Default (`10s`) |
 | `MAX_INLINE_PREVIEW_PAGES`| Max pages allowed for synchronous sample previews | System Default (`3`) |
