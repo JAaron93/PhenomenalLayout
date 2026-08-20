@@ -9,7 +9,9 @@ The core system consists of:
 2. Dual-tier glossary synchronization (persistent domain dictionaries + dynamic user overrides).
 3. **Primary Default Pipeline: Asynchronous batch document translation (`batchTranslateDocument`) via Google Cloud Storage (GCS)**.
 4. Live Long-Running Operation (LRO) progress monitoring for book translation jobs.
-5. Secondary synchronous preview translation for single sample pages.
+5. **Bring Your Own Key (BYOK) credential management** for user-billed GCP translation and storage.
+6. **Persistent user vocabulary storage** for remembering terminology decisions across sessions and books.
+7. **Serverless deployment on Modal Labs** with scale-to-zero idle compute.
 
 ---
 
@@ -34,6 +36,16 @@ The core system consists of:
 > **As a** user running a long batch translation job,  
 > **I want** real-time progress indicators displaying completed pages and estimated time remaining,  
 > **So that** I have full visibility into the background translation process.
+
+### US-05: Bring Your Own Key (BYOK) Credentials & Project Isolation
+> **As a** user accessing the web application,  
+> **I want** to securely provide my own Google Cloud Project ID, GCS Bucket, and Service Account key,  
+> **So that** all GCP translation and storage charges are billed directly to my personal GCP billing account while keeping my credentials strictly isolated.
+
+### US-06: Persistent User Neologism Vocabulary Memory
+> **As a** recurring translator translating multiple philosophical volumes,  
+> **I want** my translation decisions (e.g. mapping *Schauung* or leaving *Dasein* untranslated) to be saved to my user profile on the persistent storage volume,  
+> **So that** when I upload subsequent books, my previously chosen terminology is automatically pre-filled.
 
 ---
 
@@ -66,7 +78,7 @@ Feature: Dual-Tier Glossary Sync
     Given a base dictionary with 120 Klages terms
     And 25 book-specific user choices recorded in session "book-sess-42"
     When the GlossarySyncManager compiles and provisions the glossary in region "us-central1"
-    Then a combined TSV is uploaded to "gs://trans-bucket/glossaries/sessions/book-sess-42.tsv"
+    Then a combined TSV is uploaded to "gs://user-bucket/glossaries/sessions/book-sess-42.tsv"
     And Cloud Translation create_glossary LRO completes successfully
     And the active glossary resource URI "projects/p1/locations/us-central1/glossaries/book-sess-42" is returned
 ```
@@ -81,7 +93,7 @@ Feature: Dual-Tier Glossary Sync
 ```gherkin
 Feature: GCS Batch Document Translation
   Scenario: Dispatch asynchronous batch job for 300-page book
-    Given a book PDF staged at "gs://trans-bucket/inputs/book-101/source.pdf"
+    Given a book PDF staged at "gs://user-bucket/inputs/book-101/source.pdf"
     And an active glossary resource "projects/p1/locations/us-central1/glossaries/book-sess-42"
     When the orchestrator submits batch_translate_document
     Then an asynchronous Long Running Operation (LRO) is created
@@ -107,15 +119,48 @@ Feature: Batch Translation LRO Monitoring
 
 ---
 
-### FR-05: Single-Page Rapid Preview Translation (Secondary Mode)
-* **Description**: Allow translators to test translation quality on 1–3 sample pages using synchronous `translateDocument` with `enableShadowRemovalNativePdf=True` before committing to a full book batch run.
-* **Traceability**: US-01, US-02
+### FR-05: Bring Your Own Key (BYOK) Credentials Vault
+* **Description**: The web interface must provide a BYOK configuration panel where users provide GCP Project ID, GCS Bucket Name, and Service Account JSON credentials. The backend verifies credentials with a non-billable validation request and dynamically initializes authenticated GCP clients per user session.
+* **Traceability**: US-05
+
+#### BDD Scenario FR-05.1: Validate and Bind User GCP Credentials
+```gherkin
+Feature: BYOK Credentials Management
+  Scenario: Validate user-supplied Service Account JSON
+    Given a user "translator-01" provides a valid Service Account JSON for project "my-gcp-proj" and bucket "my-trans-bucket"
+    When the BYOKCredentialsManager validates the credentials
+    Then a connectivity check against Cloud Translation API succeeds
+    And the credentials are bound strictly to "translator-01" session context
+    And no credential secrets are written to disk or logs
+```
 
 ---
 
-### FR-06: Glossary & File Staging Lifecycle Management
-* **Description**: The system must apply 7-day TTL lifecycle rules to transient GCS input/output book objects and session glossaries, while preserving persistent base glossaries.
-* **Traceability**: US-02, US-03
+### FR-06: Persistent User Neologism Vocabulary Store
+* **Description**: The system must persist user translation choices (translated equivalents, contextual notes, or "keep untranslated" directives) to a persistent storage volume (`modal.Volume`). When a user pre-scans a new book, the engine automatically matches and pre-fills terms from their personal vocabulary.
+* **Traceability**: US-06
+
+#### BDD Scenario FR-06.1: Recall User Vocabulary for New Book Pre-Scan
+```gherkin
+Feature: User Vocabulary Persistence
+  Scenario: Auto-populate terminology choices from user history
+    Given user "translator-01" has previously saved term "Schauung" -> "Intuitive Vision"
+    When user "translator-01" uploads a new book containing "Schauung"
+    Then the Neologism Pre-Scanner recognizes "Schauung" from the user vocabulary
+    And the review table pre-selects "Intuitive Vision" with high confidence
+```
+
+---
+
+### FR-07: Single-Page Rapid Preview Translation (Secondary Mode)
+* **Description**: Allow translators to test translation quality on 1–3 sample pages using synchronous `translateDocument` with `enableShadowRemovalNativePdf=True` using their BYOK credentials before committing to a full book batch run.
+* **Traceability**: US-01, US-02, US-05
+
+---
+
+### FR-08: Modal Labs Serverless Web Deployment & Scale-to-Zero
+* **Description**: The application must be deployable as a serverless ASGI/WSGI web app on Modal Labs (`modal_app.py`). When no requests or batch monitoring jobs are active, the container scales to zero.
+* **Traceability**: US-01, US-03, US-05
 
 ---
 
@@ -125,10 +170,11 @@ Feature: Batch Translation LRO Monitoring
 | :--- | :--- | :--- | :--- |
 | **NFR-01** | **Scalability** | Batch pipeline must support translating long books up to 1,000 pages without memory starvation. | Peak RAM usage $\le 256\text{ MB}$; streaming file handling. |
 | **NFR-02** | **Reliability** | Long-running operation polling and GCS downloads must recover from network disconnects. | Exponential backoff retry with up to 5 attempts. |
-| **NFR-03** | **Security** | Zero credential leaks: No GCP service account JSON files or private keys stored in code or repository commits. | Mandatory check against `.gitignore` / ADC environment validation. |
+| **NFR-03** | **Security & Privacy** | Zero credential leaks: BYOK credentials held strictly in encrypted session memory and never logged, leaked across sessions, or committed. | Zero credentials stored on disk; isolated per session token. |
 | **NFR-04** | **Glossary Consistency** | 100% of defined glossary terms must be supplied in compliant UTF-8 TSV format. | Zero TSV syntax errors; validation pass prior to GCS upload. |
-| **NFR-05** | **Test Coverage** | New GCS batch translation client, glossary sync manager, and orchestrator modules must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
-| **NFR-06** | **TDD 3-Strike Gate** | All bug fixes and feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
+| **NFR-05** | **Cost Efficiency** | Host compute must remain within Modal Labs' $30/month free tier with near-zero idle cost. | Scaledown window $\le 300\text{s}$; zero GPU requirement for host. |
+| **NFR-06** | **Test Coverage** | New BYOK credentials manager, user vocabulary store, GCS batch client, and orchestrator modules must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
+| **NFR-07** | **TDD 3-Strike Gate** | All feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
 
 ---
 
@@ -136,8 +182,10 @@ Feature: Batch Translation LRO Monitoring
 
 | User Story | Functional Requirement | Non-Functional Requirement | Test Target |
 | :--- | :--- | :--- | :--- |
-| **US-01** | FR-01, FR-05 | NFR-01 | `tests/test_book_pre_scanner.py` |
-| **US-02** | FR-02, FR-06 | NFR-03, NFR-04 | `tests/test_glossary_sync_manager.py` |
-| **US-03** | FR-03, FR-04 | NFR-01, NFR-02, NFR-05 | `tests/test_gcp_batch_translation_service.py` |
+| **US-01** | FR-01, FR-07 | NFR-01 | `tests/test_book_pre_scanner.py` |
+| **US-02** | FR-02 | NFR-03, NFR-04 | `tests/test_glossary_sync_manager.py` |
+| **US-03** | FR-03, FR-04 | NFR-01, NFR-02, NFR-06 | `tests/test_gcp_batch_translation_service.py` |
 | **US-04** | FR-04 | NFR-02 | `tests/test_lro_progress_monitor.py` |
-| **All** | FR-01 to FR-06 | NFR-05, NFR-06 | `tests/test_book_translation_e2e.py` |
+| **US-05** | FR-05, FR-08 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
+| **US-06** | FR-06 | NFR-03, NFR-06 | `tests/test_user_vocabulary_store.py` |
+| **All** | FR-01 to FR-08 | NFR-05, NFR-06, NFR-07 | `tests/test_book_translation_e2e.py` |
