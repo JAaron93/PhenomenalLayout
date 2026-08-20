@@ -61,61 +61,45 @@ While Lingo.dev provides world-class translation and Dolphin OCR delivers except
 - **Real-time progress monitoring** with time estimation
 - **Memory efficient** streaming processing for large documents
 
-## 🏗️ Architecture
+### Target Architecture: Google Cloud Document Translation & Neologism Orchestrator
 
-### PhenomenalLayout Processing Pipeline
+PhenomenalLayout orchestrates Google Cloud's Document Translation API with an advanced German philosophical neologism detection and user-choice engine:
 
-PhenomenalLayout orchestrates external services through a sophisticated layout preservation engine:
-
-```text
-PDF Upload
-    ↓
-PDF Validation & Analysis
-    ↓
-High-Resolution Rendering (pdf2image)
-    ↓
-Dolphin OCR Layout Analysis → [Text + Position + Font Metadata]
-    ↓
-🎨 PHENOMENAL LAYOUT ENGINE 🎨
-│
-├─ Language Detection & Translation (Lingo.dev)
-│
-├─ Text Fitting Analysis:
-│   ├─ Length Comparison (Original vs Translated)
-│   ├─ Strategy Selection (Scale/Wrap/Expand)
-│   └─ Quality Optimization
-│
-└─ Layout Preservation Processing:
-    ├─ Font Scaling Calculations
-    ├─ Intelligent Text Wrapping
-    └─ Bounding Box Optimization
-    ↓
-Advanced PDF Reconstruction
-    ↓
-Pixel-Perfect Document Output
+```mermaid
+flowchart TD
+    A[Upload German Book PDF] --> B[Fast Text Extraction & Neologism Scan]
+    B --> C[Neologism Detector Identifies German Compounds & Terms]
+    C --> D[User Choice UI: Confirm / Select Terminology Translations]
+    D --> E[Generate Dynamic Cloud Translation Glossary]
+    E --> F[Google Cloud Batch Document Translation: batchTranslateDocument (GCS)]
+    F --> G[Download Pixel-Perfect Translated PDF with Intact Tables & Images]
 ```
+
+> [!NOTE]
+> For complete architectural details, see the [Architecture Decision Record (ADR 0001)](docs/adr/0001-migrate-to-google-cloud-document-translation.md) and the formal specification suite:
+> - [System Design Spec](spec/gcp-migration/design.md)
+> - [Requirements & BDD Spec](spec/gcp-migration/requirements.md)
+> - [Actionable Tasks & TDD Plan](spec/gcp-migration/tasks.md)
 
 ### Core Components
 
-1. **Layout Preservation Engine** (`dolphin_ocr/layout.py`)
-   - **Text Fitting Analysis**: Proprietary algorithms for handling translation length variations
-   - **Quality Scoring System**: Automated assessment of layout preservation strategies
-   - **Multi-Strategy Processing**: Font scaling, text wrapping, and bounding box optimization
+1. **Neologism Detection Engine** (`services/neologism_detector.py`)
+   - Morphological compound analysis and decomposition
+   - Philosophical context analyzer & confidence scoring
+   - Built-in domain dictionaries (`config/klages_terminology.json`)
 
-2. **Layout-Aware Translation Service** (`services/layout_aware_translation_service.py`)
-   - **Translation-Layout Integration**: Seamless coordination between Lingo.dev and layout analysis
-   - **Context-Aware Processing**: Layout constraints inform translation decisions
-   - **Batch Optimization**: Intelligent processing for large-scale documents
+2. **User Choice & Disambiguation Manager** (`core/dynamic_choice_engine.py`, `services/user_choice_manager.py`)
+   - Interactive review for coined philosophical terms
+   - User override and custom translation management
 
-3. **Enhanced Document Processor** (`services/enhanced_document_processor.py`)
-   - PDF validation, rendering, and OCR orchestration
-   - Layout-aware reconstruction utilities with PhenomenalLayout integration
-   - Advanced preview generation with layout preservation metrics
+3. **Google Cloud Document Translation Service** (`services/gcp_document_translation_client.py`)
+   - Native PDF translation with layout, typography, table, and image preservation
+   - Shadow text removal and automatic rotation correction
+   - Dynamic glossary synchronization (`GlossaryConfig`)
 
-4. **Advanced Web Interface** (`app.py`)
-   - Enhanced Gradio UI with layout preservation status
-   - Real-time progress tracking for translation and formatting
-   - Comprehensive layout quality reporting
+4. **Web & API Interface** (`app.py`, `api/routes.py`)
+   - Document upload and interactive terminology review
+   - One-click document translation and instant PDF preview
 
 ## 🔬 Technical Deep-Dive: Layout Preservation Innovation
 
