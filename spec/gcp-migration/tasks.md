@@ -71,30 +71,41 @@ The tasks are organized into five **Execution Tracks**:
 * **Traceability**: FR-03, NFR-03
 * **Dependencies**: None
 * **Description**:
-  Add `google-cloud-translate>=3.15.0`, `google-cloud-storage>=2.14.0`, `google-api-python-client>=2.120.0`, and `modal>=0.60.0` to `requirements.txt`. Add configuration dataclasses in `config/settings.py` for default GCP locations (`us-central1`), pricing constants (`$0.080/page`, `$0.020/GB/mo`, 5GB free tier), poll intervals, and Modal volume paths (`/data`).
+  Add `google-cloud-translate>=3.15.0`, `google-cloud-storage>=2.14.0`, `google-api-python-client>=2.120.0`, and `modal>=0.60.0` to `requirements.txt`. Add configuration dataclasses in `config/settings.py` for default GCP locations (`us-central1`), pricing constants (`$0.080/page`, `$0.020/GB/mo`, 5GB free tier, 7-day staging lifecycle), poll intervals, and Modal volume paths (`/data`).
 * **Acceptance Criteria (TDD)**:
   * Unit test verifies settings dataclasses load defaults cleanly without requiring hardcoded secrets in the environment.
 
 ---
 
-#### Task 1.2: Implement `BYOKCredentialsManager` with Onboarding Guide Data
+#### Task 1.2: Implement `BYOKCredentialsManager` with Dual-Service Validation & Walkthrough Guide
 * **ID**: `TASK-1.2`
 * **Traceability**: FR-05, FR-08, NFR-03, NFR-05, NFR-11
 * **Dependencies**: `TASK-1.1`
 * **Description**:
   Develop [`services/byok_credentials_manager.py`](services/byok_credentials_manager.py):
   1. `set_credentials(user_id: str, project_id: str, bucket_name: str, sa_json_content: str | dict) -> bool`: Ingests and binds user GCP credentials in session memory.
-  2. `validate_credentials(user_id: str) -> ValidationResult`: Performs a zero-cost API check (`projects.locations.glossaries.list`) to confirm GCP Translation & Storage IAM permissions.
+  2. `validate_credentials(user_id: str) -> ValidationResult`: Performs comprehensive dual-service non-billable validation:
+     * Validates Translation API access via `projects.locations.glossaries.list` in `us-central1`.
+     * Validates GCS bucket accessibility and IAM permissions via `storage_client.get_bucket(bucket_name)` and `bucket.test_iam_permissions(['storage.objects.create', 'storage.objects.get', 'storage.objects.delete'])`.
+     * Returns `status=VALID` only if **both** Translation and Storage permissions succeed; otherwise returns granular actionable error details.
   3. `get_translation_client(user_id: str) -> TranslationServiceClient`: Returns authenticated Google Cloud Translation v3 client.
   4. `get_storage_client(user_id: str) -> StorageClient`: Returns authenticated Google Cloud Storage client.
-  5. `get_onboarding_guide() -> list[GuideStep]`: Returns structured 6-step walkthrough data with direct GCP console links and the 1-line `gcloud` setup script.
+  5. `get_onboarding_guide() -> list[GuideStep]`: Returns structured 6-step walkthrough data with direct GCP console links and copyable, auditable `gcloud` setup commands.
   6. `clear_credentials(user_id: str) -> None`: Evicts session credentials.
 * **Acceptance Criteria (TDD & BDD)**:
-  * Test suite: `tests/test_byok_credentials_manager.py` with mock Google Auth and Translation clients ($\ge 90\%$ coverage).
+  ```gherkin
+  Scenario: Validate user Service Account credentials with dual checks
+    Given valid Service Account JSON for project "my-gcp-project" and bucket "my-trans-bucket"
+    When BYOKCredentialsManager.set_credentials is called for user "user-1"
+    Then validate_credentials verifies both Translation glossary listing and Storage bucket IAM
+    And returns status VALID with confirmed bucket access
+    And credentials are never written to disk or logs
+  ```
+  * Test suite: `tests/test_byok_credentials_manager.py` with mock Google Auth, Translation, and Storage clients ($\ge 90\%$ coverage).
 
 ---
 
-#### Task 1.3: Implement `GCPBatchTranslationService` (Zero Host Storage)
+#### Task 1.3: Implement `GCPBatchTranslationService` (Zero Host Storage & 7-Day Staging Lifecycle)
 * **ID**: `TASK-1.3`
 * **Traceability**: FR-03, FR-10, NFR-01, NFR-02, NFR-07
 * **Dependencies**: `TASK-1.2`
@@ -104,6 +115,14 @@ The tasks are organized into five **Execution Tracks**:
   2. `submit_batch_job(user_id: str, gcs_input_uri: str, gcs_output_uri_prefix: str, source_lang: str, target_lang: str, glossary_resource_name: str) -> str`: Dispatches `batch_translate_document` and returns LRO operation name.
   3. `stream_translated_book(user_id: str, gcs_output_uri: str) -> BinaryIO`: Returns non-blocking stream directly from user GCS bucket.
 * **Acceptance Criteria (TDD & BDD)**:
+  ```gherkin
+  Scenario: Dispatch full-book batch translation request
+    Given a source book at "gs://user-bucket/inputs/book_1/source.pdf"
+    And glossary "projects/user-p1/locations/us-central1/glossaries/klages_glossary"
+    When submit_batch_job is called for user "user-1"
+    Then batch_translate_document is invoked with GcsSource and GcsDestination
+    And the returned LRO operation name is stored
+  ```
   * Test suite: `tests/test_gcp_batch_translation_service.py` with mock GCS and Translation client ($\ge 90\%$ coverage).
 
 ---
@@ -119,7 +138,7 @@ The tasks are organized into five **Execution Tracks**:
 
 ---
 
-#### Task 1.5: Implement Pre-Auth `GCPCostEstimator` with GCS Retention Schedules
+#### Task 1.5: Implement Pre-Auth `GCPCostEstimator` with GCS 7-Day Staging & Retention Schedules
 * **ID**: `TASK-1.5`
 * **Traceability**: FR-07, NFR-06
 * **Dependencies**: `TASK-1.1`
@@ -128,10 +147,19 @@ The tasks are organized into five **Execution Tracks**:
   1. `estimate_book_cost(pdf_path_or_bytes: Path | bytes) -> CostQuote`: Inspects PDF page count, file size, and text density without requiring user authentication or GCP credentials.
   2. Computes itemized pricing:
      - Document Translation ($0.080/page).
+     - 7-Day GCS Staging lifecycle overhead.
      - GCS Always Free 5 GB Tier eligibility check.
      - 1-Month and 12-Month GCS storage retention schedule ($0.020/GB/mo Standard, $0.0012/GB/mo Archive).
-  3. Returns `CostQuote` dataclass with `total_pages`, `base_cost`, `storage_cost_1mo`, `storage_cost_12mo`, `free_tier_covered`, `total_estimate`, and `tolerance_range` ($\pm \$5.00$).
+  3. Returns `CostQuote` dataclass with `total_pages`, `base_cost`, `staging_overhead_cost`, `storage_cost_1mo`, `storage_cost_12mo`, `free_tier_covered`, `total_estimate`, and `tolerance_range` ($\pm \$5.00$).
 * **Acceptance Criteria (TDD & BDD)**:
+  ```gherkin
+  Scenario: Estimate translation & storage costs for 350-page book
+    Given a 350-page PDF file (15MB)
+    When estimate_book_cost is called
+    Then base cost is $28.00 ($0.080 * 350)
+    And 7-day staging and 1-month GCS storage are estimated as $0.00 (under 5GB Free Tier)
+    And total quote is within $28.00 - $28.50
+  ```
   * Test suite: `tests/test_cost_estimator.py` ($\ge 90\%$ coverage).
 
 ---
@@ -145,6 +173,14 @@ The tasks are organized into five **Execution Tracks**:
   1. `export_stream_to_drive(access_token: str, file_stream: BinaryIO, filename: str, mime_type: str = "application/pdf") -> DriveExportResult`: Streams PDF directly into the user's Google Drive via Drive v3 API `files.create` using the client's `drive.file` scoped token.
   2. Zero temporary files on host disk: Uses non-blocking streaming pipes.
 * **Acceptance Criteria (TDD & BDD)**:
+  ```gherkin
+  Scenario: Stream translated PDF to Google Drive
+    Given a valid GIS OAuth access token with scope "drive.file"
+    When export_stream_to_drive is called with PDF stream
+    Then Drive v3 multipart upload creates the file in the user's Drive
+    And the returned result contains the file ID and webViewLink
+    And zero PDF bytes are written to host disk
+  ```
   * Test suite: `tests/test_google_drive_exporter.py` with mock Google Drive v3 API ($\ge 90\%$ coverage).
 
 ---
@@ -306,9 +342,9 @@ The tasks are organized into five **Execution Tracks**:
 * **Dependencies**: `TASK-1.2`, `TASK-1.5`, `TASK-1.6`, `TASK-3.1`, `TASK-3.4`, `TASK-5.1`
 * **Description**:
   Update [`app.py`](app.py) and [`api/routes.py`](api/routes.py):
-  1. **Zero-Auth Cost Estimator Widget**: Instant upload zone generating itemized GCP budget quotes (translation + monthly GCS retention) without login.
+  1. **Zero-Auth Cost Estimator Widget**: Instant upload zone generating itemized GCP budget quotes (translation, 7-day staging lifecycle & monthly retention) without login.
   2. **Interactive GCP Onboarding Walkthrough Modal**: Step-by-step modal with direct console links and copyable `gcloud` script.
-  3. **BYOK Setup Panel**: Input GCP Project ID, GCS Bucket, Service Account JSON upload with instant validation indicator.
+  3. **BYOK Setup Panel**: Input GCP Project ID, GCS Bucket, Service Account JSON upload with instant dual Translation & Storage validation indicators.
   4. **Pre-Scan View**: Streaming page index, chapter estimation, and **Fraktur OCR Confidence Rating badge**.
   5. **Terminology Memory Table**: Visual indicator of terms auto-populated from saved user vocabulary.
   6. **Live Batch LRO Progress & Recovery**: Real-time progress bar with reconnect/resume capability.
@@ -338,7 +374,7 @@ The tasks are organized into five **Execution Tracks**:
 * **Traceability**: NFR-01 to NFR-11
 * **Dependencies**: `TASK-5.3`
 * **Description**:
-  Create full end-to-end test suite `tests/test_book_translation_e2e.py` verifying zero-auth cost quote generation with storage retention, Fraktur classification, walkthrough modal data delivery, full BYOK credential validation, user vocabulary recall, glossary sync, batch job dispatch, job recovery after disconnect, fallback plaintext translation on failed pages, Google Drive GIS export, dual-pane viewing, and zero host PDF disk footprint.
+  Create full end-to-end test suite `tests/test_book_translation_e2e.py` verifying zero-auth cost quote generation with storage retention, Fraktur classification, walkthrough modal data delivery, full BYOK credential validation (Translation + Storage), user vocabulary recall, glossary sync, batch job dispatch, job recovery after disconnect, fallback plaintext translation on failed pages, Google Drive GIS export, dual-pane viewing, and zero host PDF disk footprint.
 * **Acceptance Criteria (TDD)**:
   * All tests pass with $\ge 90\%$ code coverage.
 

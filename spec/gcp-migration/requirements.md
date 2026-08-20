@@ -9,11 +9,11 @@ The core system consists of:
 2. Dual-tier glossary synchronization (persistent domain dictionaries + dynamic user overrides).
 3. **Primary Default Pipeline: Asynchronous batch document translation (`batchTranslateDocument`) via Google Cloud Storage (GCS)**.
 4. Live Long-Running Operation (LRO) progress monitoring for book translation jobs.
-5. **Bring Your Own Key (BYOK) credential management** for user-billed GCP translation and storage.
-6. **Zero Host Storage**: Source and translated PDF files are stored strictly in the user's GCS bucket or Google Drive; Modal backend stores zero book PDFs.
+5. **Bring Your Own Key (BYOK) credential management** for user-billed GCP translation and storage with dual Translation & Storage validation.
+6. **Zero Host Storage & 7-Day Staging Lifecycle**: Source and translated PDF files are stored strictly in the user's GCS bucket (with 7-day staging auto-expiration) or Google Drive; Modal backend stores zero book PDFs.
 7. **Persistent user vocabulary storage** for remembering terminology decisions across sessions and books.
 8. **Pre-auth zero-credential GCP cost & GCS storage retention estimator** providing an itemized quote within a $\pm \$5.00$ tolerance margin.
-9. **Interactive GCP Onboarding Walkthrough Modal** guiding translators through setting up their GCP account, APIs, bucket, and service account key.
+9. **Interactive GCP Onboarding Walkthrough Modal** guiding translators through setting up their GCP account, APIs, bucket, and service account key with auditable `gcloud` commands.
 10. **Seamless Google Drive Export**: 1-click export via client-side Google Identity Services (GIS) OAuth (`drive.file` scope) with no third-party auth middleware (no Auth0 / no Clerk).
 11. **Fraktur / Blackletter OCR Script Assessment**: Evaluates historical printings and outputs confidence ratings.
 12. **Long Batch Job Recovery & Resumption**: Preserves LRO progress across browser disconnects and container scale-downs.
@@ -58,12 +58,12 @@ The core system consists of:
 
 ### US-07: Instant Pre-Auth GCP Translation & GCS Retention Cost Estimation
 > **As a** prospective user visiting the website without signing in or supplying GCP credentials,  
-> **I want** to upload my book PDF and receive an immediate, itemized GCP bill estimate (including document translation and monthly GCS storage retention) within a $\pm \$5.00$ margin of error,  
+> **I want** to upload my book PDF and receive an immediate, itemized GCP bill estimate (including document translation, 7-day staging lifecycle, and monthly GCS storage retention) within a $\pm \$5.00$ margin of error,  
 > **So that** I know exactly how much budget to allocate in my Google Cloud billing account before setting up BYOK.
 
 ### US-08: Interactive GCP Setup Walkthrough Modal
 > **As a** translator who is new to Google Cloud,  
-> **I want** a step-by-step interactive onboarding modal in the web interface that guides me through creating a GCP account, enabling the Translation and Storage APIs, creating a bucket, and generating a Service Account JSON key,  
+> **I want** a step-by-step interactive onboarding modal in the web interface that guides me through creating a GCP account, enabling the Translation and Storage APIs, creating a bucket, and generating a Service Account JSON key with copyable `gcloud` commands,  
 > **So that** I can configure my BYOK credentials without confusion or cloud friction.
 
 ### US-09: Seamless Personal Google Drive Export
@@ -112,7 +112,7 @@ Feature: Book Pre-Scanning
 ---
 
 ### FR-02: Dual-Tier Glossary Synchronization Subsystem
-* **Description**: The system must maintain persistent base glossaries (Tier 1) and dynamic book session glossaries (Tier 2). It must compile terms into RFC 4180 TSV files, upload them to GCS (`gs://<bucket>/glossaries/...`), and ensure a corresponding Cloud Translation v3 Glossary resource is created and in `READY` state.
+* **Description**: The system must maintain persistent base glossaries (Tier 1) and dynamic book session glossaries (Tier 2). It must compile terms into RFC 4180 TSVs, upload them to GCS (`gs://<bucket>/glossaries/...`), and ensure a corresponding Cloud Translation v3 Glossary resource is created and in `READY` state.
 * **Traceability**: US-02
 
 #### BDD Scenario FR-02.1: Synchronize Dynamic Book Glossary to GCP
@@ -163,17 +163,19 @@ Feature: Batch Translation LRO Monitoring
 
 ---
 
-### FR-05: Bring Your Own Key (BYOK) Credentials Vault
-* **Description**: The web interface must provide a BYOK configuration panel where users provide GCP Project ID, GCS Bucket Name, and Service Account JSON credentials. The backend verifies credentials with a non-billable validation request and dynamically initializes authenticated GCP clients per user session.
+### FR-05: Bring Your Own Key (BYOK) Credentials Vault & Dual-Service Validation
+* **Description**: The web interface must provide a BYOK configuration panel where users provide GCP Project ID, GCS Bucket Name, and Service Account JSON credentials. The backend validates BOTH: (1) Translation API access via `projects.locations.glossaries.list` in `us-central1`, and (2) GCS bucket accessibility and IAM permissions via `storage_client.get_bucket(bucket_name)` and `bucket.test_iam_permissions(['storage.objects.create', 'storage.objects.get', 'storage.objects.delete'])`.
 * **Traceability**: US-05
 
 #### BDD Scenario FR-05.1: Validate and Bind User GCP Credentials
 ```gherkin
 Feature: BYOK Credentials Management
-  Scenario: Validate user-supplied Service Account JSON
-    Given a user "translator-01" provides a valid Service Account JSON for project "my-gcp-proj" and bucket "my-trans-bucket"
+  Scenario: Validate user Service Account with dual Translation & Storage checks
+    Given a user "translator-01" provides a Service Account JSON for project "my-gcp-proj" and bucket "my-trans-bucket"
     When the BYOKCredentialsManager validates the credentials
-    Then a connectivity check against Cloud Translation API succeeds
+    Then Translation API connectivity check succeeds via list_glossaries
+    And Storage bucket permission check succeeds for "my-trans-bucket"
+    And validate_credentials returns status VALID
     And the credentials are bound strictly to "translator-01" session context
     And no credential secrets are written to disk or logs
 ```
@@ -199,8 +201,9 @@ Feature: User Vocabulary Persistence
 ### FR-07: Pre-Auth Zero-Credential Cost & GCS Retention Estimator
 * **Description**: The application must provide a publicly accessible endpoint and UI widget allowing users to upload a PDF without signing in or providing GCP credentials, computing page-level counts and emitting an itemized GCP billing estimate with:
   1. Base Document Translation cost ($0.080/page).
-  2. GCS Always Free 5 GB Tier eligibility and 1-month / 12-month retention cost schedules.
-  3. Total variance strictly within $\pm \$5.00$.
+  2. GCS 7-day staging lifecycle overhead and Always Free 5 GB Tier eligibility check.
+  3. 1-month and 12-month GCS storage retention schedule.
+  4. Total variance strictly within $\pm \$5.00$.
 * **Traceability**: US-07
 
 #### BDD Scenario FR-07.1: Calculate Zero-Auth Translation & Storage Quote
@@ -210,7 +213,7 @@ Feature: Pre-Auth Cost & Storage Estimation
     Given an unauthenticated user uploads a 350-page PDF "klages_der_mensch.pdf" (12MB)
     When the GCPCostEstimator analyzes the document
     Then the calculated base translation cost is $28.00 (350 * $0.080)
-    And the 1-month GCS storage cost is estimated as $0.00 (Covered by GCP Always Free 5GB Tier)
+    And 7-day GCS staging storage is estimated as $0.00 (Covered by GCP Always Free 5GB Tier)
     And the total quote is returned as $28.00 with tolerance range "$28.00 - $28.50"
     And the estimation completes in less than 1.0 second on Modal CPU
 ```
@@ -218,7 +221,7 @@ Feature: Pre-Auth Cost & Storage Estimation
 ---
 
 ### FR-08: Interactive GCP Setup Walkthrough Modal
-* **Description**: The web application must include an interactive guided modal dialog ("Step-by-Step GCP Setup Guide") containing 6 progressive steps: (1) Account creation & free credit claim, (2) Project creation, (3) Enabling Translation & Storage APIs, (4) Creating a GCS Bucket in `us-central1`, (5) Creating a Service Account with `roles/cloudtranslate.editor` and `roles/storage.objectAdmin` and downloading JSON key, and (6) Drag-and-drop credential validation. Also includes a 1-line `gcloud` setup script for power users.
+* **Description**: The web application must include an interactive guided modal dialog ("Step-by-Step GCP Setup Guide") containing 6 progressive steps: (1) Account creation & free credit claim, (2) Project creation, (3) Enabling Translation & Storage APIs, (4) Creating a GCS Bucket in `us-central1`, (5) Creating a Service Account with `roles/cloudtranslate.editor` and `roles/storage.objectAdmin` and downloading JSON key, and (6) Drag-and-drop credential validation. Also includes explicit, auditable copyable `gcloud` setup commands.
 * **Traceability**: US-08
 
 ---
@@ -241,9 +244,9 @@ Feature: Google Drive Export
 
 ---
 
-### FR-10: Zero Host PDF Storage Invariant
-* **Description**: Modal Labs backend containers and persistent volumes must never store full-length source or translated PDF files. All PDF storage is strictly isolated to the user's GCS bucket and personal Google Drive. Modal Volume storage is restricted strictly to lightweight user vocabulary and metadata databases ($\le 5\text{MB}$).
-* **Traceability**: US-03, US-05, US-09
+### FR-10: Zero Host PDF Storage Invariant & 7-Day GCS Staging Lifecycle
+* **Description**: Modal Labs backend containers and persistent volumes must never store full-length source or translated PDF files. All PDF storage is strictly isolated to the user's GCS bucket and personal Google Drive. Staged input objects in `gs://<bucket>/inputs/...` must have a 7-day auto-deletion lifecycle policy. Modal Volume storage is restricted strictly to lightweight user vocabulary and metadata databases ($\le 5\text{MB}$).
+* **Traceability**: US-03, US-05, US-07, US-09
 
 ---
 
@@ -332,7 +335,7 @@ Feature: Fallback Page Translation
 | **NFR-04** | **Glossary Consistency** | 100% of defined glossary terms must be supplied in compliant UTF-8 TSV format. | Zero TSV syntax errors; validation pass prior to GCS upload. |
 | **NFR-05** | **Cost Efficiency** | Host compute must remain within Modal Labs' $30/month free tier with near-zero idle cost. | Scaledown window $\le 300\text{s}$; zero GPU requirement for host. |
 | **NFR-06** | **Cost Precision** | Pre-auth cost estimate must deviate from actual GCP bill by no more than \$5.00. | Estimate variance $\le \pm \$5.00$ per document. |
-| **NFR-07** | **Zero Host Storage** | Modal persistent storage is restricted to user metadata; zero book PDF bytes stored on host disk. | Host PDF disk usage $= 0\text{ MB}$ persistent. |
+| **NFR-07** | **Zero Host Storage** | Modal persistent storage is restricted to user metadata; zero book PDF bytes stored on host disk. Staged GCS inputs auto-expire after 7 days. | Host PDF disk usage $= 0\text{ MB}$ persistent. |
 | **NFR-08** | **Job Resumption Time**| Reconnecting to an active cloud batch job must take less than 1.0 second. | Session restoration latency $\le 1000\text{ms}$. |
 | **NFR-09** | **Test Coverage** | All services, classifiers, recovery managers, and translators must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
 | **NFR-10** | **TDD 3-Strike Gate** | All feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
@@ -350,7 +353,7 @@ Feature: Fallback Page Translation
 | **US-04** | FR-04 | NFR-02 | `tests/test_lro_progress_monitor.py` |
 | **US-05** | FR-05, FR-17 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
 | **US-06** | FR-06 | NFR-03, NFR-09 | `tests/test_user_vocabulary_store.py` |
-| **US-07** | FR-07 | NFR-05, NFR-06 | `tests/test_cost_estimator.py` |
+| **US-07** | FR-07, FR-10 | NFR-05, NFR-06, NFR-07 | `tests/test_cost_estimator.py` |
 | **US-08** | FR-08 | NFR-11 | `tests/test_app_routes.py` |
 | **US-09** | FR-09, FR-10 | NFR-03, NFR-07, NFR-09 | `tests/test_google_drive_exporter.py` |
 | **US-10** | FR-11 | NFR-01, NFR-09 | `tests/test_fraktur_classifier.py` |

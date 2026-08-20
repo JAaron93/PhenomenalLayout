@@ -10,7 +10,7 @@ PhenomenalLayout is deployed as a **serverless cloud application on Modal Labs**
 * **Zero Host Storage**: Modal Labs stores **zero** book PDF files. The source PDF and translated outputs reside exclusively in the **user's personal GCS bucket** or export directly to their **personal Google Drive**.
 * **Zero Host API/Compute Cost**: Translation ($0.08/page) and GCS storage are billed directly to the user's personal GCP project. Modal Labs operates strictly within its $30/month free tier with automatic scale-to-zero.
 * **Seamless Google Drive Export**: Uses native **Google Identity Services (GIS)** client-side OAuth (`drive.file` scope) for 1-click cloud export without requiring heavy third-party SaaS auth (no Auth0, no Clerk).
-* **Pre-Auth Zero-Credential Cost Estimator**: Calculates translation costs and monthly GCS retention schedules within a $\pm \$5.00$ tolerance margin before login.
+* **Pre-Auth Zero-Credential Cost Estimator**: Calculates translation costs and 7-day staging / monthly GCS retention schedules within a $\pm \$5.00$ tolerance margin before login.
 * **Scholarly Resilience**: Includes **Job Resumption** for long 10–35 min batch jobs, **Fraktur / Blackletter OCR confidence rating**, **Partial Page Failure resilience with Fallback Plaintext translation** (achieving 98% layout + 100% text translation), **Glossary Quota auto-cleanup**, and a **Side-by-Side Dual-Pane Reading Mode**.
 
 ---
@@ -56,7 +56,8 @@ flowchart TB
 
     PUB_UI -.->|Proceed with BYOK| UI
     UI --> AUTH
-    AUTH -->|Validate Credentials| GCP_BATCH
+    AUTH -->|Validate Translation & Storage IAM| GCP_BATCH
+    AUTH -->|Validate Bucket Access| GCS_BUCKET
     UI --> NEO
     UI --> FRAK
     NEO <--> VOCAB
@@ -87,7 +88,8 @@ flowchart TB
 Google Cloud Platform pricing for Document Translation and Storage consists of:
 1. **Document Translation Rate**: Flat **$0.080 per page** for native and scanned PDF layouts.
 2. **GCS "Always Free" Tier**: Google Cloud provides **5 GB-months of Standard Storage free of charge** in US regions (`us-central1`, `us-east1`, `us-west1`).
-3. **Paid GCS Storage Tiers (Beyond 5 GB free limit)**:
+3. **GCS Staging Lifecycle (7-Day Auto-Expiration)**: Transient input staging objects (`gs://<bucket>/inputs/...`) and temporary translation runs are provisioned with a **7-day auto-delete lifecycle policy** on the bucket to prevent unbounded storage accumulation.
+4. **Paid GCS Storage Tiers (Beyond 5 GB free limit)**:
    * Standard Regional Storage: **$0.020 per GB / month** (or ~$0.00067 / GB / day).
    * Archive Storage (Long-Term Archival): **$0.0012 per GB / month** (or ~$0.0144 / GB / year).
 
@@ -97,6 +99,7 @@ A 200–500 page book PDF is typically 15 MB to 50 MB in file size.
 
 The **`GCPCostEstimator`** calculates:
 $$\text{Base Translation Cost} = N_{\text{billable\_pages}} \times \$0.080$$
+$$\text{7-Day Staging Overhead} = \left(\frac{\text{File Size MB} \times 2}{1024}\right) \times \$0.020 \times \left(\frac{7 \text{ days}}{30 \text{ days}}\right) \approx \$0.0001 \text{ to } \$0.0004$$
 $$\text{1-Month GCS Retention Cost} = \left(\frac{\text{File Size MB} \times 2}{1024}\right) \times \$0.020 \approx \$0.0006 \text{ to } \$0.0019 / \text{month}$$
 $$\text{12-Month GCS Archival Cost} = \left(\frac{\text{File Size MB} \times 2}{1024}\right) \times \$0.0012 \times 12 \approx \$0.0004 \text{ to } \$0.0014 / \text{year}$$
 
@@ -104,7 +107,7 @@ $$\text{12-Month GCS Archival Cost} = \left(\frac{\text{File Size MB} \times 2}{
 
 The cost estimator outputs an itemized breakdown:
 * **Translation Cost**: $N_{\text{pages}} \times \$0.080$ (e.g. 350 pages = **$28.00**).
-* **Storage Cost**: **$0.00** (Covered under GCP Always Free 5 GB tier; or $< \$0.01/\text{month}$ beyond).
+* **Storage Cost**: **$0.00** (Covered under GCP Always Free 5 GB tier; or $< \$0.01/\text{month}$ beyond with 7-day auto-expiry on staging).
 * **Total Expected GCP Budget**: **$28.00 – $28.50** (Variance strictly within $\pm \$5.00$).
 
 ---
@@ -128,13 +131,59 @@ PhenomenalLayout implements **native client-side Google Identity Services (GIS)*
 
 ## 5. Bring Your Own Key (BYOK) Architecture & Onboarding Walkthrough
 
-### 5.1 Credential Ingestion & Security Model
+### 5.1 Credential Ingestion & Dual-Service Validation Model
 1. **Inputs Required**: GCP Project ID, Target GCS Bucket Name, and GCP Service Account JSON key.
 2. **Session-Scoped Isolation**: Held strictly in memory for the active session; zero disk writes, zero logging.
-3. **Instant Validation**: Non-billable check (`projects.locations.glossaries.list`) verifies IAM roles and regional endpoint availability (`us-central1`).
+3. **Comprehensive Dual-Service Validation (`validate_credentials`)**:
+   * **Translation API Check**: Non-billable call (`projects.locations.glossaries.list`) verifies Translation API enablement and IAM roles (`roles/cloudtranslate.editor`) in `us-central1`.
+   * **Storage Bucket Check**: Verifies bucket accessibility and IAM permissions (`storage_client.get_bucket(bucket_name)` and `bucket.test_iam_permissions(['storage.objects.create', 'storage.objects.get', 'storage.objects.delete'])`).
+   * Only when **both** checks pass is the connection declared `VALID`.
 
 ### 5.2 Interactive GCP Onboarding Walkthrough Modal
-The BYOK panel includes a **"📖 Step-by-Step GCP Setup Guide"** modal that opens directly in the browser with 6 progressive steps, direct Google Cloud Console links, and a 1-line copyable `gcloud` setup script.
+
+The BYOK panel includes a **"📖 Step-by-Step GCP Setup Guide"** modal that opens directly in the browser with 6 progressive steps, direct Google Cloud Console links, and copyable `gcloud` setup commands:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🚀 Google Cloud Setup Guide (Step-by-Step BYOK Walkthrough)               [X]│
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 1️⃣  Create GCP Account & Claim Free Credits                                 │
+│     • Go to console.cloud.google.com (New users receive $300 in free credit)│
+│                                                                             │
+│ 2️⃣  Create a Project                                                       │
+│     • Click Project Selector ➔ "New Project" ➔ Name it e.g. "phenomenal-book"│
+│                                                                             │
+│ 3️⃣  Enable Required APIs (1-Click Link)                                    │
+│     • Cloud Translation API (translate.googleapis.com)                      │
+│     • Cloud Storage API (storage.googleapis.com)                            │
+│                                                                             │
+│ 4️⃣  Create a Cloud Storage Bucket                                          │
+│     • Go to Cloud Storage ➔ Create Bucket in region 'us-central1'           │
+│                                                                             │
+│ 5️⃣  Create Service Account & Download JSON Key                              │
+│     • Go to IAM & Admin ➔ Service Accounts ➔ "Create Service Account"       │
+│     • Grant Roles:                                                          │
+│       - Cloud Translation API User / Editor (roles/cloudtranslate.editor)   │
+│       - Storage Object Admin (roles/storage.objectAdmin)                    │
+│     • Keys tab ➔ Add Key ➔ Create New Key ➔ JSON (downloads credentials.json)│
+│                                                                             │
+│ 6️⃣  Upload & Validate                                                       │
+│     • Drag & drop credentials.json into PhenomenalLayout and click 'Connect' │
+│                                                                             │
+│ ⚡ Power User? Copy and execute these pinned gcloud commands:                │
+│    gcloud services enable translate.googleapis.com storage.googleapis.com    │
+│    gcloud storage buckets create gs://[BUCKET] --location=us-central1        │
+│    gcloud iam service-accounts create phenomenal-sa                         │
+│    gcloud projects add-iam-policy-binding [PROJ] \                           │
+│      --member="serviceAccount:phenomenal-sa@[PROJ].iam.gserviceaccount.com" \│
+│      --role="roles/cloudtranslate.editor"                                   │
+│    gcloud storage buckets add-iam-policy-binding gs://[BUCKET] \             │
+│      --member="serviceAccount:phenomenal-sa@[PROJ].iam.gserviceaccount.com" \│
+│      --role="roles/storage.objectAdmin"                                     │
+│    gcloud iam service-accounts keys create credentials.json \               │
+│      --iam-account=phenomenal-sa@[PROJ].iam.gserviceaccount.com             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -307,6 +356,7 @@ def web_entrypoint():
 | `GCP_DOC_TRANSLATION_PRICE_PER_PAGE` | Flat GCP Document Translation rate per page | Constant (`0.080`) |
 | `GCS_STANDARD_STORAGE_PER_GB_MO` | Rate per GB per month for standard storage | Constant (`0.020`) |
 | `GCS_ALWAYS_FREE_STORAGE_GB` | Monthly free storage allowance in US region | Constant (`5.0`) |
+| `GCS_STAGING_EXPIRATION_DAYS` | Auto-deletion lifecycle for temporary staging files | Constant (`7`) |
 | `GOOGLE_DRIVE_OAUTH_CLIENT_ID` | OAuth2 Client ID for Google Identity Services | Public Client Setting |
 | `GCP_LOCATION` | Regional endpoint for Translation & Glossaries | User Config (`us-central1`) |
 | `BATCH_POLL_INTERVAL_SEC`| Interval in seconds for checking batch LRO status | System Default (`10s`) |
