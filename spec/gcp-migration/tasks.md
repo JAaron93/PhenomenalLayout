@@ -2,7 +2,7 @@
 
 ## 1. Plan Overview & Book-Scale Execution Strategy
 
-This implementation plan decomposes the requirements from [`requirements.md`](spec/gcp-migration/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**, deployed on **Modal Labs** under a **Bring Your Own Key (BYOK)** model with **Pre-Auth Cost Estimation**.
+This implementation plan decomposes the requirements from [`requirements.md`](spec/gcp-migration/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**, deployed on **Modal Labs** under a **Bring Your Own Key (BYOK)** model with **Pre-Auth Cost Estimation** and an **Interactive GCP Onboarding Walkthrough Modal**.
 
 The tasks are organized into four **Execution Tracks**:
 * **Track 1: GCP Batch Translation Engine, BYOK & Cost Estimator** (Primary pipeline, auth vault & quote engine)
@@ -39,7 +39,7 @@ The tasks are organized into four **Execution Tracks**:
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │ Track 4: Book Orchestrator, Modal Deployment, UI & E2E Validation      │
-│ [Task 4.1: Book Orchestrator] ──> [Task 4.2: UI with BYOK & Cost Quote]│
+│ [Task 4.1: Book Orchestrator] ──> [Task 4.2: UI with BYOK, Modal Guide]│
 │                               ──> [Task 4.3: Modal App Scaffolding]    │
 │                               ──> [Task 4.4: Full-Book E2E Test Suite] │
 └────────────────────────────────────────────────────────────────────────┘
@@ -65,9 +65,9 @@ The tasks are organized into four **Execution Tracks**:
 
 ---
 
-#### Task 1.2: Implement `BYOKCredentialsManager`
+#### Task 1.2: Implement `BYOKCredentialsManager` with Onboarding Guide Data
 * **ID**: `TASK-1.2`
-* **Traceability**: FR-05, NFR-03, NFR-05
+* **Traceability**: FR-05, FR-08, NFR-03, NFR-05, NFR-09
 * **Dependencies**: `TASK-1.1`
 * **Description**:
   Develop [`services/byok_credentials_manager.py`](services/byok_credentials_manager.py):
@@ -75,7 +75,8 @@ The tasks are organized into four **Execution Tracks**:
   2. `validate_credentials(user_id: str) -> ValidationResult`: Performs a zero-cost API check (`projects.locations.glossaries.list`) to confirm GCP Translation & Storage IAM permissions.
   3. `get_translation_client(user_id: str) -> TranslationServiceClient`: Returns authenticated Google Cloud Translation v3 client.
   4. `get_storage_client(user_id: str) -> StorageClient`: Returns authenticated Google Cloud Storage client.
-  5. `clear_credentials(user_id: str) -> None`: Evicts session credentials.
+  5. `get_onboarding_guide() -> list[GuideStep]`: Returns structured 6-step walkthrough data with direct GCP console links and the 1-line `gcloud` setup script.
+  6. `clear_credentials(user_id: str) -> None`: Evicts session credentials.
 * **Acceptance Criteria (TDD & BDD)**:
   ```gherkin
   Scenario: Validate user Service Account credentials
@@ -227,17 +228,18 @@ The tasks are organized into four **Execution Tracks**:
 
 ---
 
-#### Task 4.2: Update UI with Pre-Auth Cost Quote, BYOK Panel & User Vocab
+#### Task 4.2: Update UI with Pre-Auth Cost Quote, BYOK Walkthrough Modal & User Vocab
 * **ID**: `TASK-4.2`
-* **Traceability**: US-01 to US-07, FR-05, FR-07
-* **Dependencies**: `TASK-1.5`, `TASK-4.1`
+* **Traceability**: US-01 to US-08, FR-05, FR-07, FR-08
+* **Dependencies**: `TASK-1.2`, `TASK-1.5`, `TASK-4.1`
 * **Description**:
   Update [`app.py`](app.py) and [`api/routes.py`](api/routes.py):
   1. **Zero-Auth Cost Estimator Widget**: Instant upload zone generating itemized GCP budget quotes ($\pm \$5.00$ variance) without login.
-  2. **BYOK Setup Panel**: Input GCP Project ID, GCS Bucket, Service Account JSON upload with instant validation indicator.
-  3. **Book Upload & Pre-Scan View**: Streaming page index and chapter estimation.
-  4. **Terminology Memory Table**: Visual indicator of terms auto-populated from saved user vocabulary vs. new novel coined compounds.
-  5. **Live Batch LRO Progress**: Real-time progress bar displaying page count (e.g. `142/350 Pages Translated`) and download button.
+  2. **Interactive GCP Onboarding Walkthrough Modal**: Accessible via "📖 How to get your GCP credentials" button, rendering the 6-step guided walkthrough with direct console links and `gcloud` copyable script.
+  3. **BYOK Setup Panel**: Input GCP Project ID, GCS Bucket, Service Account JSON upload with instant validation indicator.
+  4. **Book Upload & Pre-Scan View**: Streaming page index and chapter estimation.
+  5. **Terminology Memory Table**: Visual indicator of terms auto-populated from saved user vocabulary vs. new novel coined compounds.
+  6. **Live Batch LRO Progress**: Real-time progress bar displaying page count (e.g. `142/350 Pages Translated`) and download button.
 * **Acceptance Criteria (TDD)**:
   * Test suite: `tests/test_app_routes.py`.
 
@@ -245,7 +247,7 @@ The tasks are organized into four **Execution Tracks**:
 
 #### Task 4.3: Implement Modal Labs Serverless Web Deployment
 * **ID**: `TASK-4.3`
-* **Traceability**: FR-09, NFR-05
+* **Traceability**: FR-10, NFR-05
 * **Dependencies**: `TASK-4.2`
 * **Description**:
   Create `modal_app.py` defining:
@@ -260,10 +262,10 @@ The tasks are organized into four **Execution Tracks**:
 
 #### Task 4.4: End-to-End Book Translation & BYOK Integration Test Suite
 * **ID**: `TASK-4.4`
-* **Traceability**: NFR-01, NFR-03, NFR-05, NFR-06, NFR-07, NFR-08
+* **Traceability**: NFR-01, NFR-03, NFR-05, NFR-06, NFR-07, NFR-08, NFR-09
 * **Dependencies**: `TASK-4.3`
 * **Description**:
-  Create full end-to-end test suite `tests/test_book_translation_e2e.py` verifying zero-auth cost quote generation, full BYOK credential validation, user vocabulary recall, glossary sync, batch job dispatch, simulated LRO polling, and final PDF output.
+  Create full end-to-end test suite `tests/test_book_translation_e2e.py` verifying zero-auth cost quote generation, walkthrough modal data delivery, full BYOK credential validation, user vocabulary recall, glossary sync, batch job dispatch, simulated LRO polling, and final PDF output.
 * **Acceptance Criteria (TDD)**:
   * All tests pass with $\ge 90\%$ code coverage.
 
@@ -274,7 +276,7 @@ The tasks are organized into four **Execution Tracks**:
 | Task ID | Component | Upstream Dependencies | FR / NFR Traceability | Execution Mode |
 | :--- | :--- | :--- | :--- | :--- |
 | **TASK-1.1** | Config & Deps | None | FR-03, NFR-03 | Sequential |
-| **TASK-1.2** | BYOK Credentials Manager| TASK-1.1 | FR-05, NFR-03, NFR-05 | Sequential (Track 1) |
+| **TASK-1.2** | BYOK Credentials Manager| TASK-1.1 | FR-05, FR-08, NFR-03, NFR-09 | Sequential (Track 1) |
 | **TASK-1.3** | GCS Batch Service | TASK-1.2 | FR-03, NFR-01, NFR-02 | Sequential (Track 1) |
 | **TASK-1.4** | LRO Progress Monitor| TASK-1.3 | FR-04, NFR-02 | Sequential (Track 1) |
 | **TASK-1.5** | Pre-Auth Cost Estimator | TASK-1.1 | FR-07, NFR-06 | **Parallel (Track 1)** |
@@ -283,6 +285,6 @@ The tasks are organized into four **Execution Tracks**:
 | **TASK-2.3** | Glossary Sync Mgr | TASK-1.2, TASK-2.2 | FR-02, FR-06, NFR-04 | Sequential (Track 2) |
 | **TASK-3.1** | Deprecation | None | Cleanup | **Parallel (Track 3)** |
 | **TASK-4.1** | Book Orchestrator | TASK-1.4, TASK-2.3, TASK-3.1 | FR-01, FR-02, FR-03, FR-04 | Sequential (Track 4) |
-| **TASK-4.2** | BYOK UI & Live LRO | TASK-1.5, TASK-4.1 | US-01 to US-07, FR-05, FR-07 | Sequential (Track 4) |
-| **TASK-4.3** | Modal App Deployment| TASK-4.2 | FR-09, NFR-05 | Sequential (Track 4) |
-| **TASK-4.4** | Full-Book E2E Test | TASK-4.3 | NFR-01, NFR-05, NFR-07, NFR-08 | Sequential (Track 4) |
+| **TASK-4.2** | BYOK UI & Live LRO | TASK-1.2, TASK-1.5, TASK-4.1 | US-01 to US-08, FR-05, FR-07, FR-08 | Sequential (Track 4) |
+| **TASK-4.3** | Modal App Deployment| TASK-4.2 | FR-10, NFR-05 | Sequential (Track 4) |
+| **TASK-4.4** | Full-Book E2E Test | TASK-4.3 | NFR-01, NFR-05, NFR-07, NFR-08, NFR-09 | Sequential (Track 4) |

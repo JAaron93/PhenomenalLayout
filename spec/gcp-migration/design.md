@@ -6,7 +6,7 @@
 
 Because books range from 50 to 1,000+ pages with complex multi-column layouts, footnotes, diagrams, and dense terminology, PhenomenalLayout establishes **Asynchronous Google Cloud Document Batch Translation (`batchTranslateDocument`) using Google Cloud Storage (GCS) buckets as the primary/default translation pipeline**.
 
-PhenomenalLayout is deployed as a **serverless cloud application on Modal Labs** under a **Bring Your Own Key (BYOK)** model. Users provide their own Google Cloud credentials and project billing, while Modal Labs orchestrates the web interface, text streaming, German morphological analysis, dynamic glossary compilation, persistent user-level neologism preferences, and **pre-auth zero-credential GCP cost estimation**.
+PhenomenalLayout is deployed as a **serverless cloud application on Modal Labs** under a **Bring Your Own Key (BYOK)** model. Users provide their own Google Cloud credentials and project billing, while Modal Labs orchestrates the web interface, text streaming, German morphological analysis, dynamic glossary compilation, persistent user-level neologism preferences, **pre-auth zero-credential GCP cost estimation**, and an **interactive GCP setup onboarding modal**.
 
 ---
 
@@ -19,8 +19,10 @@ flowchart TB
     subgraph PreAuth_Zone["Zero-Auth Public Tier (Modal Labs Free Backend)"]
         PUB_UI["Public Web Portal (No Login Required)"]
         COST_EST["Pre-Auth PDF Cost Estimator (services/cost_estimator.py)"]
+        GUIDE_MODAL["Interactive GCP BYOK Setup Guide Modal"]
         PUB_UI -->|Upload PDF for Quote| COST_EST
         COST_EST -->|Instant GCP Cost Breakdown (±$5 Margin)| PUB_UI
+        PUB_UI -->|Click 'How to get GCP Keys'| GUIDE_MODAL
     end
 
     subgraph Modal_Zone["Modal Labs Serverless Cloud (Host: Near-Zero Compute / Auto-Scale to 0)"]
@@ -62,6 +64,7 @@ flowchart TB
 | Workload Component | Host Layer | Resource Profile | Cost & Scaling Model |
 | :--- | :--- | :--- | :--- |
 | **Pre-Auth Cost Estimator** | Modal Labs Web Endpoint | Lightweight PDF metadata & page inspection | Executes in < 500ms on Modal CPU. No login or GCP key needed. |
+| **BYOK Setup Walkthrough Modal** | Modal Labs Web Endpoint | Client-side interactive modal / JSON guide | Zero compute overhead; rendered client-side. |
 | **Web Interface & API** | Modal Labs Web Endpoint | Lightweight Python FastAPI / Gradio | Auto-scales down to 0 when idle. Consumes < $2–$5/mo of Modal's $30 free compute tier. |
 | **Neologism Pre-Scanning & Parsing** | Modal CPU Worker | Python streaming chunk reader + spaCy NLP | ~2–5 seconds CPU burst per chapter. Highly optimized memory footprint (< 256MB RAM). |
 | **User Account & Vocabulary Store** | Modal Persistent Volume (`modal.Volume`) | SQLite / JSON store on `/data/user_profiles/` | Persistent storage across user sessions. Zero recurring compute cost when idle. |
@@ -97,26 +100,58 @@ Because PDF page counts are fixed and GCP Document Translation charges an exact 
 * **500-page book**: Expected \$40.00 (Tolerance range: \$40.00 – \$41.00).
 * **1,000-page treatise**: Expected \$80.00 (Tolerance range: \$80.00 – \$81.50).
 
-The output provides the user with an itemized quote:
-* Scanned physical page count vs. billable text pages.
-* Primary batch translation estimate.
-* Optional sample preview allowance.
-* Recommended GCP project billing budget to set aside.
-
 ---
 
-## 4. Bring Your Own Key (BYOK) Architecture & Security Model
+## 4. Bring Your Own Key (BYOK) Architecture & Onboarding Walkthrough
 
-PhenomenalLayout provides a dedicated **BYOK Setup & Credentials Vault**:
+PhenomenalLayout provides a dedicated **BYOK Setup & Credentials Vault** coupled with an **interactive onboarding guide modal**:
 
-1. **Credential Ingestion**:
-   * Users supply their **Google Cloud Project ID**, **Target GCS Bucket Name**, and **GCP Service Account Key (JSON)** or temporary OAuth access token.
-   * Service Account must have permissions: `roles/cloudtranslate.editor` and `roles/storage.objectAdmin` on the target bucket.
+### 4.1 Credential Ingestion & Security Model
+1. **Inputs Required**:
+   * **Google Cloud Project ID** (e.g. `philosophy-translation-prod`).
+   * **Target GCS Bucket Name** (e.g. `gs://my-klages-translations`).
+   * **GCP Service Account Key (JSON)**.
 2. **Session-Scoped Isolation**:
-   * Credentials are held strictly in memory for the active browser session (or encrypted at rest on client-side encrypted tokens).
+   * Credentials are held strictly in memory for the active browser session.
    * Credentials are never logged, never exposed to other users, and never persisted to public storage.
 3. **Instant Validation**:
-   * Upon entry, the system tests connectivity by issuing a zero-cost GCP call (`projects.locations.glossaries.list`) to verify permissions and regional endpoint availability (`us-central1`).
+   * Tests connectivity with a zero-cost API check (`projects.locations.glossaries.list`) to verify IAM permissions and regional endpoint availability (`us-central1`).
+
+### 4.2 Interactive GCP Onboarding Walkthrough Modal
+
+To eliminate friction for non-cloud-native translators, the BYOK panel includes a **"📖 Step-by-Step GCP Setup Guide"** modal that opens directly in the browser:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🚀 Google Cloud Setup Guide (Step-by-Step BYOK Walkthrough)               [X]│
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 1️⃣  Create GCP Account & Claim Free Credits                                 │
+│     • Go to console.cloud.google.com (New users receive $300 in free credit)│
+│                                                                             │
+│ 2️⃣  Create a Project                                                       │
+│     • Click Project Selector ➔ "New Project" ➔ Name it e.g. "phenomenal-book"│
+│                                                                             │
+│ 3️⃣  Enable Required APIs (1-Click Link)                                    │
+│     • Cloud Translation API (translate.googleapis.com)                      │
+│     • Cloud Storage API (storage.googleapis.com)                            │
+│                                                                             │
+│ 4️⃣  Create a Cloud Storage Bucket                                          │
+│     • Go to Cloud Storage ➔ Create Bucket in region 'us-central1'           │
+│                                                                             │
+│ 5️⃣  Create Service Account & Download JSON Key                              │
+│     • Go to IAM & Admin ➔ Service Accounts ➔ "Create Service Account"       │
+│     • Grant Roles:                                                          │
+│       - Cloud Translation API User / Editor (roles/cloudtranslate.editor)   │
+│       - Storage Object Admin (roles/storage.objectAdmin)                    │
+│     • Keys tab ➔ Add Key ➔ Create New Key ➔ JSON (downloads credentials.json)│
+│                                                                             │
+│ 6️⃣  Upload & Validate                                                       │
+│     • Drag & drop credentials.json into PhenomenalLayout and click 'Connect' │
+│                                                                             │
+│ ⚡ Power User? Run this 1-line gcloud script:                                │
+│    curl -fsSL https://phenomenal.app/scripts/setup-gcp.sh | bash             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -150,6 +185,7 @@ classDiagram
         +get_client(user_id) TranslationServiceClient
         +get_storage_client(user_id) StorageClient
         +validate_gcp_access(user_id) ValidationResult
+        +get_onboarding_guide() OnboardingGuideData
         +clear_session(user_id) void
     }
 
@@ -279,7 +315,9 @@ sequenceDiagram
     end
 
     rect rgb(240, 255, 240)
-    Note over Translator,BYOK: Authenticated BYOK Session Setup
+    Note over Translator,BYOK: Authenticated BYOK Session Setup & Onboarding
+    Translator->>UI: Click 'How to get GCP Keys'
+    UI-->>Translator: Render Step-by-Step Onboarding Modal
     Translator->>UI: Input GCP Project ID, GCS Bucket & Upload SA Key JSON
     UI->>BYOK: Set & Validate Credentials
     BYOK->>UserGCP: Test Connection (List Glossaries)

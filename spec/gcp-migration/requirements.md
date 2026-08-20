@@ -12,7 +12,8 @@ The core system consists of:
 5. **Bring Your Own Key (BYOK) credential management** for user-billed GCP translation and storage.
 6. **Persistent user vocabulary storage** for remembering terminology decisions across sessions and books.
 7. **Pre-auth zero-credential GCP cost estimator** providing an itemized quote within a $\pm \$5.00$ tolerance margin.
-8. **Serverless deployment on Modal Labs** with scale-to-zero idle compute.
+8. **Interactive GCP Onboarding Walkthrough Modal** guiding translators through setting up their GCP account, APIs, bucket, and service account key.
+9. **Serverless deployment on Modal Labs** with scale-to-zero idle compute.
 
 ---
 
@@ -52,6 +53,11 @@ The core system consists of:
 > **As a** prospective user visiting the website without signing in or supplying GCP credentials,  
 > **I want** to upload my book PDF and receive an immediate, itemized GCP bill estimate within a $\pm \$5.00$ margin of error,  
 > **So that** I know exactly how much budget to allocate in my Google Cloud billing account before setting up BYOK.
+
+### US-08: Interactive GCP Setup Walkthrough Modal
+> **As a** translator who is new to Google Cloud,  
+> **I want** a step-by-step interactive onboarding modal in the web interface that guides me through creating a GCP account, enabling the Translation and Storage APIs, creating a bucket, and generating a Service Account JSON key,  
+> **So that** I can configure my BYOK credentials without confusion or cloud friction.
 
 ---
 
@@ -176,15 +182,21 @@ Feature: Pre-Auth Cost Estimation
 
 ---
 
-### FR-08: Single-Page Rapid Preview Translation (Secondary Mode)
+### FR-08: Interactive GCP Setup Walkthrough Modal
+* **Description**: The web application must include an interactive guided modal dialog ("Step-by-Step GCP Setup Guide") containing 6 progressive steps: (1) Account creation & free credit claim, (2) Project creation, (3) Enabling Translation & Storage APIs, (4) Creating a GCS Bucket in `us-central1`, (5) Creating a Service Account with `roles/cloudtranslate.editor` and `roles/storage.objectAdmin` and downloading JSON key, and (6) Drag-and-drop credential validation. Also includes a 1-line `gcloud` setup script for power users.
+* **Traceability**: US-08
+
+---
+
+### FR-09: Single-Page Rapid Preview Translation (Secondary Mode)
 * **Description**: Allow translators to test translation quality on 1–3 sample pages using synchronous `translateDocument` with `enableShadowRemovalNativePdf=True` using their BYOK credentials before committing to a full book batch run.
 * **Traceability**: US-01, US-02, US-05
 
 ---
 
-### FR-09: Modal Labs Serverless Web Deployment & Scale-to-Zero
+### FR-10: Modal Labs Serverless Web Deployment & Scale-to-Zero
 * **Description**: The application must be deployable as a serverless ASGI/WSGI web app on Modal Labs (`modal_app.py`). When no requests or batch monitoring jobs are active, the container scales to zero.
-* **Traceability**: US-01, US-03, US-05, US-07
+* **Traceability**: US-01, US-03, US-05, US-07, US-08
 
 ---
 
@@ -200,6 +212,7 @@ Feature: Pre-Auth Cost Estimation
 | **NFR-06** | **Cost Precision** | Pre-auth cost estimate must deviate from actual GCP bill by no more than \$5.00. | Estimate variance $\le \pm \$5.00$ per document. |
 | **NFR-07** | **Test Coverage** | New BYOK credentials manager, user vocabulary store, cost estimator, GCS batch client, and orchestrator modules must be covered by automated tests. | $\ge 90\%$ line and branch coverage. |
 | **NFR-08** | **TDD 3-Strike Gate** | All feature development must follow strict TDD sequences with a 3-strike fail-safe abort. | Test pass rate must not fall below $90\%$ across 3 consecutive loops. |
+| **NFR-09** | **Onboarding Usability**| Walkthrough modal must enable non-technical users to complete GCP credential creation in under 5 minutes. | 6 clear steps with visual instructions and direct Google Cloud Console links. |
 
 ---
 
@@ -207,11 +220,12 @@ Feature: Pre-Auth Cost Estimation
 
 | User Story | Functional Requirement | Non-Functional Requirement | Test Target |
 | :--- | :--- | :--- | :--- |
-| **US-01** | FR-01, FR-08 | NFR-01 | `tests/test_book_pre_scanner.py` |
+| **US-01** | FR-01, FR-09 | NFR-01 | `tests/test_book_pre_scanner.py` |
 | **US-02** | FR-02 | NFR-03, NFR-04 | `tests/test_glossary_sync_manager.py` |
 | **US-03** | FR-03, FR-04 | NFR-01, NFR-02, NFR-07 | `tests/test_gcp_batch_translation_service.py` |
 | **US-04** | FR-04 | NFR-02 | `tests/test_lro_progress_monitor.py` |
-| **US-05** | FR-05, FR-09 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
+| **US-05** | FR-05, FR-10 | NFR-03, NFR-05 | `tests/test_byok_credentials_manager.py` |
 | **US-06** | FR-06 | NFR-03, NFR-07 | `tests/test_user_vocabulary_store.py` |
 | **US-07** | FR-07 | NFR-05, NFR-06 | `tests/test_cost_estimator.py` |
-| **All** | FR-01 to FR-09 | NFR-07, NFR-08 | `tests/test_book_translation_e2e.py` |
+| **US-08** | FR-08 | NFR-09 | `tests/test_app_routes.py` |
+| **All** | FR-01 to FR-10 | NFR-07, NFR-08, NFR-09 | `tests/test_book_translation_e2e.py` |
