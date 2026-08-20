@@ -9,7 +9,9 @@ Your role is to enforce code quality, architectural integrity, and security stan
 
 **PhenomenalLayout** is a domain-specific **German Philosophical Book Translation & Neologism Orchestration Engine**.
 
-The project orchestrates **Google Cloud Document Translation API (Cloud Translation - Advanced v3)** with a proprietary **German Philosophical Neologism Detection Engine** to translate full-length books (50–1,000+ pages) from German to English with pixel-perfect preservation of typography, multi-column tables, diagrams, and complex layouts.
+The project pairs **Google Cloud Document Translation API (Cloud Translation - Advanced v3)** with a proprietary **German Philosophical Neologism Detection Engine** to translate full-length books (50–1,000+ pages) from German to English with pixel-perfect preservation of typography, multi-column tables, diagrams, and footnotes.
+
+The application runs serverless on **Modal Labs** under a **Bring Your Own Key (BYOK)** model.
 
 ---
 
@@ -22,8 +24,11 @@ PhenomenalLayout has migrated away from custom, heuristic-heavy PDF layout recon
 | **Custom Canvas Reconstruction** (e.g. ReportLab canvas text painting, manual DPI coordinate transforms) | Heuristic font-scaling and box expansion broke tables and figures. | Use Google Cloud Document Translation (`batchTranslateDocument` / `translateDocument`), which natively outputs preserved PDFs. |
 | **Dedicated GPU OCR Workers** (e.g. Modal Dolphin OCR instances) | High operational overhead and cost. | Outsource OCR and document typesetting directly to Google Cloud Document Translation. |
 | **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py`, `core/dynamic_programming.py`) | Redundant and fragile. | Let Cloud Translation handle typography scaling and line wrapping natively. |
-| **Hardcoded Credentials & Keys** | Security violation. | Use Google Cloud **Application Default Credentials (ADC)** or environment variables. Never commit service account JSONs. |
+| **Third-Party Auth Middleware** (Auth0, Clerk, Firebase) | Unnecessary SaaS cost and operational dependency. | Use native client-side **Google Identity Services (GIS)** OAuth with `drive.file` scope. |
+| **Storing Book PDFs on Host Disk** | Causes disk bloat and memory leaks on serverless instances. | Stream directly to/from user GCS bucket and personal Google Drive. |
+| **Hardcoded Credentials & Keys** | Security violation. | Use Google Cloud **Application Default Credentials (ADC)** or session-scoped BYOK vaults. Never commit service account JSONs. |
 | **Blocking Sync I/O in Async Paths** | Degrades throughput on multi-chapter books. | Use `asyncio` and non-blocking streaming I/O for GCS uploads and LRO polling. |
+| **Author-Specific Worktree Links** (`file:///Users/...`) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`spec/gcp-migration/design.md`). |
 
 ---
 
@@ -34,16 +39,23 @@ When reviewing new code or refactors, verify compliance with these components:
 ### 3.1 Google Cloud Translation & GCS Staging
 * **Default Pipeline**: Asynchronous batch translation (`batchTranslateDocument`) via Google Cloud Storage (`gs://<bucket>/inputs/...` $\rightarrow$ `gs://<bucket>/outputs/...`) is the **primary default** for full-length books.
 * **Synchronous Mode**: `translateDocument` is reserved only for rapid 1–3 page sample previews.
-* **LRO Progress Polling**: Batch operations must be monitored via Long-Running Operation (`LRO`) metadata with robust backoff retries.
+* **LRO Progress Polling**: Batch operations must be monitored via Long-Running Operation (`LRO`) metadata with robust backoff retries (`metadata.translated_pages`, `metadata.total_pages`, `SUCCEEDED` status).
 
-### 3.2 Dual-Tier Glossary Synchronization
-* **Tier 1 (Persistent Base Glossary)**: Static philosophical foundation dictionaries (`config/klages_terminology.json`) provisioned once as regional GCP Glossaries (`us-central1`).
-* **Tier 2 (Dynamic Book Session Glossary)**: Dynamic user choices compiled into RFC 4180 TSVs (`de\ten`), uploaded to GCS, and registered with Cloud Translation before the batch job executes.
-* **Lifecycle**: Session glossaries must have cleanup/TTL handlers.
+### 3.2 BYOK & Credential Isolation
+* Users supply their own GCP Project ID, GCS Bucket, and Service Account JSON.
+* Credentials must be held in session memory, never persisted to disk, never logged, and validated via zero-cost API checks (`projects.locations.glossaries.list`).
+* Include interactive 6-step walkthrough modal data for non-technical translators.
 
-### 3.3 Neologism & Morphological Analysis
-* Maintain the integrity of [`NeologismDetector`](services/neologism_detector.py), [`MorphologicalAnalyzer`](services/morphological_analyzer.py), and [`PhilosophicalContextAnalyzer`](services/philosophical_context_analyzer.py).
-* All candidate extraction must support streaming chunk analysis for 1,000+ page manuscripts without loading full uncompressed bitmap renders into RAM.
+### 3.3 Zero Host Storage & Google Drive GIS Export
+* Modal persistent volume (`/data`) must store **zero book PDF bytes** (reserved strictly for user vocabulary DBs and job handles $\le 5\text{MB}$).
+* Google Drive export must use native client-side **Google Identity Services (GIS)** with restricted `https://www.googleapis.com/auth/drive.file` scope.
+
+### 3.4 Scholarly Resilience Architecture
+* **Fraktur Script Assessment**: `FrakturClassifier` must analyze font properties and return OCR script confidence ratings for pre-1945 editions.
+* **Batch Job Resumption**: `BatchJobRecoveryManager` must persist active LRO states in `/data/sessions/` so translators can reconnect without job abandonment.
+* **Partial Page Failure Fallback**: `FallbackPageTranslator` must handle `metadata.failed_pages > 0` by extracting and translating raw text to deliver a 98% layout + 100% translated book.
+* **Glossary Lifecycle**: `SessionGlossaryLifecycleManager` must prune transient Tier 2 session glossaries upon job completion.
+* **Dual-Pane Viewer**: `DualPaneViewerController` must serve synchronized German/English page pairs for reading and verification.
 
 ---
 
