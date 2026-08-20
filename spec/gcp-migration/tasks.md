@@ -86,18 +86,18 @@ The tasks are organized into five **Execution Tracks**:
   1. `set_credentials(user_id: str, project_id: str, bucket_name: str, sa_json_content: str | dict) -> bool`: Ingests and binds user GCP credentials in session memory.
   2. `validate_credentials(user_id: str) -> ValidationResult`: Performs comprehensive dual-service non-billable validation:
      * Validates Translation API access via `projects.locations.glossaries.list` in `us-central1`.
-     * Validates GCS bucket accessibility and IAM permissions via `storage_client.get_bucket(bucket_name)` and `bucket.test_iam_permissions(['storage.objects.create', 'storage.objects.get', 'storage.objects.delete'])`.
+     * Validates GCS bucket accessibility, object CRUD permissions, and lifecycle configuration authority via `storage_client.get_bucket(bucket_name)` and `bucket.test_iam_permissions(['storage.objects.create', 'storage.objects.get', 'storage.objects.delete', 'storage.buckets.get', 'storage.buckets.update'])`.
      * Returns `status=VALID` only if **both** Translation and Storage permissions succeed; otherwise returns granular actionable error details.
   3. `get_translation_client(user_id: str) -> TranslationServiceClient`: Returns authenticated Google Cloud Translation v3 client.
   4. `get_storage_client(user_id: str) -> StorageClient`: Returns authenticated Google Cloud Storage client.
-  5. `get_onboarding_guide() -> list[GuideStep]`: Returns structured 6-step walkthrough data with direct GCP console links and copyable, auditable `gcloud` setup commands.
+  5. `get_onboarding_guide() -> list[GuideStep]`: Returns structured 6-step walkthrough data with direct GCP console links and copyable, auditable `gcloud` setup commands (specifying `roles/storage.admin` on the bucket).
   6. `clear_credentials(user_id: str) -> None`: Evicts session credentials.
 * **Acceptance Criteria (TDD & BDD)**:
   ```gherkin
   Scenario: Validate user Service Account credentials with dual checks
     Given valid Service Account JSON for project "my-gcp-project" and bucket "my-trans-bucket"
     When BYOKCredentialsManager.set_credentials is called for user "user-1"
-    Then validate_credentials verifies both Translation glossary listing and Storage bucket IAM
+    Then validate_credentials verifies Translation glossary listing and Storage bucket IAM (including lifecycle update permissions)
     And returns status VALID with confirmed bucket access
     And credentials are never written to disk or logs
   ```
@@ -112,7 +112,7 @@ The tasks are organized into five **Execution Tracks**:
 * **Description**:
   Develop [`services/gcp_batch_translation_service.py`](services/gcp_batch_translation_service.py):
   1. `upload_book_to_gcs(user_id: str, local_pdf_path_or_stream, gcs_destination_uri: str) -> str`: Streams PDF directly to user's GCS bucket without caching on host disk.
-  2. `ensure_staging_lifecycle_policy(user_id: str, bucket_name: str, staging_prefix: str = "inputs/", age_days: int = 7) -> bool`: Checks and automatically provisions a 7-day auto-delete GCS bucket lifecycle rule on `inputs/` and transient staging prefixes if absent, ensuring accumulated storage charges align strictly with the quote.
+  2. `ensure_staging_lifecycle_policy(user_id: str, bucket_name: str, staging_prefix: str = "inputs/", age_days: int = 7) -> bool`: Specifically inspects bucket lifecycle rules for a rule matching `action.type == "Delete"` and `condition.matches_prefix == [staging_prefix]`. If no rule covering `staging_prefix` exists, appends/merges the prefix-scoped 7-day auto-delete rule into the bucket's existing lifecycle rule list and patches the bucket metadata.
   3. `submit_batch_job(user_id: str, gcs_input_uri: str, gcs_output_uri_prefix: str, source_lang: str, target_lang: str, glossary_resource_name: str) -> str`: Dispatches `batch_translate_document` and returns LRO operation name.
   4. `stream_translated_book(user_id: str, gcs_output_uri: str) -> BinaryIO`: Returns non-blocking stream directly from user GCS bucket.
 * **Acceptance Criteria (TDD & BDD)**:
@@ -121,7 +121,7 @@ The tasks are organized into five **Execution Tracks**:
     Given a source book at "gs://user-bucket/inputs/book_1/source.pdf"
     And glossary "projects/user-p1/locations/us-central1/glossaries/klages_glossary"
     When submit_batch_job is called for user "user-1"
-    Then ensure_staging_lifecycle_policy verifies or applies the 7-day auto-delete rule on "inputs/"
+    Then ensure_staging_lifecycle_policy verifies or appends the prefix-scoped 7-day auto-delete rule on "inputs/"
     And batch_translate_document is invoked with GcsSource and GcsDestination
     And the returned LRO operation name is stored
   ```

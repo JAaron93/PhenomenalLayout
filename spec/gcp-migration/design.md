@@ -136,7 +136,7 @@ PhenomenalLayout implements **native client-side Google Identity Services (GIS)*
 2. **Session-Scoped Isolation**: Held strictly in memory for the active session; zero disk writes, zero logging.
 3. **Comprehensive Dual-Service Validation (`validate_credentials`)**:
    * **Translation API Check**: Non-billable call (`projects.locations.glossaries.list`) verifies Translation API enablement and IAM roles (`roles/cloudtranslate.editor`) in `us-central1`.
-   * **Storage Bucket Check**: Verifies bucket accessibility and IAM permissions (`storage_client.get_bucket(bucket_name)` and `bucket.test_iam_permissions(['storage.objects.create', 'storage.objects.get', 'storage.objects.delete'])`).
+   * **Storage Bucket & Lifecycle Check**: Verifies bucket accessibility and IAM permissions (`storage_client.get_bucket(bucket_name)` and `bucket.test_iam_permissions(['storage.objects.create', 'storage.objects.get', 'storage.objects.delete', 'storage.buckets.get', 'storage.buckets.update'])`) to confirm both object manipulation and lifecycle rule management authority.
    * Only when **both** checks pass is the connection declared `VALID`.
 
 ### 5.2 Interactive GCP Onboarding Walkthrough Modal
@@ -164,7 +164,7 @@ The BYOK panel includes a **"📖 Step-by-Step GCP Setup Guide"** modal that ope
 │     • Go to IAM & Admin ➔ Service Accounts ➔ "Create Service Account"       │
 │     • Grant Roles:                                                          │
 │       - Cloud Translation API User / Editor (roles/cloudtranslate.editor)   │
-│       - Storage Object Admin (roles/storage.objectAdmin)                    │
+│       - Storage Admin on bucket (roles/storage.admin)                       │
 │     • Keys tab ➔ Add Key ➔ Create New Key ➔ JSON (downloads credentials.json)│
 │                                                                             │
 │ 6️⃣  Upload & Validate                                                       │
@@ -179,7 +179,7 @@ The BYOK panel includes a **"📖 Step-by-Step GCP Setup Guide"** modal that ope
 │      --role="roles/cloudtranslate.editor"                                   │
 │    gcloud storage buckets add-iam-policy-binding gs://[BUCKET] \             │
 │      --member="serviceAccount:phenomenal-sa@[PROJ].iam.gserviceaccount.com" \│
-│      --role="roles/storage.objectAdmin"                                     │
+│      --role="roles/storage.admin"                                           │
 │    gcloud iam service-accounts keys create credentials.json \               │
 │      --iam-account=phenomenal-sa@[PROJ].iam.gserviceaccount.com             │
 └─────────────────────────────────────────────────────────────────────────────┘

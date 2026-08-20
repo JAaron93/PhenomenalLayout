@@ -164,7 +164,7 @@ Feature: Batch Translation LRO Monitoring
 ---
 
 ### FR-05: Bring Your Own Key (BYOK) Credentials Vault & Dual-Service Validation
-* **Description**: The web interface must provide a BYOK configuration panel where users provide GCP Project ID, GCS Bucket Name, and Service Account JSON credentials. The backend validates BOTH: (1) Translation API access via `projects.locations.glossaries.list` in `us-central1`, and (2) GCS bucket accessibility and IAM permissions via `storage_client.get_bucket(bucket_name)` and `bucket.test_iam_permissions(['storage.objects.create', 'storage.objects.get', 'storage.objects.delete'])`.
+* **Description**: The web interface must provide a BYOK configuration panel where users provide GCP Project ID, GCS Bucket Name, and Service Account JSON credentials. The backend validates BOTH: (1) Translation API access via `projects.locations.glossaries.list` in `us-central1`, and (2) GCS bucket accessibility, object operations, and lifecycle update permissions via `storage_client.get_bucket(bucket_name)` and `bucket.test_iam_permissions(['storage.objects.create', 'storage.objects.get', 'storage.objects.delete', 'storage.buckets.get', 'storage.buckets.update'])`.
 * **Traceability**: US-05
 
 #### BDD Scenario FR-05.1: Validate and Bind User GCP Credentials
@@ -174,7 +174,7 @@ Feature: BYOK Credentials Management
     Given a user "translator-01" provides a Service Account JSON for project "my-gcp-proj" and bucket "my-trans-bucket"
     When the BYOKCredentialsManager validates the credentials
     Then Translation API connectivity check succeeds via list_glossaries
-    And Storage bucket permission check succeeds for "my-trans-bucket"
+    And Storage bucket permission check succeeds for "my-trans-bucket" including bucket-level update permissions
     And validate_credentials returns status VALID
     And the credentials are bound strictly to "translator-01" session context
     And no credential secrets are written to disk or logs
@@ -221,7 +221,7 @@ Feature: Pre-Auth Cost & Storage Estimation
 ---
 
 ### FR-08: Interactive GCP Setup Walkthrough Modal
-* **Description**: The web application must include an interactive guided modal dialog ("Step-by-Step GCP Setup Guide") containing 6 progressive steps: (1) Account creation & free credit claim, (2) Project creation, (3) Enabling Translation & Storage APIs, (4) Creating a GCS Bucket in `us-central1`, (5) Creating a Service Account with `roles/cloudtranslate.editor` and `roles/storage.objectAdmin` and downloading JSON key, and (6) Drag-and-drop credential validation. Also includes explicit, auditable copyable `gcloud` setup commands.
+* **Description**: The web application must include an interactive guided modal dialog ("Step-by-Step GCP Setup Guide") containing 6 progressive steps: (1) Account creation & free credit claim, (2) Project creation, (3) Enabling Translation & Storage APIs, (4) Creating a GCS Bucket in `us-central1`, (5) Creating a Service Account with `roles/cloudtranslate.editor` and `roles/storage.admin` on the bucket and downloading JSON key, and (6) Drag-and-drop credential validation. Also includes explicit, auditable copyable `gcloud` setup commands.
 * **Traceability**: US-08
 
 ---
