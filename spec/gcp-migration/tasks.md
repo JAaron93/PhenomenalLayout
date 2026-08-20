@@ -112,15 +112,17 @@ The tasks are organized into five **Execution Tracks**:
 * **Description**:
   Develop [`services/gcp_batch_translation_service.py`](services/gcp_batch_translation_service.py):
   1. `upload_book_to_gcs(user_id: str, local_pdf_path_or_stream, gcs_destination_uri: str) -> str`: Streams PDF directly to user's GCS bucket without caching on host disk.
-  2. `submit_batch_job(user_id: str, gcs_input_uri: str, gcs_output_uri_prefix: str, source_lang: str, target_lang: str, glossary_resource_name: str) -> str`: Dispatches `batch_translate_document` and returns LRO operation name.
-  3. `stream_translated_book(user_id: str, gcs_output_uri: str) -> BinaryIO`: Returns non-blocking stream directly from user GCS bucket.
+  2. `ensure_staging_lifecycle_policy(user_id: str, bucket_name: str, staging_prefix: str = "inputs/", age_days: int = 7) -> bool`: Checks and automatically provisions a 7-day auto-delete GCS bucket lifecycle rule on `inputs/` and transient staging prefixes if absent, ensuring accumulated storage charges align strictly with the quote.
+  3. `submit_batch_job(user_id: str, gcs_input_uri: str, gcs_output_uri_prefix: str, source_lang: str, target_lang: str, glossary_resource_name: str) -> str`: Dispatches `batch_translate_document` and returns LRO operation name.
+  4. `stream_translated_book(user_id: str, gcs_output_uri: str) -> BinaryIO`: Returns non-blocking stream directly from user GCS bucket.
 * **Acceptance Criteria (TDD & BDD)**:
   ```gherkin
-  Scenario: Dispatch full-book batch translation request
+  Scenario: Dispatch full-book batch translation request and verify lifecycle rule
     Given a source book at "gs://user-bucket/inputs/book_1/source.pdf"
     And glossary "projects/user-p1/locations/us-central1/glossaries/klages_glossary"
     When submit_batch_job is called for user "user-1"
-    Then batch_translate_document is invoked with GcsSource and GcsDestination
+    Then ensure_staging_lifecycle_policy verifies or applies the 7-day auto-delete rule on "inputs/"
+    And batch_translate_document is invoked with GcsSource and GcsDestination
     And the returned LRO operation name is stored
   ```
   * Test suite: `tests/test_gcp_batch_translation_service.py` with mock GCS and Translation client ($\ge 90\%$ coverage).
