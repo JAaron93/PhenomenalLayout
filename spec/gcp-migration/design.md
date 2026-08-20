@@ -100,9 +100,9 @@ classDiagram
 ### 4.1 Subsystem 1: Book-Scale Text Ingestion & Neologism Pre-Scanning
 * **Stream-Based Chunking**: Full books (100–1,000 pages) are processed in streaming chunks via `pypdf` without loading entire uncompressed page bitmaps into memory.
 * **Linguistic Analysis**:
-  * [`NeologismDetector`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/neologism_detector.py) identifies German compounds, prefixes, and suffixes.
-  * [`PhilosophicalContextAnalyzer`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/philosophical_context_analyzer.py) scores term frequency, chapter distribution, and philosophical relevance.
-  * Terms already present in the pre-compiled domain dictionary ([`klages_terminology.json`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/config/klages_terminology.json)) are flagged as standard, while novel coined compounds are surfaced for translator review.
+  * [`NeologismDetector`](services/neologism_detector.py) identifies German compounds, prefixes, and suffixes.
+  * [`PhilosophicalContextAnalyzer`](services/philosophical_context_analyzer.py) scores term frequency, chapter distribution, and philosophical relevance.
+  * Terms already present in the pre-compiled domain dictionary ([`klages_terminology.json`](config/klages_terminology.json)) are flagged as standard, while novel coined compounds are surfaced for translator review.
 
 ---
 
@@ -137,10 +137,10 @@ Because books exceed inline API payload and timeout limits, **Asynchronous Batch
      * `glossaries = {"en": {"glossary": glossary_resource_name}}`
    * Dispatches asynchronous request via `TranslationServiceClient.batch_translate_document`.
 3. **Long-Running Operation (LRO) Monitoring**:
-   * Tracks operation progress metadata (`response.metadata.state`, `pages_completed / total_pages`).
+   * Tracks operation progress metadata via `BatchTranslateDocumentMetadata` (`metadata.state == SUCCEEDED`, `metadata.translated_pages / metadata.total_pages`, `metadata.failed_pages`).
    * Emits progress events to the Gradio/FastAPI interface for live chapter/page tracking.
 4. **Automated Fetch & Validation**:
-   * Once LRO transitions to `DONE`, downloads the translated PDF from `gs://<bucket>/outputs/<book_id>/` to local cache.
+   * Once LRO transitions to `SUCCEEDED` (or `done == True`), downloads the translated PDF from `gs://<bucket>/outputs/<book_id>/` to local cache.
    * Runs validation check ensuring page count matches and PDF structure is intact.
 
 *(Note: Synchronous `translateDocument` is retained purely as an optional rapid preview tool for single sample pages).*
@@ -185,11 +185,11 @@ sequenceDiagram
     
     loop Every 10s until Complete
         Orch->>GCP_API: get_operation(LRO)
-        GCP_API-->>Orch: Operation Metadata (Pages Completed / Total Pages)
+        GCP_API-->>Orch: Operation Metadata (translated_pages / total_pages)
         Orch-->>UI: Update Live Progress Bar (e.g. 142/350 Pages)
     end
     
-    GCP_API-->>Orch: LRO State = SUCCESS
+    GCP_API-->>Orch: LRO State = SUCCEEDED
     Orch->>GCS: Download Translated PDF from gs://bucket/outputs/book_101/
     end
 

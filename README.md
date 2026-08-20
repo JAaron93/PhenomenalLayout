@@ -67,19 +67,19 @@ PhenomenalLayout orchestrates Google Cloud's Document Translation API with an ad
 
 ```mermaid
 flowchart TD
-    A[Upload German PDF] --> B[Fast Text Extraction & Neologism Scan]
+    A[Upload German Book PDF] --> B[Fast Text Extraction & Neologism Scan]
     B --> C[Neologism Detector Identifies German Compounds & Terms]
     C --> D[User Choice UI: Confirm / Select Terminology Translations]
     D --> E[Generate Dynamic Cloud Translation Glossary]
-    E --> F[Google Cloud Document Translation API: translateDocument]
+    E --> F[Google Cloud Batch Document Translation: batchTranslateDocument (GCS)]
     F --> G[Download Pixel-Perfect Translated PDF with Intact Tables & Images]
 ```
 
 > [!NOTE]
-> For complete architectural details, see the [Architecture Decision Record (ADR 0001)](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/docs/adr/0001-migrate-to-google-cloud-document-translation.md) and the formal specification suite:
-> - [System Design Spec](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/design.md)
-> - [Requirements & BDD Spec](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/requirements.md)
-> - [Actionable Tasks & TDD Plan](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/tasks.md)
+> For complete architectural details, see the [Architecture Decision Record (ADR 0001)](docs/adr/0001-migrate-to-google-cloud-document-translation.md) and the formal specification suite:
+> - [System Design Spec](spec/gcp-migration/design.md)
+> - [Requirements & BDD Spec](spec/gcp-migration/requirements.md)
+> - [Actionable Tasks & TDD Plan](spec/gcp-migration/tasks.md)
 
 ### Core Components
 

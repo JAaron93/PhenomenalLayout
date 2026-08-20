@@ -28,4 +28,4 @@
 
 ## 2. Terminology & Glossary Constraints
 * TSV files generated for GCP glossaries must be strictly RFC 4180-compliant with format `source_code\ttarget_code`.
-* Base terminology dictionaries ([`config/klages_terminology.json`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/config/klages_terminology.json)) must not be deleted or mutated into incompatible schemas.
+* Base terminology dictionaries ([`config/klages_terminology.json`](config/klages_terminology.json)) must not be deleted or mutated into incompatible schemas.

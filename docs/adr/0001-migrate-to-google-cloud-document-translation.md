@@ -36,11 +36,11 @@ We will adopt **Google Cloud Document Translation API (Cloud Translation - Advan
    * Long-Running Operations (LRO) are polled asynchronously, reporting live page-by-page progress to the UI.
    * Google Cloud natively preserves multi-column book layouts, footnotes, typography, tables, and images while removing shadow text.
 2. **Dual-Tier Glossary Synchronization**:
-   * **Tier 1 (Persistent Base Glossary)**: Static philosophical foundation dictionaries ([`config/klages_terminology.json`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/config/klages_terminology.json)) registered as persistent Cloud Translation Glossaries in `us-central1`.
+   * **Tier 1 (Persistent Base Glossary)**: Static philosophical foundation dictionaries ([`config/klages_terminology.json`](config/klages_terminology.json)) registered as persistent Cloud Translation Glossaries in `us-central1`.
    * **Tier 2 (Dynamic Book Session Glossary)**: Dynamic user choices and novel coined compounds compiled into RFC 4180 TSVs, staged in GCS, and registered with Cloud Translation before the batch job starts.
 3. **Retain and Elevate the Neologism & Terminology Subsystem**:
    * Pre-scan book text streams using lightweight streaming parsing.
-   * Run [`NeologismDetector`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/neologism_detector.py) and [`PhilosophicalContextAnalyzer`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/philosophical_context_analyzer.py) to aggregate coined terms and present them in a pre-translation review UI.
+   * Run [`NeologismDetector`](services/neologism_detector.py) and [`PhilosophicalContextAnalyzer`](services/philosophical_context_analyzer.py) to aggregate coined terms and present them in a pre-translation review UI.
 4. **Retire Redundant Code**:
    * Deprecate and delete `services/pdf_document_reconstructor.py`, `core/dynamic_layout_engine.py`, `core/dynamic_programming.py`, `services/dolphin_client.py`, and `services/dolphin_modal_service.py`.
 
@@ -61,7 +61,7 @@ We will adopt **Google Cloud Document Translation API (Cloud Translation - Advan
 ---
 
 ## References
-* [System Design Spec](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/design.md)
-* [Requirements & BDD Spec](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/requirements.md)
-* [Tasks Spec](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/tasks.md)
+* [System Design Spec](spec/gcp-migration/design.md)
+* [Requirements & BDD Spec](spec/gcp-migration/requirements.md)
+* [Tasks Spec](spec/gcp-migration/tasks.md)
 * [Google Cloud Translation Document Translation API](https://cloud.google.com/translate/docs/advanced/translate-documents)

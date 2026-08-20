@@ -40,7 +40,7 @@ The core system consists of:
 ## 3. Functional Requirements (FR) & BDD Scenarios
 
 ### FR-01: Stream-Based PDF Book Ingestion & Neologism Pre-Scanning
-* **Description**: Ingest full book PDFs using stream-based chunking, scan text streams with [`NeologismDetector`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/neologism_detector.py), and aggregate frequency and sentence context without loading high-resolution page bitmaps into memory.
+* **Description**: Ingest full book PDFs using stream-based chunking, scan text streams with [`NeologismDetector`](services/neologism_detector.py), and aggregate frequency and sentence context without loading high-resolution page bitmaps into memory.
 * **Traceability**: US-01
 
 #### BDD Scenario FR-01.1: Pre-Scan Full Book
@@ -91,7 +91,7 @@ Feature: GCS Batch Document Translation
 ---
 
 ### FR-04: Batch Job Monitoring & Progress Polling
-* **Description**: The system must poll the GCP Translation LRO operation every $N$ seconds, extract `pages_completed` and `total_pages` metadata, and publish progress updates to the UI.
+* **Description**: The system must poll the GCP Translation LRO operation every $N$ seconds, extract `translated_pages`, `total_pages`, and `failed_pages` metadata, and publish progress updates to the UI.
 * **Traceability**: US-04
 
 #### BDD Scenario FR-04.1: Track LRO Progress to Completion
@@ -100,8 +100,8 @@ Feature: Batch Translation LRO Monitoring
   Scenario: Poll batch translation progress until completion
     Given an active batch translation LRO "projects/p1/locations/us-central1/operations/op-99"
     When the progress monitor polls the operation
-    Then progress metadata is emitted (e.g. 150/300 pages completed)
-    And when the LRO reaches "DONE", the translated PDF is downloaded from GCS outputs
+    Then progress metadata is emitted (e.g. 150/300 pages translated)
+    And when the LRO reaches state "SUCCEEDED", the translated PDF is downloaded from GCS outputs
     And output PDF page count is verified to equal 300
 ```
 

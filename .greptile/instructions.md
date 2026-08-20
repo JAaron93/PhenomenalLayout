@@ -42,7 +42,7 @@ When reviewing new code or refactors, verify compliance with these components:
 * **Lifecycle**: Session glossaries must have cleanup/TTL handlers.
 
 ### 3.3 Neologism & Morphological Analysis
-* Maintain the integrity of [`NeologismDetector`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/neologism_detector.py), [`MorphologicalAnalyzer`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/morphological_analyzer.py), and [`PhilosophicalContextAnalyzer`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/philosophical_context_analyzer.py).
+* Maintain the integrity of [`NeologismDetector`](services/neologism_detector.py), [`MorphologicalAnalyzer`](services/morphological_analyzer.py), and [`PhilosophicalContextAnalyzer`](services/philosophical_context_analyzer.py).
 * All candidate extraction must support streaming chunk analysis for 1,000+ page manuscripts without loading full uncompressed bitmap renders into RAM.
 
 ---

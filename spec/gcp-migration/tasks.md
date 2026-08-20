@@ -2,7 +2,7 @@
 
 ## 1. Plan Overview & Book-Scale Execution Strategy
 
-This implementation plan decomposes the requirements from [`requirements.md`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/spec/gcp-migration/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**.
+This implementation plan decomposes the requirements from [`requirements.md`](spec/gcp-migration/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**.
 
 The tasks are organized into four **Execution Tracks**:
 * **Track 1: GCP Batch Translation Engine & GCS File Staging** (Primary pipeline infrastructure)
@@ -66,7 +66,7 @@ The tasks are organized into four **Execution Tracks**:
 * **Traceability**: FR-03, NFR-01, NFR-02
 * **Dependencies**: `TASK-1.1`
 * **Description**:
-  Develop [`services/gcp_batch_translation_service.py`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/gcp_batch_translation_service.py):
+  Develop [`services/gcp_batch_translation_service.py`](services/gcp_batch_translation_service.py):
   1. `upload_book_to_gcs(local_pdf_path: Path, gcs_destination_uri: str) -> str`: Streaming GCS upload.
   2. `submit_batch_job(gcs_input_uri: str, gcs_output_uri_prefix: str, source_lang: str, target_lang: str, glossary_resource_name: str) -> str`: Dispatches `batch_translate_document` and returns LRO operation name.
   3. `download_translated_book(gcs_output_prefix: str, local_output_path: Path) -> Path`: Downloads completed translated book from GCS.
@@ -88,9 +88,9 @@ The tasks are organized into four **Execution Tracks**:
 * **Traceability**: FR-04, NFR-02
 * **Dependencies**: `TASK-1.2`
 * **Description**:
-  Develop [`services/lro_progress_monitor.py`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/lro_progress_monitor.py) to poll LRO operations via `TranslationServiceClient.get_operation`, parse `BatchTranslateDocumentMetadata` (total pages, completed pages, failed pages, state), and compute completion percentage and remaining time estimates.
+  Develop [`services/lro_progress_monitor.py`](services/lro_progress_monitor.py) to poll LRO operations via `TranslationServiceClient.get_operation`, parse `BatchTranslateDocumentMetadata` (`total_pages`, `translated_pages`, `failed_pages`, `state`), and compute completion percentage and remaining time estimates.
 * **Acceptance Criteria (TDD)**:
-  * Unit test verifies accurate progress calculation from mock LRO metadata states (`RUNNING`, `SUCCESS`, `FAILED`).
+  * Unit test verifies accurate progress calculation from mock LRO metadata states (`RUNNING`, `SUCCEEDED`, `FAILED`) and `translated_pages` count.
 
 ---
 
@@ -104,7 +104,7 @@ The tasks are organized into four **Execution Tracks**:
 * **Traceability**: FR-02, NFR-04
 * **Dependencies**: None
 * **Description**:
-  Create [`services/glossary_compiler.py`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/glossary_compiler.py) to combine base philosophical terms ([`config/klages_terminology.json`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/config/klages_terminology.json)) with book-specific user choices ([`core/dynamic_choice_engine.py`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/core/dynamic_choice_engine.py)), producing strictly formatted TSV bytes with header `de\ten`.
+  Create [`services/glossary_compiler.py`](services/glossary_compiler.py) to combine base philosophical terms ([`config/klages_terminology.json`](config/klages_terminology.json)) with book-specific user choices ([`core/dynamic_choice_engine.py`](core/dynamic_choice_engine.py)), producing strictly formatted TSV bytes with header `de\ten`.
 * **Acceptance Criteria (TDD)**:
   * Test suite: `tests/test_glossary_compiler.py` verifying TSV encoding, quote escaping, and deduplication.
 
@@ -115,7 +115,7 @@ The tasks are organized into four **Execution Tracks**:
 * **Traceability**: FR-02, FR-06, NFR-04
 * **Dependencies**: `TASK-1.1`, `TASK-2.1`
 * **Description**:
-  Develop [`services/glossary_sync_manager.py`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/glossary_sync_manager.py):
+  Develop [`services/glossary_sync_manager.py`](services/glossary_sync_manager.py):
   1. `sync_base_glossary()`: Provisions persistent Tier 1 base glossary if not already active in GCP region.
   2. `sync_book_session_glossary(session_id, user_choices)`: Uploads combined TSV to `gs://<bucket>/glossaries/sessions/<session_id>.tsv`, invokes `create_glossary`, polls until `READY`, and returns glossary resource name.
   3. `cleanup_session_glossary(glossary_resource_name)`: Deletes temporary book session glossary after batch completion.
@@ -148,7 +148,7 @@ The tasks are organized into four **Execution Tracks**:
 * **Traceability**: FR-01, FR-02, FR-03, FR-04, FR-05
 * **Dependencies**: `TASK-1.2`, `TASK-1.3`, `TASK-2.2`, `TASK-3.1`
 * **Description**:
-  Develop [`services/book_translation_orchestrator.py`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/services/book_translation_orchestrator.py) integrating the end-to-end book workflow:
+  Develop [`services/book_translation_orchestrator.py`](services/book_translation_orchestrator.py) integrating the end-to-end book workflow:
   1. Pre-scan book stream for neologisms.
   2. Register user choices in choice engine.
   3. Trigger glossary synchronization with GCP.
@@ -164,7 +164,7 @@ The tasks are organized into four **Execution Tracks**:
 * **Traceability**: US-01, US-02, US-03, US-04
 * **Dependencies**: `TASK-4.1`
 * **Description**:
-  Update [`app.py`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/app.py) and [`api/routes.py`](file:///Users/pretermodernist/.gemini/antigravity/worktrees/PhenomenalLayout/fix_translation_layout_formatting/api/routes.py):
+  Update [`app.py`](app.py) and [`api/routes.py`](api/routes.py):
   1. Book upload interface with chapter/page estimation.
   2. Terminology review table for philosophical neologisms.
   3. "Start Full-Book Translation (Batch)" action triggering GCS batch workflow.
