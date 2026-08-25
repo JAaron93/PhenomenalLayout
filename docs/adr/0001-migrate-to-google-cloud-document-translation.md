@@ -61,7 +61,7 @@ We will adopt **Google Cloud Document Translation API (Cloud Translation - Advan
 ---
 
 ## References
-* [System Design Spec](spec/gcp-migration/design.md)
-* [Requirements & BDD Spec](spec/gcp-migration/requirements.md)
-* [Tasks Spec](spec/gcp-migration/tasks.md)
+* [System Design Spec](.kiro/specs/gcp-migration/design.md)
+* [Requirements & BDD Spec](.kiro/specs/gcp-migration/requirements.md)
+* [Tasks Spec](.kiro/specs/gcp-migration/tasks.md)
 * [Google Cloud Translation Document Translation API](https://cloud.google.com/translate/docs/advanced/translate-documents)

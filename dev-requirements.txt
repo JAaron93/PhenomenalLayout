@@ -44,7 +44,7 @@ attrs==25.4.0
     #   aiohttp
     #   jsonschema
     #   referencing
-audioop-lts==0.2.2
+audioop-lts==0.2.2; python_version >= '3.13'
     # via
     #   -c requirements.txt
     #   gradio

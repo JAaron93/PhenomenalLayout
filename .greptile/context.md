@@ -29,7 +29,7 @@ PhenomenalLayout translates full-length philosophical treatises (e.g. Ludwig Kla
   - `services/glossary_sync_manager.py`: Compiles and synchronizes Dual-Tier TSV Glossaries with GCP Cloud Translation in `us-central1`.
 
 ## 3. Specifications & Reference Docs
-* [System Design Spec](spec/gcp-migration/design.md)
-* [Requirements Spec](spec/gcp-migration/requirements.md)
-* [Implementation Tasks Spec](spec/gcp-migration/tasks.md)
+* [System Design Spec](.kiro/specs/gcp-migration/design.md)
+* [Requirements Spec](.kiro/specs/gcp-migration/requirements.md)
+* [Implementation Tasks Spec](.kiro/specs/gcp-migration/tasks.md)
 * [ADR 0001: Migration to Google Cloud Document Translation](docs/adr/0001-migrate-to-google-cloud-document-translation.md)
