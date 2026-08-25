@@ -2,7 +2,7 @@
 
 ## 1. Plan Overview & Book-Scale Execution Strategy
 
-This implementation plan decomposes the requirements from [`requirements.md`](spec/gcp-migration/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**, deployed on **Modal Labs** under a **Bring Your Own Key (BYOK)** model with **Pre-Auth Cost & Storage Estimation**, **Zero Host Storage**, **Seamless Google Drive Export**, and **Scholarly Resilience Enhancements**.
+This implementation plan decomposes the requirements from [`requirements.md`](.kiro/specs/gcp-migration/requirements.md) into concrete, test-driven work packages tailored for **full-length book translation** with **Asynchronous GCS Batch Translation as the primary default**, deployed on **Modal Labs** under a **Bring Your Own Key (BYOK)** model with **Pre-Auth Cost & Storage Estimation**, **Zero Host Storage**, **Seamless Google Drive Export**, and **Scholarly Resilience Enhancements**.
 
 The tasks are organized into five **Execution Tracks**:
 * **Track 1: GCP Batch Translation Engine, BYOK & Exporters** (Primary pipeline, auth vault, quote engine & Drive exporter)

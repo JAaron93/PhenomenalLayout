@@ -28,7 +28,7 @@ PhenomenalLayout has migrated away from custom, heuristic-heavy PDF layout recon
 | **Storing Book PDFs on Host Disk** | Causes disk bloat and memory leaks on serverless instances. | Stream directly to/from user GCS bucket and personal Google Drive. |
 | **Hardcoded Credentials & Keys** | Security violation. | Use Google Cloud **Application Default Credentials (ADC)** or session-scoped BYOK vaults. Never commit service account JSONs. |
 | **Blocking Sync I/O in Async Paths** | Degrades throughput on multi-chapter books. | Use `asyncio` and non-blocking streaming I/O for GCS uploads and LRO polling. |
-| **Author-Specific Worktree Links** (`file:///Users/...`) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`spec/gcp-migration/design.md`). |
+| **Author-Specific Worktree Links** (`file:///Users/...`) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`.kiro/specs/gcp-migration/design.md`). |
 
 ---
 

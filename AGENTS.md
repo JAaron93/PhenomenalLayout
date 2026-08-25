@@ -78,7 +78,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py`, `core/dynamic_programming.py`) | Fragile heuristics and technical debt. | Cloud Translation handles typography scaling and line wrapping natively. |
 | **Third-Party Auth Middleware** (Auth0, Clerk, Firebase) | Unnecessary SaaS dependency, cost, and complexity. | Use native client-side Google Identity Services (GIS) OAuth with `drive.file` scope. |
 | **Storing Book PDFs on Host Disk** | Memory exhaustion and disk bloat on serverless instances. | Stream directly to/from user GCS bucket and Google Drive. |
-| **Absolute Local Worktree Links** (`file:///Users/...`) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`spec/gcp-migration/design.md`). |
+| **Absolute Local Worktree Links** (`file:///Users/...`) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`.kiro/specs/gcp-migration/design.md`). |
 | **Blocking Sync I/O in Async Paths** | Degrades throughput on multi-chapter books. | Use `asyncio` and non-blocking streaming I/O for GCS uploads and LRO polling. |
 | **Hardcoded Credentials or `.env` Commits** | Security vulnerability. | Use session-scoped BYOK vaults or Google Cloud Application Default Credentials (ADC). |
 
@@ -86,7 +86,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 
 ## 5. Documentation & Specification Hierarchy
 
-* **Specification Organization**: All feature specifications, designs, and task plans must reside in topical subdirectories under `spec/` (e.g., `spec/gcp-migration/`, `spec/<feature-name>/`).
+* **Specification Organization**: All feature specifications, designs, and task plans must reside in topical subdirectories under `.kiro/specs/` (e.g., `.kiro/specs/gcp-migration/`, `.kiro/specs/<feature-name>/`).
 * **Spec Suite Structure**: Follow the 3-document sequence:
   1. `design.md`: Architectural overview, component diagrams, data flows.
   2. `requirements.md`: User Stories, Functional/Non-Functional Requirements with Gherkin BDD scenarios.

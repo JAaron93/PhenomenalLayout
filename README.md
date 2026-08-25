@@ -77,9 +77,9 @@ flowchart TD
 
 > [!NOTE]
 > For complete architectural details, see the [Architecture Decision Record (ADR 0001)](docs/adr/0001-migrate-to-google-cloud-document-translation.md) and the formal specification suite:
-> - [System Design Spec](spec/gcp-migration/design.md)
-> - [Requirements & BDD Spec](spec/gcp-migration/requirements.md)
-> - [Actionable Tasks & TDD Plan](spec/gcp-migration/tasks.md)
+> - [System Design Spec](.kiro/specs/gcp-migration/design.md)
+> - [Requirements & BDD Spec](.kiro/specs/gcp-migration/requirements.md)
+> - [Actionable Tasks & TDD Plan](.kiro/specs/gcp-migration/tasks.md)
 
 ### Core Components
 

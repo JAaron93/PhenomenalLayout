@@ -281,8 +281,9 @@ WARP.md
 .kilocode/
 
 # Kiro IDE specific
-.kiro
-.kiro/
+.kiro/*
+!.kiro/specs/
+!.kiro/steering/
 
 # Qoder specific
 # .qoder
