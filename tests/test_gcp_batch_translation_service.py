@@ -144,6 +144,50 @@ class TestEnsureStagingLifecyclePolicy:
         assert rule["condition"]["matchesPrefix"] == ["inputs/"]
         assert rule["condition"]["age"] == 7
 
+    @patch("services.gcp_batch_translation_service.storage.Client")
+    def test_lifecycle_policy_with_restrictive_keys_is_patched(
+        self, mock_storage_cls: MagicMock, batch_service: GCPBatchTranslationService
+    ) -> None:
+        mock_storage_client = MagicMock()
+        mock_storage_cls.return_value = mock_storage_client
+        mock_bucket = MagicMock()
+        mock_bucket.lifecycle_rules = [
+            {"action": {"type": "Delete"}, "condition": {"age": 7, "matchesPrefix": ["inputs/"], "matchesStorageClass": ["COLDLINE"]}},
+            {"action": {"type": "SetStorageClass"}, "condition": {"age": 7, "matchesPrefix": ["inputs/"]}},
+            {"action": {"type": "Delete"}, "condition": {"age": 7, "matchesPrefix": ["other/"]}},
+            {"action": {"type": "Delete"}, "condition": {"age": 30, "matchesPrefix": ["inputs/"]}},
+            {"action": {"type": "Delete"}, "condition": {"age": 7, "matchesPrefix": ["inputs/"], "isLive": False}},
+        ]
+        mock_storage_client.get_bucket.return_value = mock_bucket
+
+        applied = batch_service.ensure_staging_lifecycle_policy(
+            user_id="user-1",
+            bucket_name="my-bucket",
+            staging_prefix="inputs/",
+            age_days=7,
+        )
+        assert applied is True
+        mock_bucket.patch.assert_called_once()
+
+    @patch("services.gcp_batch_translation_service.storage.Client")
+    def test_lifecycle_policy_patch_failure_returns_false(
+        self, mock_storage_cls: MagicMock, batch_service: GCPBatchTranslationService
+    ) -> None:
+        mock_storage_client = MagicMock()
+        mock_storage_cls.return_value = mock_storage_client
+        mock_bucket = MagicMock()
+        mock_bucket.lifecycle_rules = []
+        mock_bucket.patch.side_effect = Exception("Patch error")
+        mock_storage_client.get_bucket.return_value = mock_bucket
+
+        applied = batch_service.ensure_staging_lifecycle_policy(
+            user_id="user-1",
+            bucket_name="my-bucket",
+            staging_prefix="inputs/",
+            age_days=7,
+        )
+        assert applied is False
+
 
 class TestSubmitBatchJob:
     """Verify submitting batchTranslateDocument requests."""

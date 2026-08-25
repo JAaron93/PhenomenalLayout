@@ -410,21 +410,27 @@ class GCPBatchTranslationService:
         for rule in existing_rules:
             action = rule.get("action", {})
             condition = rule.get("condition", {})
-            if (
-                action.get("type") == "Delete"
-                and staging_prefix in condition.get("matchesPrefix", [])
-                and condition.get("age") == age_days
-                and condition.get("isLive") is not False
-                and not condition.get("numNewerVersions")
-            ):
-                logger.info(
-                    "Lifecycle policy already exists | user=%s bucket=%s prefix=%s age_days=%d",
-                    user_id,
-                    bucket_name,
-                    staging_prefix,
-                    age_days,
-                )
-                return True
+            if action.get("type") != "Delete":
+                continue
+            if staging_prefix not in condition.get("matchesPrefix", []):
+                continue
+            if condition.get("age") != age_days:
+                continue
+            # Ensure no extra restrictive conditions exist (e.g. storageClass, dates, non-live)
+            extra_restrictive_keys = set(condition.keys()) - {"matchesPrefix", "age", "isLive"}
+            if extra_restrictive_keys:
+                continue
+            if condition.get("isLive") is False:
+                continue
+
+            logger.info(
+                "Lifecycle policy already exists | user=%s bucket=%s prefix=%s age_days=%d",
+                user_id,
+                bucket_name,
+                staging_prefix,
+                age_days,
+            )
+            return True
 
         # No matching rule — append and patch
         new_rule: dict = {
