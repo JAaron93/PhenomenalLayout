@@ -160,7 +160,7 @@ attrs==25.3.0 \
     #   jsonschema
     #   referencing
     #   sigtools
-audioop-lts==0.2.2; python_version >= '3.13' \
+audioop-lts==0.2.2 \
     --hash=sha256:0337d658f9b81f4cd0fdb1f47635070cc084871a3d4646d9de74fdf4e7c3d24a \
     --hash=sha256:03f061a1915538fd96272bac9551841859dbb2e3bf73ebe4a23ef043766f5449 \
     --hash=sha256:068aa17a38b4e0e7de771c62c60bbca2455924b67a8814f3b0dee92b5820c0b3 \
@@ -1870,9 +1870,9 @@ pyjwt[crypto]==2.12.1 \
     # via
     #   -r requirements.in
     #   pyjwt
-pypdf==6.10.2 \
-    --hash=sha256:7d09ce108eff6bf67465d461b6ef352dcb8d84f7a91befc02f904455c6eea11d \
-    --hash=sha256:aa53be9826655b51c96741e5d7983ca224d898ac0a77896e64636810517624aa
+pypdf==6.15.0 \
+    --hash=sha256:14e001d6504822cb1ca9c7ed9a69bccb320f59b320730f55af804361abe4d5ee \
+    --hash=sha256:d39c4d955a76409284a905e2d65b40076d77ab76129e0faaeeb6612403ecfc79
     # via -r requirements.in
 python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
