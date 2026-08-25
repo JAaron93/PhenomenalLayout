@@ -160,7 +160,7 @@ attrs==25.3.0 \
     #   jsonschema
     #   referencing
     #   sigtools
-audioop-lts==0.2.2 \
+audioop-lts==0.2.2; python_version >= '3.13' \
     --hash=sha256:0337d658f9b81f4cd0fdb1f47635070cc084871a3d4646d9de74fdf4e7c3d24a \
     --hash=sha256:03f061a1915538fd96272bac9551841859dbb2e3bf73ebe4a23ef043766f5449 \
     --hash=sha256:068aa17a38b4e0e7de771c62c60bbca2455924b67a8814f3b0dee92b5820c0b3 \
