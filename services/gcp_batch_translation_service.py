@@ -414,6 +414,8 @@ class GCPBatchTranslationService:
                 action.get("type") == "Delete"
                 and staging_prefix in condition.get("matchesPrefix", [])
                 and condition.get("age") == age_days
+                and condition.get("isLive") is not False
+                and not condition.get("numNewerVersions")
             ):
                 logger.info(
                     "Lifecycle policy already exists | user=%s bucket=%s prefix=%s age_days=%d",
