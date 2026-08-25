@@ -63,7 +63,7 @@ class TestCostEstimatorZeroAuthBDD:
 
         with patch.object(estimator, "_open_source") as mock_open:
             # 10,000 MB file -> 20 GB combined
-            mock_open.return_value = (io.BytesIO(pdf_bytes), 10000.0)
+            mock_open.return_value = (io.BytesIO(pdf_bytes), 10000.0, False)
             quote = estimator.estimate_book_cost(pdf_bytes)
 
             assert quote.total_pages == 100

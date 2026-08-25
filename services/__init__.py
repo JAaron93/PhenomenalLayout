@@ -105,6 +105,7 @@ __all__: list[str] = [
     "TRANSLATION_SERVICE_AVAILABLE",
     "LANGUAGE_DETECTOR_AVAILABLE",
     "ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE",
+    "GCP_BATCH_SERVICES_AVAILABLE",
     "services_count",
     "services_list",
     "AVAILABLE_SERVICES",
@@ -120,6 +121,9 @@ TRANSLATION_SERVICE_AVAILABLE: bool = _service_availability[
 LANGUAGE_DETECTOR_AVAILABLE: bool = _service_availability["LANGUAGE_DETECTOR_AVAILABLE"]
 ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE: bool = _service_availability[
     "ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE"
+]
+GCP_BATCH_SERVICES_AVAILABLE: bool = _service_availability[
+    "GCP_BATCH_SERVICES_AVAILABLE"
 ]
 
 # Log summary of available services

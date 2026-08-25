@@ -80,13 +80,19 @@ class GCPCostEstimator:
         """
         t_start = time.monotonic()
 
-        stream, file_size_mb = self._open_source(source)
+        stream, file_size_mb, should_close = self._open_source(source)
         try:
             import pypdf
             reader = pypdf.PdfReader(stream)
             total_pages = len(reader.pages)
         except Exception as exc:
             raise ValueError(f"Failed to read PDF: {exc}") from exc
+        finally:
+            if should_close:
+                try:
+                    stream.close()
+                except Exception:  # noqa: BLE001
+                    pass
 
         if total_pages == 0:
             raise ValueError("PDF has 0 pages — cannot estimate cost.")
@@ -167,8 +173,8 @@ class GCPCostEstimator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _open_source(source: Path | bytes | BinaryIO) -> tuple[BinaryIO, float]:
-        """Open the PDF source and return (stream, file_size_mb).
+    def _open_source(source: Path | bytes | BinaryIO) -> tuple[BinaryIO, float, bool]:
+        """Open the PDF source and return (stream, file_size_mb, should_close).
 
         For paths: opens in binary mode and measures size via os.stat.
         For bytes: wraps in BytesIO and uses len(bytes).
@@ -178,10 +184,10 @@ class GCPCostEstimator:
 
         if isinstance(source, Path):
             file_size_mb = os.path.getsize(source) / (1024 * 1024)
-            return open(source, "rb"), file_size_mb  # noqa: SIM115
+            return open(source, "rb"), file_size_mb, True  # noqa: SIM115
         elif isinstance(source, bytes):
             file_size_mb = len(source) / (1024 * 1024)
-            return io.BytesIO(source), file_size_mb
+            return io.BytesIO(source), file_size_mb, False
         else:
             # Try to measure via seek
             try:
@@ -194,5 +200,5 @@ class GCPCostEstimator:
                 # Non-seekable stream: buffer it to measure
                 data = source.read()
                 file_size_mb = len(data) / (1024 * 1024)
-                return io.BytesIO(data), file_size_mb
-            return source, file_size_mb
+                return io.BytesIO(data), file_size_mb, False
+            return source, file_size_mb, False
