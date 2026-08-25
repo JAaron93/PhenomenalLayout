@@ -148,10 +148,17 @@ class TestEnsureStagingLifecyclePolicy:
 class TestSubmitBatchJob:
     """Verify submitting batchTranslateDocument requests."""
 
+    @patch("services.gcp_batch_translation_service.storage.Client")
     @patch("services.gcp_batch_translation_service.translate.TranslationServiceClient")
     def test_submit_batch_job_success(
-        self, mock_translate_cls: MagicMock, batch_service: GCPBatchTranslationService
+        self, mock_translate_cls: MagicMock, mock_storage_cls: MagicMock, batch_service: GCPBatchTranslationService
     ) -> None:
+        mock_storage_client = MagicMock()
+        mock_storage_cls.return_value = mock_storage_client
+        mock_bucket = MagicMock()
+        mock_bucket.lifecycle_rules = [{"action": {"type": "Delete"}, "condition": {"matchesPrefix": ["inputs/"], "age": 7}}]
+        mock_storage_client.get_bucket.return_value = mock_bucket
+
         mock_translate_client = MagicMock()
         mock_translate_cls.return_value = mock_translate_client
 
@@ -172,10 +179,21 @@ class TestSubmitBatchJob:
         mock_translate_client.batch_translate_document.assert_called_once()
 
     @patch("time.sleep", return_value=None)
+    @patch("services.gcp_batch_translation_service.storage.Client")
     @patch("services.gcp_batch_translation_service.translate.TranslationServiceClient")
     def test_submit_batch_job_transient_retry(
-        self, mock_translate_cls: MagicMock, mock_sleep: MagicMock, batch_service: GCPBatchTranslationService
+        self,
+        mock_translate_cls: MagicMock,
+        mock_storage_cls: MagicMock,
+        mock_sleep: MagicMock,
+        batch_service: GCPBatchTranslationService,
     ) -> None:
+        mock_storage_client = MagicMock()
+        mock_storage_cls.return_value = mock_storage_client
+        mock_bucket = MagicMock()
+        mock_bucket.lifecycle_rules = [{"action": {"type": "Delete"}, "condition": {"matchesPrefix": ["inputs/"], "age": 7}}]
+        mock_storage_client.get_bucket.return_value = mock_bucket
+
         mock_translate_client = MagicMock()
         mock_translate_cls.return_value = mock_translate_client
 
@@ -195,6 +213,17 @@ class TestSubmitBatchJob:
 
         assert op_name == "projects/test-project-123/locations/us-central1/operations/op-retry"
         assert mock_sleep.called
+
+    def test_upload_fails_if_lifecycle_policy_fails(
+        self, batch_service: GCPBatchTranslationService
+    ) -> None:
+        with patch.object(batch_service, "ensure_staging_lifecycle_policy", return_value=False):
+            with pytest.raises(RuntimeError, match="Failed to ensure 7-day auto-delete"):
+                batch_service.upload_book_to_gcs(
+                    user_id="user-1",
+                    source=io.BytesIO(b"%PDF-test"),
+                    gcs_destination_uri="gs://my-bucket/inputs/book_101/source.pdf",
+                )
 
 
 class TestStreamTranslatedBook:
