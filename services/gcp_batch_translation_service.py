@@ -413,12 +413,14 @@ class GCPBatchTranslationService:
             if (
                 action.get("type") == "Delete"
                 and staging_prefix in condition.get("matchesPrefix", [])
+                and condition.get("age") == age_days
             ):
                 logger.info(
-                    "Lifecycle policy already exists | user=%s bucket=%s prefix=%s",
+                    "Lifecycle policy already exists | user=%s bucket=%s prefix=%s age_days=%d",
                     user_id,
                     bucket_name,
                     staging_prefix,
+                    age_days,
                 )
                 return True
 
