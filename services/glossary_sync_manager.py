@@ -247,12 +247,25 @@ class GlossarySyncManager:
         token = self._session_token(session_id)
         return f"sess-{clean_slug}-{token}"
 
+    @staticmethod
+    def _glossary_timestamp(g: translate.Glossary) -> float:
+        """Extract unix timestamp from glossary submit_time or end_time."""
+        for attr in ("submit_time", "end_time"):
+            val = getattr(g, attr, None)
+            if val is not None:
+                try:
+                    return val.timestamp()
+                except Exception:
+                    pass
+        return 0.0
+
     def _find_session_glossaries(self, user_id: str, session_id: str) -> list[translate.Glossary]:
         """Find active regional glossaries belonging strictly to *session_id*.
 
         Matches:
         1. Legacy exact candidates (both full 63-char and 55-char truncated forms, exact match only).
         2. Blue-Green two-slot and token-isolated glossaries (`sess-{slug}-{token}-a`, `-b`, etc.).
+        3. Historical versioned legacy glossaries (`{legacy_prefix}-{hex_version}`).
         """
         session_key = self._session_id_prefix(session_id)
         slot_a = f"{session_key}-a"
@@ -263,53 +276,46 @@ class GlossarySyncManager:
         trunc_legacy = sanitize_glossary_id(f"sess-{session_id}")[:55].rstrip("-")
         legacy_candidates = {full_legacy, trunc_legacy}
 
-        known_probe_ids = [slot_a, slot_b, session_key]
-        for c in (full_legacy, trunc_legacy):
-            if c not in known_probe_ids:
-                known_probe_ids.append(c)
-
         client = self._get_translate_client(user_id)
         project_id = self._get_project_id(user_id)
         parent = f"projects/{project_id}/locations/{self._location}"
 
+        # list_glossaries is the authoritative source for regional glossaries.
+        # Query with exponential backoff on transient errors. If GCP is failing,
+        # fail-fast and propagate the error rather than blindly guessing with partial probes.
+        glossary_iter = _retry_with_backoff(
+            f"list_glossaries for session {session_id}",
+            lambda: list(client.list_glossaries(parent=parent)),
+        )
+
         matches: list[translate.Glossary] = []
-        try:
-            # Query list_glossaries with retry for resilience against transient GCP errors
-            glossary_iter = _retry_with_backoff(
-                f"list_glossaries for session {session_id}",
-                lambda: list(client.list_glossaries(parent=parent)),
-            )
-            for g in glossary_iter:
-                g_name = getattr(g, "name", "")
-                g_id = g_name.split("/")[-1]
-                # 1. Match exact legacy candidates or exact session hash key / slots
-                if (
-                    g_id in legacy_candidates
-                    or g_id == session_key
-                    or g_id == slot_a
-                    or g_id == slot_b
-                    or g_id.startswith(f"{session_key}-")
-                ):
-                    matches.append(g)
-                    continue
+        for g in glossary_iter:
+            g_name = getattr(g, "name", "")
+            g_id = g_name.split("/")[-1]
+            # 1. Match exact legacy candidates or exact session hash key / slots
+            if (
+                g_id in legacy_candidates
+                or g_id == session_key
+                or g_id == slot_a
+                or g_id == slot_b
+                or g_id.startswith(f"{session_key}-")
+            ):
+                matches.append(g)
+                continue
 
-                # 2. Match historical versioned legacy IDs ({legacy_prefix}-{hex_version})
-                for leg in legacy_candidates:
-                    if g_id.startswith(f"{leg}-"):
-                        rem = g_id[len(leg) + 1 :]
-                        if re.fullmatch(r"[0-9a-f]{6,8}|[ab]", rem):
-                            matches.append(g)
-                            break
-        except Exception:
-            logger.warning(
-                "list_glossaries failed during session search; probing known slot and legacy candidate IDs directly"
-            )
+            # 2. Match historical versioned legacy IDs ({legacy_prefix}-{hex_version})
+            for leg in legacy_candidates:
+                if g_id.startswith(f"{leg}-"):
+                    rem = g_id[len(leg) + 1 :]
+                    if re.fullmatch(r"[0-9a-f]{6,8}|[ab]", rem):
+                        matches.append(g)
+                        break
 
-        # Fallback to direct get_glossary probe for all known slots and legacy candidate IDs
-        # Guarantees versioned glossaries (-a, -b) and legacy glossaries are discovered
-        # even if list_glossaries fails or is restricted!
+        # Fallback to direct get_glossary probe for all deterministic slots and legacy IDs
+        # if list_glossaries returned no matches
         if not matches:
-            for candidate_id in known_probe_ids:
+            probe_ids = [slot_a, slot_b, session_key, full_legacy, trunc_legacy]
+            for candidate_id in probe_ids:
                 exact = self.get_glossary(user_id, candidate_id)
                 if exact is not None:
                     matches.append(exact)
@@ -369,21 +375,35 @@ class GlossarySyncManager:
             include_user_vocab=True,
         )
 
-        # 3. Choose next Blue-Green slot (slot A or slot B) to bound quota and enable deterministic fallback probing.
-        # If both slots are active (e.g. from an earlier interrupted retirement), allocate a fresh unique slot.
         session_key = self._session_id_prefix(session_id)
         slot_a_id = f"{session_key}-a"
         slot_b_id = f"{session_key}-b"
-
         active_ids = {getattr(g, "name", "").split("/")[-1] for g in existing_glossaries}
-        if slot_a_id not in active_ids:
-            new_glossary_id = slot_a_id
-        elif slot_b_id not in active_ids:
-            new_glossary_id = slot_b_id
-        else:
-            # Both slots are currently active; generate an isolated unique version slot to avoid collision
-            new_glossary_id = f"{session_key}-{uuid.uuid4().hex[:6]}"
 
+        # 3. Strictly enforce two-slot bound: if both slots A and B are active because
+        # retirement previously failed, retire the older superseded slot first.
+        # This guarantees regional quota is strictly capped to 2 slots with no unbounded UUID growth.
+        if slot_a_id in active_ids and slot_b_id in active_ids:
+            slot_glossaries = [
+                g
+                for g in existing_glossaries
+                if getattr(g, "name", "").split("/")[-1] in (slot_a_id, slot_b_id)
+            ]
+            slot_glossaries.sort(key=self._glossary_timestamp)
+            older_slot = slot_glossaries[0]
+            older_name = getattr(older_slot, "name", "")
+            logger.info(
+                "Retiring older superseded slot %s before provisioning replacement",
+                older_name,
+            )
+            self.delete_glossary(user_id, older_name)
+            existing_glossaries = [
+                g for g in existing_glossaries if getattr(g, "name", "") != older_name
+            ]
+            active_ids.discard(older_name.split("/")[-1])
+
+        # Choose the free slot (slot B if slot A is active; otherwise slot A)
+        new_glossary_id = slot_b_id if slot_a_id in active_ids else slot_a_id
         new_glossary_name = self._format_glossary_name(project_id, new_glossary_id)
 
         # 4. Stage new TSV to GCS under the chosen slot's deterministic path

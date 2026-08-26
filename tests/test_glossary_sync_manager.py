@@ -272,33 +272,20 @@ class TestBookSessionGlossarySync:
         # MUST only delete the target session glossary, NOT the prefix-related other session!
         mock_trans.delete_glossary.assert_called_once_with(name=g_target.name)
 
-    def test_sync_book_session_glossary_fallback_probes_versioned_slots_when_list_fails(
+    def test_sync_book_session_glossary_list_failure_propagates_exception(
         self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
     ) -> None:
         mock_trans = mock_creds_mgr.get_translation_client.return_value
-        # list_glossaries raises an error
-        mock_trans.list_glossaries.side_effect = RuntimeError("list_glossaries unavailable")
+        # list_glossaries raises an unretryable error or exhausts retries
+        mock_trans.list_glossaries.side_effect = RuntimeError("GCP list_glossaries failed")
 
-        # Fallback probes find slot A
-        session_key = sync_mgr._session_id_prefix("book-101")
-        slot_a_name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-a"
-        existing_slot_a = MagicMock()
-        existing_slot_a.name = slot_a_name
-
-        def fake_get_glossary(name: str):
-            if f"{session_key}-a" in name:
-                return existing_slot_a
-            raise gcp_exceptions.NotFound("Not found")
-
-        mock_trans.get_glossary.side_effect = fake_get_glossary
-
-        # With overwrite=False, fallback discovers slot A and returns it without recreation
-        res = sync_mgr.sync_book_session_glossary(
-            user_id="user_1",
-            session_id="book-101",
-            overwrite=False,
-        )
-        assert res == slot_a_name
+        with pytest.raises(RuntimeError, match="GCP list_glossaries failed"):
+            sync_mgr.sync_book_session_glossary(
+                user_id="user_1",
+                session_id="book-101",
+                overwrite=False,
+            )
+        # Fail-fast: does not blindly attempt glossary creation when list failed
         mock_trans.create_glossary.assert_not_called()
 
     def test_sync_book_session_glossary_matches_and_retires_55_char_truncated_legacy_id(
@@ -359,21 +346,26 @@ class TestBookSessionGlossarySync:
         # Verified: historical versioned glossary was retired, but other session was untouched
         mock_trans.delete_glossary.assert_called_once_with(name=hist_g.name)
 
-    def test_sync_book_session_glossary_both_slots_active_allocates_fresh_slot_and_retires_both(
+    def test_sync_book_session_glossary_both_slots_active_retires_older_slot_first(
         self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
     ) -> None:
+        import datetime
         mock_trans = mock_creds_mgr.get_translation_client.return_value
 
         session_key = sync_mgr._session_id_prefix("book-101")
         slot_a = MagicMock()
         slot_a.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-a"
+        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+
         slot_b = MagicMock()
         slot_b.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-b"
+        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.timezone.utc)
+
         mock_trans.list_glossaries.return_value = [slot_a, slot_b]
 
         mock_lro = MagicMock()
         created = MagicMock()
-        created.name = "projects/test-project-123/locations/us-central1/glossaries/sess-fresh"
+        created.name = slot_a.name
         mock_lro.result.return_value = created
         mock_trans.create_glossary.return_value = mock_lro
 
@@ -385,13 +377,11 @@ class TestBookSessionGlossarySync:
         )
 
         assert res == created.name
-        # Verified: new glossary was created without collision
-        mock_trans.create_glossary.assert_called_once()
-        # Both superseded slots A and B were retired!
+        # Verified: older slot A was retired before creating the replacement, and newer slot B was retired after!
         assert mock_trans.delete_glossary.call_count == 2
-        retired_names = [call.kwargs["name"] for call in mock_trans.delete_glossary.call_args_list]
-        assert slot_a.name in retired_names
-        assert slot_b.name in retired_names
+        calls = [c.kwargs["name"] for c in mock_trans.delete_glossary.call_args_list]
+        assert calls[0] == slot_a.name  # Cleaned up first before create
+        assert calls[1] == slot_b.name  # Cleaned up after new slot is live
 
 
 class TestRetryAndResilience:
