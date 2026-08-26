@@ -24,6 +24,7 @@ import math
 import random
 import re
 import time
+import uuid
 from typing import Any, Callable, TypeVar
 
 from google.api_core import exceptions as gcp_exceptions
@@ -277,8 +278,10 @@ class GlossarySyncManager:
             include_user_vocab=True,
         )
 
-        # 2. Stage TSV to GCS FIRST before touching any active GCP glossary resources
-        gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{glossary_id}.tsv"
+        # 2. Stage TSV to GCS with a unique version suffix so active known-good TSVs
+        # referenced by existing glossaries are never overwritten before replacement succeeds
+        version_suffix = uuid.uuid4().hex[:8]
+        gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{glossary_id}_{version_suffix}.tsv"
         self._upload_tsv_to_gcs(user_id, gcs_uri, tsv_bytes)
 
         # 3. Check if glossary is already provisioned
@@ -307,13 +310,28 @@ class GlossarySyncManager:
             self.delete_glossary(user_id, glossary_id)
 
             try:
-                return self._create_glossary_resource(
+                created_name = self._create_glossary_resource(
                     user_id=user_id,
                     project_id=project_id,
                     glossary_id=glossary_id,
                     glossary_name=glossary_name,
                     gcs_input_uri=gcs_uri,
                 )
+                # Clean up superseded TSV blob now that replacement glossary is live
+                if (
+                    prev_input_uri
+                    and prev_input_uri != gcs_uri
+                    and prev_input_uri.startswith("gs://")
+                ):
+                    try:
+                        p_parts = prev_input_uri[5:].split("/", 1)
+                        if len(p_parts) == 2:
+                            storage_client = self._get_storage_client(user_id)
+                            storage_client.bucket(p_parts[0]).blob(p_parts[1]).delete()
+                            logger.debug("Cleaned up superseded session TSV: %s", prev_input_uri)
+                    except Exception:
+                        logger.debug("Failed to delete superseded session TSV %s", prev_input_uri)
+                return created_name
             except Exception:
                 logger.exception(
                     "Creation of replacement glossary %s failed. Attempting rollback...",
@@ -328,7 +346,11 @@ class GlossarySyncManager:
                             glossary_name=glossary_name,
                             gcs_input_uri=prev_input_uri,
                         )
-                        logger.info("Successfully restored previous working glossary %s", glossary_name)
+                        logger.info(
+                            "Successfully restored previous working glossary %s from %s",
+                            glossary_name,
+                            prev_input_uri,
+                        )
                     except Exception:
                         logger.exception("Failed to restore previous glossary %s during rollback", glossary_name)
                 raise
