@@ -97,6 +97,41 @@ except ImportError as e:
     logger.debug(f"GCP Batch Translation services not available: {e}")
     _service_availability["GCP_BATCH_SERVICES_AVAILABLE"] = False
 
+# Track 2: Dual-Tier Glossary Sync & Persistent User Vocabulary Store
+try:
+    from .glossary_compiler import (  # noqa: F401
+        GlossaryCompiler,
+        compile_glossary_tsv,
+    )
+    from .glossary_sync_manager import (  # noqa: F401
+        GlossarySyncManager,
+        sanitize_glossary_id,
+    )
+    from .session_glossary_lifecycle import (  # noqa: F401
+        SessionGlossaryLifecycleManager,
+        SessionGlossaryRecord,
+    )
+    from .user_vocabulary_store import (  # noqa: F401
+        TermPreference,
+        UserVocabularyStore,
+    )
+
+    _available_services.extend([
+        "UserVocabularyStore",
+        "TermPreference",
+        "GlossaryCompiler",
+        "compile_glossary_tsv",
+        "GlossarySyncManager",
+        "sanitize_glossary_id",
+        "SessionGlossaryLifecycleManager",
+        "SessionGlossaryRecord",
+    ])
+    _service_availability["GLOSSARY_SYNC_SERVICES_AVAILABLE"] = True
+    logger.debug("Dual-Tier Glossary Sync services imported successfully")
+except ImportError as e:
+    logger.debug(f"Dual-Tier Glossary Sync services not available: {e}")
+    _service_availability["GLOSSARY_SYNC_SERVICES_AVAILABLE"] = False
+
 # Dynamically build __all__ list based on successfully imported services
 # Include service symbols, availability flags, and summary counters
 __all__: list[str] = [
@@ -106,6 +141,7 @@ __all__: list[str] = [
     "LANGUAGE_DETECTOR_AVAILABLE",
     "ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE",
     "GCP_BATCH_SERVICES_AVAILABLE",
+    "GLOSSARY_SYNC_SERVICES_AVAILABLE",
     "services_count",
     "services_list",
     "AVAILABLE_SERVICES",
@@ -124,6 +160,9 @@ ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE: bool = _service_availability[
 ]
 GCP_BATCH_SERVICES_AVAILABLE: bool = _service_availability[
     "GCP_BATCH_SERVICES_AVAILABLE"
+]
+GLOSSARY_SYNC_SERVICES_AVAILABLE: bool = _service_availability[
+    "GLOSSARY_SYNC_SERVICES_AVAILABLE"
 ]
 
 # Log summary of available services

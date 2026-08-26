@@ -197,6 +197,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 2.1: Implement `UserVocabularyStore` (Persistent Memory)
 * **ID**: `TASK-2.1`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-06, NFR-03, NFR-09
 * **Dependencies**: None
 * **Description**:
@@ -212,6 +213,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 2.2: Implement RFC 4180 Glossary TSV Compiler
 * **ID**: `TASK-2.2`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-02, NFR-04
 * **Dependencies**: `TASK-2.1`
 * **Description**:
@@ -227,6 +229,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 2.3: Implement `GlossarySyncManager`
 * **ID**: `TASK-2.3`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-02, FR-06, NFR-04
 * **Dependencies**: `TASK-1.2`, `TASK-2.2`
 * **Description**:
@@ -240,6 +243,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 2.4: Implement `SessionGlossaryLifecycleManager` (GCP Quota Auto-Cleanup)
 * **ID**: `TASK-2.4`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-14, NFR-03
 * **Dependencies**: `TASK-2.3`
 * **Description**:
