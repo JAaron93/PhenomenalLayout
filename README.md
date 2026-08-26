@@ -83,23 +83,42 @@ flowchart TD
 
 ### Core Components
 
-1. **Neologism Detection Engine** (`services/neologism_detector.py`)
+1. **GCP Batch Translation Service** (`services/gcp_batch_translation_service.py`)
+   - Direct-to-GCS streamed PDF upload (`upload_book_to_gcs`) with zero host disk caching
+   - Prefix-scoped 7-day auto-delete lifecycle policy management (`ensure_staging_lifecycle_policy`)
+   - Asynchronous `batchTranslateDocument` dispatch (`submit_batch_job`) with dynamic glossary attachment
+   - Non-blocking streaming reader (`stream_translated_book`)
+
+2. **BYOK Credentials Manager** (`services/byok_credentials_manager.py`)
+   - In-memory thread-safe user session vault with zero disk/logging persistence
+   - Non-billable dual-service validation (`projects.locations.glossaries.list` + GCS bucket IAM checks)
+   - 6-step guided onboarding modal guide with GCP console links and copyable `gcloud` scripts
+
+3. **LRO Progress Monitor** (`services/lro_progress_monitor.py`)
+   - Long-Running Operation (LRO) poller for `BatchTranslateDocumentMetadata`
+   - Page-by-page progress tracking, percentage calculation, and linear ETA estimation
+   - Exponential backoff retry on HTTP 429/503 errors
+
+4. **Pre-Auth Cost Estimator** (`services/cost_estimator.py`)
+   - Pre-auth PDF inspection via `pypdf.PdfReader` requiring zero credentials or network calls
+   - Itemized quote: translation ($0.080/page), GCS 5 GB Always Free tier deduction, 7-day staging, and storage schedules ($\pm \$5.00$ tolerance)
+
+5. **Google Drive GIS Exporter** (`services/google_drive_exporter.py`)
+   - 1-click export to user's Google Drive via client-side Google Identity Services (GIS) OAuth (`drive.file` scope)
+   - Direct multipart streaming upload via `MediaIoBaseUpload` with zero temporary host files
+
+6. **Neologism Detection Engine** (`services/neologism_detector.py`)
    - Morphological compound analysis and decomposition
    - Philosophical context analyzer & confidence scoring
    - Built-in domain dictionaries (`config/klages_terminology.json`)
 
-2. **User Choice & Disambiguation Manager** (`core/dynamic_choice_engine.py`, `services/user_choice_manager.py`)
+7. **User Choice & Disambiguation Manager** (`core/dynamic_choice_engine.py`, `services/user_choice_manager.py`)
    - Interactive review for coined philosophical terms
    - User override and custom translation management
 
-3. **Google Cloud Document Translation Service** (`services/gcp_document_translation_client.py`)
-   - Native PDF translation with layout, typography, table, and image preservation
-   - Shadow text removal and automatic rotation correction
-   - Dynamic glossary synchronization (`GlossaryConfig`)
-
-4. **Web & API Interface** (`app.py`, `api/routes.py`)
-   - Document upload and interactive terminology review
-   - One-click document translation and instant PDF preview
+8. **Web & API Interface** (`app.py`, `api/routes.py`)
+   - Document upload, unauthenticated cost estimation, and terminology review
+   - One-click asynchronous document translation and synchronized dual-pane viewer
 
 ## 🔬 Technical Deep-Dive: Layout Preservation Innovation
 
@@ -163,17 +182,25 @@ quality_score = (
 1. Clone the repository
 2. Install dependencies:
    ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
    pip install -r requirements.txt
    ```
-3. Set up your Lingo API key:
+3. *(Optional)* Configure GCP & Modal defaults via environment variables or `config/settings.py`:
    ```bash
-   export LINGO_API_KEY="your_lingo_api_key_here"
+   export GCP_LOCATION="us-central1"
+   export GCP_DOC_PRICE_PER_PAGE="0.080"
+   export GCS_STAGING_EXPIRATION_DAYS="7"
+   export MODAL_VOLUME_PATH="/data"
    ```
-4. Configure translation services in `config/settings.py` (optional)
-5. Run the application:
+4. Run the application:
    ```bash
    python app.py
    ```
+5. In the web interface:
+   - Calculate an unauthenticated cost quote for your German PDF book.
+   - Enter your personal GCP Service Account credentials in the BYOK setup panel (validated non-billably in session memory).
+   - Review and select neologism translations, then dispatch the batch translation job.
 
 ### Development Setup
 
@@ -188,16 +215,12 @@ source .venv/bin/activate
 python -m pip install -U pip
 python -m pip install -r requirements-dev.txt
 
+# Run focused Track 1 tests
+FOCUSED=1 pytest tests/test_gcp_settings.py tests/test_byok_credentials_manager.py tests/test_gcp_batch_translation_service.py tests/test_lro_progress_monitor.py tests/test_cost_estimator.py tests/test_google_drive_exporter.py -v
+
 # Run linter and formatter manually
+ruff check .
 black --check .
-ruff check .
-
-# Run tests
-export GRADIO_SCHEMA_PATCH=true GRADIO_SHARE=true CI=true
-pytest -q
-
-# Manual linting and type checking
-ruff check .
 mypy .
 ```
 

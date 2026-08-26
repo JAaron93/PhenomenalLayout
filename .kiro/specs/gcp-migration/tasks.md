@@ -68,6 +68,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 1.1: Configure Dependencies and Environment Defaults
 * **ID**: `TASK-1.1`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-03, NFR-03
 * **Dependencies**: None
 * **Description**:
@@ -79,6 +80,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 1.2: Implement `BYOKCredentialsManager` with Dual-Service Validation & Walkthrough Guide
 * **ID**: `TASK-1.2`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-05, FR-08, NFR-03, NFR-05, NFR-11
 * **Dependencies**: `TASK-1.1`
 * **Description**:
@@ -107,6 +109,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 1.3: Implement `GCPBatchTranslationService` (Zero Host Storage & 7-Day Staging Lifecycle)
 * **ID**: `TASK-1.3`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-03, FR-10, NFR-01, NFR-02, NFR-07
 * **Dependencies**: `TASK-1.2`
 * **Description**:
@@ -131,6 +134,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 1.4: Implement `LROProgressMonitor`
 * **ID**: `TASK-1.4`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-04, NFR-02
 * **Dependencies**: `TASK-1.3`
 * **Description**:
@@ -142,6 +146,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 1.5: Implement Pre-Auth `GCPCostEstimator` with GCS 7-Day Staging & Retention Schedules
 * **ID**: `TASK-1.5`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-07, NFR-06
 * **Dependencies**: `TASK-1.1`
 * **Description**:
@@ -168,6 +173,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 1.6: Implement `GoogleDriveExporter` (Google Identity Services GIS)
 * **ID**: `TASK-1.6`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-09, FR-10, NFR-03, NFR-07, NFR-09
 * **Dependencies**: `TASK-1.1`
 * **Description**:

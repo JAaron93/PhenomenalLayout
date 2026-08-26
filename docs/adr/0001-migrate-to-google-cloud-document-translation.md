@@ -60,6 +60,20 @@ We will adopt **Google Cloud Document Translation API (Cloud Translation - Advan
 
 ---
 
+## Implementation Progress
+* **Track 1: GCP Batch Translation Engine, BYOK & Exporters**: **Completed (2026-08-25)**
+  - `config/settings.py` (`GCPSettings` with env overrides)
+  - `services/byok_credentials_manager.py` (In-memory BYOK vault with dual validation & 6-step walkthrough)
+  - `services/gcp_batch_translation_service.py` (Direct GCS streaming & 7-day auto-delete staging lifecycle)
+  - `services/lro_progress_monitor.py` (Asynchronous LRO metadata parsing & progress tracker)
+  - `services/cost_estimator.py` (Pre-auth zero-credential PDF pricing quote estimator)
+  - `services/google_drive_exporter.py` (GIS OAuth `drive.file` client export)
+* **Track 2: Dual-Tier Glossary Sync & Persistent User Vocabulary Store**: Pending
+* **Track 3: Neologism Detection & Context Analysis**: Pending
+* **Track 4: Web UI, Dual-Pane Synchronized Viewer & Modal Labs BYOK Deployment**: Pending
+
+---
+
 ## References
 * [System Design Spec](.kiro/specs/gcp-migration/design.md)
 * [Requirements & BDD Spec](.kiro/specs/gcp-migration/requirements.md)
