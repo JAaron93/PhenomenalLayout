@@ -282,7 +282,7 @@ class GlossarySyncManager:
             for g in glossary_iter:
                 g_name = getattr(g, "name", "")
                 g_id = g_name.split("/")[-1]
-                # Match EXACT legacy candidates or exact session hash key / slots
+                # 1. Match exact legacy candidates or exact session hash key / slots
                 if (
                     g_id in legacy_candidates
                     or g_id == session_key
@@ -291,6 +291,15 @@ class GlossarySyncManager:
                     or g_id.startswith(f"{session_key}-")
                 ):
                     matches.append(g)
+                    continue
+
+                # 2. Match historical versioned legacy IDs ({legacy_prefix}-{hex_version})
+                for leg in legacy_candidates:
+                    if g_id.startswith(f"{leg}-"):
+                        rem = g_id[len(leg) + 1 :]
+                        if re.fullmatch(r"[0-9a-f]{6,8}|[ab]", rem):
+                            matches.append(g)
+                            break
         except Exception:
             logger.warning(
                 "list_glossaries failed during session search; probing known slot and legacy candidate IDs directly"
@@ -360,14 +369,21 @@ class GlossarySyncManager:
             include_user_vocab=True,
         )
 
-        # 3. Choose next Blue-Green slot (slot A or slot B) to bound quota and enable deterministic fallback probing
+        # 3. Choose next Blue-Green slot (slot A or slot B) to bound quota and enable deterministic fallback probing.
+        # If both slots are active (e.g. from an earlier interrupted retirement), allocate a fresh unique slot.
         session_key = self._session_id_prefix(session_id)
         slot_a_id = f"{session_key}-a"
         slot_b_id = f"{session_key}-b"
 
         active_ids = {getattr(g, "name", "").split("/")[-1] for g in existing_glossaries}
-        # If slot A is currently active, provision slot B; otherwise provision slot A
-        new_glossary_id = slot_b_id if slot_a_id in active_ids else slot_a_id
+        if slot_a_id not in active_ids:
+            new_glossary_id = slot_a_id
+        elif slot_b_id not in active_ids:
+            new_glossary_id = slot_b_id
+        else:
+            # Both slots are currently active; generate an isolated unique version slot to avoid collision
+            new_glossary_id = f"{session_key}-{uuid.uuid4().hex[:6]}"
+
         new_glossary_name = self._format_glossary_name(project_id, new_glossary_id)
 
         # 4. Stage new TSV to GCS under the chosen slot's deterministic path

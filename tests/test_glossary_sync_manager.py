@@ -331,6 +331,68 @@ class TestBookSessionGlossarySync:
         # Verified: 55-char truncated legacy glossary was discovered and retired!
         mock_trans.delete_glossary.assert_called_once_with(name=legacy_g.name)
 
+    def test_sync_book_session_glossary_matches_historical_versioned_legacy_id(
+        self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
+    ) -> None:
+        mock_trans = mock_creds_mgr.get_translation_client.return_value
+
+        # Historical versioned glossary: sess-{slug}-{6_char_hex}
+        hist_g = MagicMock()
+        hist_g.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-a1b2c3"
+        other_g = MagicMock()
+        other_g.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-extra"
+        mock_trans.list_glossaries.return_value = [hist_g, other_g]
+
+        mock_lro = MagicMock()
+        created = MagicMock()
+        created.name = "projects/test-project-123/locations/us-central1/glossaries/sess-new"
+        mock_lro.result.return_value = created
+        mock_trans.create_glossary.return_value = mock_lro
+
+        sync_mgr.sync_book_session_glossary(
+            user_id="user_1",
+            session_id="book-101",
+            user_choices={"Term": "Trans"},
+            overwrite=True,
+        )
+
+        # Verified: historical versioned glossary was retired, but other session was untouched
+        mock_trans.delete_glossary.assert_called_once_with(name=hist_g.name)
+
+    def test_sync_book_session_glossary_both_slots_active_allocates_fresh_slot_and_retires_both(
+        self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
+    ) -> None:
+        mock_trans = mock_creds_mgr.get_translation_client.return_value
+
+        session_key = sync_mgr._session_id_prefix("book-101")
+        slot_a = MagicMock()
+        slot_a.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-a"
+        slot_b = MagicMock()
+        slot_b.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-b"
+        mock_trans.list_glossaries.return_value = [slot_a, slot_b]
+
+        mock_lro = MagicMock()
+        created = MagicMock()
+        created.name = "projects/test-project-123/locations/us-central1/glossaries/sess-fresh"
+        mock_lro.result.return_value = created
+        mock_trans.create_glossary.return_value = mock_lro
+
+        res = sync_mgr.sync_book_session_glossary(
+            user_id="user_1",
+            session_id="book-101",
+            user_choices={"Term": "Trans"},
+            overwrite=True,
+        )
+
+        assert res == created.name
+        # Verified: new glossary was created without collision
+        mock_trans.create_glossary.assert_called_once()
+        # Both superseded slots A and B were retired!
+        assert mock_trans.delete_glossary.call_count == 2
+        retired_names = [call.kwargs["name"] for call in mock_trans.delete_glossary.call_args_list]
+        assert slot_a.name in retired_names
+        assert slot_b.name in retired_names
+
 
 class TestRetryAndResilience:
     """Test retry behavior on transient errors (429/503)."""
