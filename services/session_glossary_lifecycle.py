@@ -183,14 +183,19 @@ class SessionGlossaryLifecycleManager:
 
         logger.info("Starting cleanup for session glossary: %s", record.glossary_resource_name)
 
+        gcp_deleted = False
+        gcs_deleted = False
+
         # 1. Delete GCP Translation v3 glossary
         try:
             translate_client = self._creds_manager.get_translation_client(user_id)
             op = translate_client.delete_glossary(name=record.glossary_resource_name)
             op.result(timeout=60.0)
             logger.info("Successfully deleted GCP glossary resource: %s", record.glossary_resource_name)
+            gcp_deleted = True
         except gcp_exceptions.NotFound:
             logger.info("GCP glossary resource already removed: %s", record.glossary_resource_name)
+            gcp_deleted = True
         except Exception:
             logger.exception(
                 "Error deleting GCP glossary %s during cleanup",
@@ -208,17 +213,32 @@ class SessionGlossaryLifecycleManager:
                     blob = bucket.blob(blob_name)
                     blob.delete()
                     logger.info("Deleted staged GCS TSV file: %s", record.gcs_tsv_uri)
+                    gcs_deleted = True
+                else:
+                    gcs_deleted = True
             except gcp_exceptions.NotFound:
                 logger.info("GCS TSV blob already removed: %s", record.gcs_tsv_uri)
+                gcs_deleted = True
             except Exception:
                 logger.exception("Error deleting GCS TSV blob %s during cleanup", record.gcs_tsv_uri)
+        else:
+            gcs_deleted = True
 
-        # 3. Update record status
-        with self._lock:
-            record.status = "cleaned_up"
-            self._save_user_sessions(user_id)
+        # 3. Update record status only if all cleanup operations succeeded
+        if gcp_deleted and gcs_deleted:
+            with self._lock:
+                record.status = "cleaned_up"
+                self._save_user_sessions(user_id)
+            return True
 
-        return True
+        logger.warning(
+            "Cleanup failed for session %s (gcp_deleted=%s, gcs_deleted=%s). "
+            "Retaining active status for future retry.",
+            session_id,
+            gcp_deleted,
+            gcs_deleted,
+        )
+        return False
 
     def audit_project_glossaries(self, user_id: str) -> dict[str, Any]:
         """Audit regional glossaries in the user's GCP project against quota limits."""

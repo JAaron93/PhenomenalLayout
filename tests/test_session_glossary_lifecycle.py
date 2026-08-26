@@ -251,9 +251,20 @@ class TestLifecycleErrorBranches:
         mock_blob = storage_client.bucket.return_value.blob.return_value
         mock_blob.delete.side_effect = RuntimeError("GCS storage error")
 
-        # Cleanup should still complete and mark status
+        # When transient errors occur, cleanup returns False and retains active record for retry
         res = lifecycle_mgr.cleanup_session_glossary("user_err", "err-sess")
-        assert res is True
+        assert res is False
+        assert len(lifecycle_mgr.list_active_sessions("user_err")) == 1
+
+        # When the transient issue resolves, subsequent cleanup retry succeeds
+        mock_trans.delete_glossary.side_effect = None
+        mock_delete_op = MagicMock()
+        mock_trans.delete_glossary.return_value = mock_delete_op
+        mock_blob.delete.side_effect = None
+
+        retry_res = lifecycle_mgr.cleanup_session_glossary("user_err", "err-sess")
+        assert retry_res is True
+        assert len(lifecycle_mgr.list_active_sessions("user_err")) == 0
 
     def test_audit_handles_list_exception(
         self, lifecycle_mgr: SessionGlossaryLifecycleManager, mock_creds_mgr: MagicMock

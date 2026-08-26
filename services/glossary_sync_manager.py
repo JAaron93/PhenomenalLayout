@@ -237,11 +237,24 @@ class GlossarySyncManager:
         user_id: str,
         session_id: str,
         user_choices: dict[str, Any] | None = None,
+        overwrite: bool = True,
     ) -> str:
         """Synchronize dynamic Tier 2 book session glossary in user's GCP region.
 
         Combines base foundation terms, persistent user vocabulary, and session overrides.
         Uploads TSV to `gs://<bucket>/glossaries/sessions/<session_id>.tsv` and creates glossary.
+
+        Parameters
+        ----------
+        user_id:
+            User identifier for BYOK credential lookup.
+        session_id:
+            Book session identifier.
+        user_choices:
+            Dynamic session-level terminology overrides.
+        overwrite:
+            If True (default) and a session glossary already exists in GCP, deletes the
+            outdated glossary first to guarantee updated terminology is ingested.
         """
         project_id = self._get_project_id(user_id)
         bucket_name = self._get_bucket_name(user_id)
@@ -252,8 +265,15 @@ class GlossarySyncManager:
         # Check if already provisioned
         existing = self.get_glossary(user_id, glossary_id)
         if existing is not None:
-            logger.info("Tier 2 session glossary already exists: %s", existing.name)
-            return existing.name
+            if not overwrite:
+                logger.info("Tier 2 session glossary already exists: %s", existing.name)
+                return existing.name
+
+            logger.info(
+                "Tier 2 session glossary %s exists; recreating to apply updated terminology",
+                glossary_id,
+            )
+            self.delete_glossary(user_id, glossary_id)
 
         logger.info(
             "Provisioning Tier 2 session glossary %s for user %s session %s",

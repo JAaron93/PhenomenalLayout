@@ -154,7 +154,7 @@ class TestBookSessionGlossarySync:
         storage_client = mock_creds_mgr.get_storage_client.return_value
         storage_client.bucket.assert_called_with("user-trans-bucket")
 
-    def test_sync_book_session_glossary_already_exists(
+    def test_sync_book_session_glossary_already_exists_no_overwrite(
         self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
     ) -> None:
         mock_trans = mock_creds_mgr.get_translation_client.return_value
@@ -166,9 +166,38 @@ class TestBookSessionGlossarySync:
             user_id="user_1",
             session_id="book-101",
             user_choices={"Term": "Trans"},
+            overwrite=False,
         )
         assert res_name == existing.name
         mock_trans.create_glossary.assert_not_called()
+
+    def test_sync_book_session_glossary_already_exists_overwrites_by_default(
+        self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
+    ) -> None:
+        mock_trans = mock_creds_mgr.get_translation_client.return_value
+        existing = MagicMock()
+        existing.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101"
+        # First call checks if exists (returns existing), then delete called, then create called
+        mock_trans.get_glossary.return_value = existing
+
+        mock_delete_op = MagicMock()
+        mock_trans.delete_glossary.return_value = mock_delete_op
+
+        mock_lro = MagicMock()
+        created = MagicMock()
+        created.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101"
+        mock_lro.result.return_value = created
+        mock_trans.create_glossary.return_value = mock_lro
+
+        res_name = sync_mgr.sync_book_session_glossary(
+            user_id="user_1",
+            session_id="book-101",
+            user_choices={"Term": "UpdatedTrans"},
+            overwrite=True,
+        )
+        assert res_name == created.name
+        mock_trans.delete_glossary.assert_called_once()
+        mock_trans.create_glossary.assert_called_once()
 
 
 class TestRetryAndResilience:
