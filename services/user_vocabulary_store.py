@@ -115,10 +115,17 @@ class UserVocabularyStore:
         """
         if storage_dir is not None:
             self.storage_dir = Path(storage_dir)
+            self.storage_dir.mkdir(parents=True, exist_ok=True)
         else:
-            self.storage_dir = Path(gcp_settings.modal_volume_path) / "user_vocabularies"
+            default_path = Path(gcp_settings.modal_volume_path) / "user_vocabularies"
+            try:
+                default_path.mkdir(parents=True, exist_ok=True)
+                self.storage_dir = default_path
+            except (OSError, PermissionError):
+                fallback_path = Path("data/user_vocabularies")
+                fallback_path.mkdir(parents=True, exist_ok=True)
+                self.storage_dir = fallback_path
 
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         logger.debug("UserVocabularyStore initialized at %s", self.storage_dir)
 
