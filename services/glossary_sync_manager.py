@@ -405,8 +405,10 @@ class GlossarySyncManager:
 
         new_glossary_name = self._format_glossary_name(project_id, new_glossary_id)
 
-        # 4. Stage new TSV to GCS FIRST before deleting any active or superseded slot
-        gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{new_glossary_id}.tsv"
+        # 4. Stage new TSV to GCS FIRST before deleting any active or superseded slot.
+        # Use a distinct version suffix so the older known-good TSV is never overwritten in GCS.
+        tsv_version = uuid.uuid4().hex[:8]
+        gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{new_glossary_id}_{tsv_version}.tsv"
         self._upload_tsv_to_gcs(user_id, gcs_uri, tsv_bytes)
 
         # If both slots were active, safely retire the older slot now that TSV is staged
