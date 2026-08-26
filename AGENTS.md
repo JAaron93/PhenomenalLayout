@@ -58,6 +58,15 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 * **Fallback Plaintext Translation**: If complex diagram pages fail layout parsing (`failed_pages > 0`), the engine must offer 1-click plaintext extraction and translation to guarantee a 98% layout-preserved, 100% translated book.
 * **Side-by-Side Dual-Pane Viewer**: Must support synchronized bilingual reading for scholars verifying translations against the German original.
 
+### 2.9 GCS Staging Lifecycle & Cost Isolation Invariant
+* **Strict Fail-Fast Staging Cleanup**: When source PDFs are uploaded or submitted under the staging prefix (`inputs/`), the system MUST verify that an unconditional 7-day auto-delete lifecycle policy exists on the user's bucket.
+* **No Silent Bypass**: If lifecycle verification or bucket patching fails, the upload/submission MUST raise a `RuntimeError` immediately rather than proceeding silently and accruing unbounded user storage costs.
+* **Unconditional Rule Matching**: When matching existing lifecycle rules, the rule MUST match exact `age == 7`, apply to live objects (`isLive is not False`), and contain NO restrictive conditions (e.g., `matchesStorageClass`, `createdBefore`, `customTimeBefore`, `daysSinceCustomTime`, `numNewerVersions`). If restrictive conditions exist, an unconditional rule MUST be appended.
+
+### 2.10 Zero Resource Leakage & Descriptor Safety
+* **Deterministic File Handle Cleanup**: Any service accepting `Path | bytes | BinaryIO` for offline processing (e.g. `GCPCostEstimator`) MUST deterministically close internally opened file descriptors using `try...finally` blocks or context managers, preventing file descriptor exhaustion in serverless environments.
+* **Package Export Symmetry**: All optional or conditional services recorded in internal availability registries MUST explicitly define and export their corresponding boolean availability flag (e.g., `GCP_BATCH_SERVICES_AVAILABLE`) in the top-level package `__all__`.
+
 ---
 
 ## 3. Modal Labs Serverless Deployment Architecture

@@ -1,14 +1,111 @@
 """Configuration settings for the PDF translator."""
 
+from __future__ import annotations
+
 import logging
 import os
 import secrets
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class GCPSettings:
+    """Immutable GCP configuration constants for the batch translation pipeline.
+
+    All monetary values are in USD. All defaults match the Google Cloud pricing
+    schedule described in .kiro/specs/gcp-migration/design.md §3.1.
+    No secrets or credentials are stored here — those live in BYOKCredentialsManager.
+    """
+
+    # Regional endpoint for Cloud Translation v3 and Glossary provisioning
+    gcp_location: str = "us-central1"
+
+    # --- Pricing constants ---
+    # Document Translation API rate (USD per page)
+    doc_translation_price_per_page: float = 0.080
+    # GCS Standard Regional Storage (USD per GB per month)
+    gcs_standard_storage_per_gb_mo: float = 0.020
+    # GCS Archive Storage for long-term retention (USD per GB per month)
+    gcs_archive_storage_per_gb_mo: float = 0.0012
+    # GCP Always Free tier: 5 GB-months of Standard Storage in US regions
+    gcs_always_free_storage_gb: float = 5.0
+
+    # --- Lifecycle policy ---
+    # Staged input objects (gs://<bucket>/inputs/...) auto-delete after 7 days
+    gcs_staging_expiration_days: int = 7
+    gcs_staging_prefix: str = "inputs/"
+
+    # --- LRO polling ---
+    # Seconds between LRO status polls during a batch translation job
+    batch_poll_interval_sec: int = 10
+
+    # --- Preview / sampling ---
+    # Maximum pages permitted in synchronous single-page preview mode
+    max_inline_preview_pages: int = 3
+    # OCR confidence below this triggers a "please test sample pages" recommendation
+    fraktur_confidence_threshold: float = 0.85
+
+    # --- Modal Labs volume ---
+    # Persistent volume mount path for user metadata and session recovery data
+    modal_volume_path: str = "/data"
+
+    # --- Cost estimator tolerance ---
+    # Maximum acceptable deviation between estimate and actual GCP bill (USD)
+    cost_estimate_tolerance_usd: float = 5.00
+
+    # --- GCP Glossary quota ---
+    # Hard regional limit for Cloud Translation glossaries per project
+    gcp_glossary_quota_limit: int = 1000
+    # Soft warning threshold (alert when approaching quota)
+    gcp_glossary_warning_threshold: int = 900
+
+    @classmethod
+    def from_env(cls) -> "GCPSettings":
+        """Build a GCPSettings instance overriding defaults from environment variables.
+
+        All GCP constants can be overridden via env vars with the GCP_ prefix.
+        No secrets are read here — credentials are exclusively in BYOKCredentialsManager.
+        """
+        return cls(
+            gcp_location=os.getenv("GCP_LOCATION", "us-central1"),
+            doc_translation_price_per_page=float(
+                os.getenv("GCP_DOC_TRANSLATION_PRICE_PER_PAGE", "0.080")
+            ),
+            gcs_standard_storage_per_gb_mo=float(
+                os.getenv("GCS_STANDARD_STORAGE_PER_GB_MO", "0.020")
+            ),
+            gcs_archive_storage_per_gb_mo=float(
+                os.getenv("GCS_ARCHIVE_STORAGE_PER_GB_MO", "0.0012")
+            ),
+            gcs_always_free_storage_gb=float(
+                os.getenv("GCS_ALWAYS_FREE_STORAGE_GB", "5.0")
+            ),
+            gcs_staging_expiration_days=int(
+                os.getenv("GCS_STAGING_EXPIRATION_DAYS", "7")
+            ),
+            gcs_staging_prefix=os.getenv("GCS_STAGING_PREFIX", "inputs/"),
+            batch_poll_interval_sec=int(os.getenv("BATCH_POLL_INTERVAL_SEC", "10")),
+            max_inline_preview_pages=int(os.getenv("MAX_INLINE_PREVIEW_PAGES", "3")),
+            fraktur_confidence_threshold=float(
+                os.getenv("FRAKTUR_CONFIDENCE_THRESHOLD", "0.85")
+            ),
+            modal_volume_path=os.getenv("MODAL_VOLUME_PATH", "/data"),
+            cost_estimate_tolerance_usd=float(
+                os.getenv("COST_ESTIMATE_TOLERANCE_USD", "5.00")
+            ),
+        )
+
+
+# Module-level singleton — import this rather than Settings() for GCP constants
+gcp_settings: GCPSettings = GCPSettings.from_env()
+
+
 
 # Valid ISO 639-1 language codes
 VALID_LANGUAGE_CODES: set[str] = {

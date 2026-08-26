@@ -55,6 +55,48 @@ except ImportError as e:
     logger.debug(f"EnhancedDocumentProcessor not available: {e}")
     _service_availability["ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE"] = False
 
+# Track 1: GCP Batch Translation Engine, BYOK & Exporters
+try:
+    from .byok_credentials_manager import (  # noqa: F401
+        BYOKCredentialsManager,
+        CredentialNotFoundError,
+        GuideStep,
+        ValidationResult,
+    )
+    from .cost_estimator import CostQuote, GCPCostEstimator  # noqa: F401
+    from .gcp_batch_translation_service import (  # noqa: F401
+        BatchJobHandle,
+        GCPBatchTranslationService,
+    )
+    from .google_drive_exporter import (  # noqa: F401
+        DriveExportResult,
+        GoogleDriveExporter,
+    )
+    from .lro_progress_monitor import (  # noqa: F401
+        LROProgressMonitor,
+        ProgressUpdate,
+    )
+
+    _available_services.extend([
+        "BYOKCredentialsManager",
+        "CredentialNotFoundError",
+        "GuideStep",
+        "ValidationResult",
+        "GCPCostEstimator",
+        "CostQuote",
+        "GCPBatchTranslationService",
+        "BatchJobHandle",
+        "GoogleDriveExporter",
+        "DriveExportResult",
+        "LROProgressMonitor",
+        "ProgressUpdate",
+    ])
+    _service_availability["GCP_BATCH_SERVICES_AVAILABLE"] = True
+    logger.debug("GCP Batch Translation services imported successfully")
+except ImportError as e:
+    logger.debug(f"GCP Batch Translation services not available: {e}")
+    _service_availability["GCP_BATCH_SERVICES_AVAILABLE"] = False
+
 # Dynamically build __all__ list based on successfully imported services
 # Include service symbols, availability flags, and summary counters
 __all__: list[str] = [
@@ -63,6 +105,7 @@ __all__: list[str] = [
     "TRANSLATION_SERVICE_AVAILABLE",
     "LANGUAGE_DETECTOR_AVAILABLE",
     "ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE",
+    "GCP_BATCH_SERVICES_AVAILABLE",
     "services_count",
     "services_list",
     "AVAILABLE_SERVICES",
@@ -78,6 +121,9 @@ TRANSLATION_SERVICE_AVAILABLE: bool = _service_availability[
 LANGUAGE_DETECTOR_AVAILABLE: bool = _service_availability["LANGUAGE_DETECTOR_AVAILABLE"]
 ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE: bool = _service_availability[
     "ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE"
+]
+GCP_BATCH_SERVICES_AVAILABLE: bool = _service_availability[
+    "GCP_BATCH_SERVICES_AVAILABLE"
 ]
 
 # Log summary of available services

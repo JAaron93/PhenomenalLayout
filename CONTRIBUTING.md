@@ -1,13 +1,16 @@
 # Contributing to PhenomenalLayout
 
-Welcome to PhenomenalLayout, an advanced layout preservation engine for document translation. This project orchestrates Lingo.dev's translation services with ByteDance's Dolphin OCR to achieve pixel-perfect formatting integrity.
+Welcome to PhenomenalLayout, a domain-specific **German Philosophical Book Translation & Neologism Orchestration Engine**. PhenomenalLayout pairs **Google Cloud Document Translation Advanced (v3)** with a specialized **German Philosophical Neologism Detection Engine** to translate full-length treatises and books with pixel-perfect typography, layout preservation, and consistent terminology.
 
 ## Project Context
 
-PhenomenalLayout's core innovation lies in solving the fundamental challenge of preserving document layout when translated text differs in length from the original. Our sophisticated algorithms include:
-- Intelligent text fitting strategies (font scaling, text wrapping, bounding box optimization)
-- Quality assessment engines for layout preservation decisions
-- Integration layer between high-quality translation and OCR services
+PhenomenalLayout's core architecture incorporates:
+- **Asynchronous GCS Batch Translation**: Serverless book-scale translation (`batchTranslateDocument`) via Google Cloud Storage with zero host PDF storage
+- **Bring Your Own Key (BYOK) Security**: In-memory credential vault with non-billable dual validation and 7-day auto-delete staging lifecycle enforcement
+- **Dual-Tier Glossary Synchronization**: Persistent base philosophical glossaries paired with dynamic per-book user choice dictionaries
+- **German Philosophical Neologism Detector**: Morphological analysis and contextual compound decomposition with interactive review
+- **Zero-Credential Cost Estimator**: Unauthenticated offline PDF pricing calculation ($\pm \$5.00$ tolerance)
+- **1-Click Google Drive Export**: Streamed multipart export via client-side Google Identity Services (GIS) OAuth (`drive.file` scope)
 
 This project uses pinned dev tooling and automation to keep CI stable and reproducible.
 
@@ -15,22 +18,14 @@ This project uses pinned dev tooling and automation to keep CI stable and reprod
 
 - Pytest is configured in `pytest.ini`:
   - `asyncio_mode = auto` for `pytest-asyncio>=0.23` on pytest 8.
-  - Markers: `slow`, `load`. Run only non-slow and non-load tests with `pytest -q -m "not slow and not load"`. List available markers with `pytest --markers`. Declare any custom markers in `pytest.ini` to avoid `PytestUnknownMarkWarning`.
-    Optional example:
-    ```ini
-    # pytest.ini
-    [pytest]
-    markers =
-        slow: marks tests as slow
-        load: marks load tests (deselect with "-m 'not load'")
-    ```
-  - Coverage gates are applied by default; set `FOCUSED=1` to disable locally for focused runs.
+  - Markers: `slow`, `load`. Run only non-slow and non-load tests with `pytest -q -m "not slow and not load"`.
+  - Coverage gates ($\ge 85\%$) are applied by default; set `FOCUSED=1` to disable locally for focused test runs.
 - Ruff and mypy live in `pyproject.toml` under `[tool.ruff]` and `[tool.mypy]` so local and CI share rules.
-- Runtime deps: `requirements.txt`. Dev-only pins: `requirements-dev.txt` (includes `-r requirements.txt`).
+- Runtime deps: `requirements.txt` (compiled from `requirements.in`). Dev-only pins: `requirements-dev.txt`.
 
 ## Development environment
 
-Prerequisite: Python 3.11 or 3.12 (match CI). Verify with: python3 --version
+Prerequisite: Python 3.11 or 3.12 (match CI). Verify with: `python3 --version`
 
 ```bash
 python3 -m venv .venv
@@ -39,24 +34,12 @@ python -m pip install -U pip
 python -m pip install -r requirements-dev.txt
 ```
 
-### Debug Scripts
-
-For local development and debugging, several utility scripts are available in the `scripts/` directory:
-
-- **`debug_test_env.py`**: Verify environment configuration and test authentication endpoints locally
-  ```bash
-  python scripts/debug_test_env.py
-  ```
-
-See `scripts/README.md` for complete documentation of available debug and test tools.
-
 ### Manual Quality Checks
 
-Run the test suite:
+Run the Track 1 test suite:
 
 ```bash
-export GRADIO_SCHEMA_PATCH=true GRADIO_SHARE=true CI=true
-pytest -q
+FOCUSED=1 pytest tests/test_gcp_settings.py tests/test_byok_credentials_manager.py tests/test_gcp_batch_translation_service.py tests/test_lro_progress_monitor.py tests/test_cost_estimator.py tests/test_google_drive_exporter.py -v
 ```
 
 Lint and type-check:
