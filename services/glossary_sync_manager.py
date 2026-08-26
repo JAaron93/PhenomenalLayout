@@ -262,27 +262,14 @@ class GlossarySyncManager:
         glossary_id = sanitize_glossary_id(f"sess-{session_id}")
         glossary_name = self._format_glossary_name(project_id, glossary_id)
 
-        # Check if already provisioned
-        existing = self.get_glossary(user_id, glossary_id)
-        if existing is not None:
-            if not overwrite:
-                logger.info("Tier 2 session glossary already exists: %s", existing.name)
-                return existing.name
-
-            logger.info(
-                "Tier 2 session glossary %s exists; recreating to apply updated terminology",
-                glossary_id,
-            )
-            self.delete_glossary(user_id, glossary_id)
-
         logger.info(
-            "Provisioning Tier 2 session glossary %s for user %s session %s",
+            "Synchronizing Tier 2 session glossary %s for user %s session %s",
             glossary_id,
             user_id,
             session_id,
         )
 
-        # 1. Compile merged TSV (Book Overrides > User Vocab > Base Dictionary)
+        # 1. Compile merged TSV (Book Overrides > User Vocab > Base Dictionary) FIRST
         tsv_bytes = self._compiler.compile_tsv(
             session_overrides=user_choices,
             user_id=user_id,
@@ -290,11 +277,63 @@ class GlossarySyncManager:
             include_user_vocab=True,
         )
 
-        # 2. Stage TSV to GCS
+        # 2. Stage TSV to GCS FIRST before touching any active GCP glossary resources
         gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{glossary_id}.tsv"
         self._upload_tsv_to_gcs(user_id, gcs_uri, tsv_bytes)
 
-        # 3. Create regional glossary resource
+        # 3. Check if glossary is already provisioned
+        existing = self.get_glossary(user_id, glossary_id)
+        if existing is not None:
+            if not overwrite:
+                logger.info("Tier 2 session glossary already exists: %s", existing.name)
+                return existing.name
+
+            logger.info(
+                "Tier 2 session glossary %s exists; replacing with staged updated terminology",
+                glossary_id,
+            )
+            # Retain previous GCS URI for rollback restoration if replacement fails
+            prev_input_uri: str | None = None
+            try:
+                if (
+                    hasattr(existing, "input_config")
+                    and hasattr(existing.input_config, "gcs_source")
+                    and hasattr(existing.input_config.gcs_source, "input_uri")
+                ):
+                    prev_input_uri = existing.input_config.gcs_source.input_uri
+            except Exception:
+                prev_input_uri = None
+
+            self.delete_glossary(user_id, glossary_id)
+
+            try:
+                return self._create_glossary_resource(
+                    user_id=user_id,
+                    project_id=project_id,
+                    glossary_id=glossary_id,
+                    glossary_name=glossary_name,
+                    gcs_input_uri=gcs_uri,
+                )
+            except Exception:
+                logger.exception(
+                    "Creation of replacement glossary %s failed. Attempting rollback...",
+                    glossary_name,
+                )
+                if prev_input_uri:
+                    try:
+                        self._create_glossary_resource(
+                            user_id=user_id,
+                            project_id=project_id,
+                            glossary_id=glossary_id,
+                            glossary_name=glossary_name,
+                            gcs_input_uri=prev_input_uri,
+                        )
+                        logger.info("Successfully restored previous working glossary %s", glossary_name)
+                    except Exception:
+                        logger.exception("Failed to restore previous glossary %s during rollback", glossary_name)
+                raise
+
+        # 4. Create regional glossary resource (first-time provisioning)
         return self._create_glossary_resource(
             user_id=user_id,
             project_id=project_id,

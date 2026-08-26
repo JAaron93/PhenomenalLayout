@@ -199,6 +199,56 @@ class TestBookSessionGlossarySync:
         mock_trans.delete_glossary.assert_called_once()
         mock_trans.create_glossary.assert_called_once()
 
+    def test_sync_book_session_glossary_upload_failure_leaves_existing_untouched(
+        self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
+    ) -> None:
+        mock_trans = mock_creds_mgr.get_translation_client.return_value
+        existing = MagicMock()
+        existing.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101"
+        mock_trans.get_glossary.return_value = existing
+
+        storage_client = mock_creds_mgr.get_storage_client.return_value
+        mock_blob = storage_client.bucket.return_value.blob.return_value
+        mock_blob.upload_from_string.side_effect = RuntimeError("GCS upload failed")
+
+        with pytest.raises(RuntimeError, match="GCS upload failed"):
+            sync_mgr.sync_book_session_glossary(
+                user_id="user_1",
+                session_id="book-101",
+                user_choices={"Term": "UpdatedTrans"},
+                overwrite=True,
+            )
+
+        # Existing glossary must NOT have been deleted
+        mock_trans.delete_glossary.assert_not_called()
+
+    def test_sync_book_session_glossary_creation_failure_attempts_rollback(
+        self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
+    ) -> None:
+        mock_trans = mock_creds_mgr.get_translation_client.return_value
+        existing = MagicMock()
+        existing.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101"
+        existing.input_config.gcs_source.input_uri = "gs://user-trans-bucket/glossaries/sessions/prev.tsv"
+        mock_trans.get_glossary.return_value = existing
+
+        # First create fails (raises), second create (rollback) succeeds
+        mock_lro_rollback = MagicMock()
+        mock_trans.create_glossary.side_effect = [
+            RuntimeError("GCP creation failed"),
+            mock_lro_rollback,
+        ]
+
+        with pytest.raises(RuntimeError, match="GCP creation failed"):
+            sync_mgr.sync_book_session_glossary(
+                user_id="user_1",
+                session_id="book-101",
+                user_choices={"Term": "UpdatedTrans"},
+                overwrite=True,
+            )
+
+        # Verify old was deleted, create failed, and rollback create was called
+        assert mock_trans.create_glossary.call_count == 2
+
 
 class TestRetryAndResilience:
     """Test retry behavior on transient errors (429/503)."""
