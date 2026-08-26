@@ -19,6 +19,7 @@ Design invariants:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import random
@@ -233,9 +234,29 @@ class GlossarySyncManager:
             gcs_input_uri=gcs_uri,
         )
 
+    @staticmethod
+    def _session_token(session_id: str) -> str:
+        """Compute deterministic 16-char SHA-256 hash for exact session isolation."""
+        return hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:16]
+
+    def _session_id_prefix(self, session_id: str) -> str:
+        """Compute isolated session prefix containing both readable slug and session hash."""
+        clean_slug = re.sub(r"[^a-z0-9_-]", "-", session_id.lower().strip()).strip("-")[:28]
+        if not clean_slug:
+            clean_slug = "book"
+        token = self._session_token(session_id)
+        return f"sess-{clean_slug}-{token}"
+
     def _find_session_glossaries(self, user_id: str, session_id: str) -> list[translate.Glossary]:
-        """Find active regional glossaries matching *session_id*."""
-        prefix = sanitize_glossary_id(f"sess-{session_id}")[:55].rstrip("-")
+        """Find active regional glossaries belonging strictly to *session_id*.
+
+        Matches:
+        1. Legacy exact ID (`sess-{session_id}` exact match only, never substring or prefix match).
+        2. Versioned Blue-Green glossaries bearing the exact SHA-256 session token (`sess-{slug}-{token}-{version}`).
+        """
+        session_key = self._session_id_prefix(session_id)
+        legacy_exact_id = sanitize_glossary_id(f"sess-{session_id}")
+
         client = self._get_translate_client(user_id)
         project_id = self._get_project_id(user_id)
         parent = f"projects/{project_id}/locations/{self._location}"
@@ -247,18 +268,32 @@ class GlossarySyncManager:
                 for g in glossary_iter:
                     g_name = getattr(g, "name", "")
                     g_id = g_name.split("/")[-1]
-                    if g_id == prefix or g_id.startswith(f"{prefix}-") or g_id.startswith(f"{prefix}_"):
+                    # Disallow partial prefix overlaps: match EXACT legacy ID or exact hash key
+                    if g_id == legacy_exact_id or g_id == session_key or g_id.startswith(f"{session_key}-"):
                         matches.append(g)
         except Exception:
             logger.debug("list_glossaries check failed; falling back to get_glossary")
 
         # Fallback to direct get_glossary lookup if list_glossaries returned no matches
         if not matches:
-            exact = self.get_glossary(user_id, prefix)
-            if exact is not None:
-                matches.append(exact)
+            candidates = [session_key]
+            if legacy_exact_id != session_key:
+                candidates.append(legacy_exact_id)
+            for candidate_id in candidates:
+                exact = self.get_glossary(user_id, candidate_id)
+                if exact is not None:
+                    matches.append(exact)
 
-        return matches
+        # Deduplicate matches by full resource name
+        seen_names: set[str] = set()
+        unique_matches: list[translate.Glossary] = []
+        for g in matches:
+            name = getattr(g, "name", "")
+            if name and name not in seen_names:
+                seen_names.add(name)
+                unique_matches.append(g)
+
+        return unique_matches
 
     def sync_book_session_glossary(
         self,
@@ -304,10 +339,10 @@ class GlossarySyncManager:
             include_user_vocab=True,
         )
 
-        # 3. Generate distinct versioned glossary ID for zero-downtime blue-green provisioning
-        prefix = sanitize_glossary_id(f"sess-{session_id}")[:55].rstrip("-")
+        # 3. Generate distinct versioned glossary ID with exact SHA-256 session token
+        session_key = self._session_id_prefix(session_id)
         version_suffix = uuid.uuid4().hex[:6]
-        new_glossary_id = f"{prefix}-{version_suffix}"
+        new_glossary_id = f"{session_key}-{version_suffix}"
         new_glossary_name = self._format_glossary_name(project_id, new_glossary_id)
 
         # 4. Stage new TSV to GCS

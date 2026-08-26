@@ -244,6 +244,34 @@ class TestBookSessionGlossarySync:
         # Existing glossary was NEVER deleted because new was not yet ready
         mock_trans.delete_glossary.assert_not_called()
 
+    def test_sync_book_session_glossary_prefix_related_sessions_isolated(
+        self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
+    ) -> None:
+        mock_trans = mock_creds_mgr.get_translation_client.return_value
+
+        # Existing list contains both the target session and a prefix-related other session
+        g_other = MagicMock()
+        g_other.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-extra"
+        g_target = MagicMock()
+        g_target.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101"
+        mock_trans.list_glossaries.return_value = [g_other, g_target]
+
+        mock_lro = MagicMock()
+        created = MagicMock()
+        created.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-new"
+        mock_lro.result.return_value = created
+        mock_trans.create_glossary.return_value = mock_lro
+
+        sync_mgr.sync_book_session_glossary(
+            user_id="user_1",
+            session_id="book-101",
+            user_choices={"Term": "Trans"},
+            overwrite=True,
+        )
+
+        # MUST only delete the target session glossary, NOT the prefix-related other session!
+        mock_trans.delete_glossary.assert_called_once_with(name=g_target.name)
+
 
 class TestRetryAndResilience:
     """Test retry behavior on transient errors (429/503)."""
