@@ -272,6 +272,65 @@ class TestBookSessionGlossarySync:
         # MUST only delete the target session glossary, NOT the prefix-related other session!
         mock_trans.delete_glossary.assert_called_once_with(name=g_target.name)
 
+    def test_sync_book_session_glossary_fallback_probes_versioned_slots_when_list_fails(
+        self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
+    ) -> None:
+        mock_trans = mock_creds_mgr.get_translation_client.return_value
+        # list_glossaries raises an error
+        mock_trans.list_glossaries.side_effect = RuntimeError("list_glossaries unavailable")
+
+        # Fallback probes find slot A
+        session_key = sync_mgr._session_id_prefix("book-101")
+        slot_a_name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-a"
+        existing_slot_a = MagicMock()
+        existing_slot_a.name = slot_a_name
+
+        def fake_get_glossary(name: str):
+            if f"{session_key}-a" in name:
+                return existing_slot_a
+            raise gcp_exceptions.NotFound("Not found")
+
+        mock_trans.get_glossary.side_effect = fake_get_glossary
+
+        # With overwrite=False, fallback discovers slot A and returns it without recreation
+        res = sync_mgr.sync_book_session_glossary(
+            user_id="user_1",
+            session_id="book-101",
+            overwrite=False,
+        )
+        assert res == slot_a_name
+        mock_trans.create_glossary.assert_not_called()
+
+    def test_sync_book_session_glossary_matches_and_retires_55_char_truncated_legacy_id(
+        self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
+    ) -> None:
+        mock_trans = mock_creds_mgr.get_translation_client.return_value
+
+        # Session ID whose full name exceeds 55 chars
+        long_sess_id = "book-philosophical-investigations-vol-2-chapter-9-subheading-alpha"
+        from services.glossary_sync_manager import sanitize_glossary_id
+        truncated_55_id = sanitize_glossary_id(f"sess-{long_sess_id}")[:55].rstrip("-")
+
+        legacy_g = MagicMock()
+        legacy_g.name = f"projects/test-project-123/locations/us-central1/glossaries/{truncated_55_id}"
+        mock_trans.list_glossaries.return_value = [legacy_g]
+
+        mock_lro = MagicMock()
+        created = MagicMock()
+        created.name = "projects/test-project-123/locations/us-central1/glossaries/sess-new"
+        mock_lro.result.return_value = created
+        mock_trans.create_glossary.return_value = mock_lro
+
+        sync_mgr.sync_book_session_glossary(
+            user_id="user_1",
+            session_id=long_sess_id,
+            user_choices={"Term": "Trans"},
+            overwrite=True,
+        )
+
+        # Verified: 55-char truncated legacy glossary was discovered and retired!
+        mock_trans.delete_glossary.assert_called_once_with(name=legacy_g.name)
+
 
 class TestRetryAndResilience:
     """Test retry behavior on transient errors (429/503)."""

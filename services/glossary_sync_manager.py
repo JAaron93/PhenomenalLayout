@@ -251,11 +251,22 @@ class GlossarySyncManager:
         """Find active regional glossaries belonging strictly to *session_id*.
 
         Matches:
-        1. Legacy exact ID (`sess-{session_id}` exact match only, never substring or prefix match).
-        2. Versioned Blue-Green glossaries bearing the exact SHA-256 session token (`sess-{slug}-{token}-{version}`).
+        1. Legacy exact candidates (both full 63-char and 55-char truncated forms, exact match only).
+        2. Blue-Green two-slot and token-isolated glossaries (`sess-{slug}-{token}-a`, `-b`, etc.).
         """
         session_key = self._session_id_prefix(session_id)
-        legacy_exact_id = sanitize_glossary_id(f"sess-{session_id}")
+        slot_a = f"{session_key}-a"
+        slot_b = f"{session_key}-b"
+
+        # Explicit legacy candidates: include both un-truncated (up to 63) and 55-char truncated forms
+        full_legacy = sanitize_glossary_id(f"sess-{session_id}")
+        trunc_legacy = sanitize_glossary_id(f"sess-{session_id}")[:55].rstrip("-")
+        legacy_candidates = {full_legacy, trunc_legacy}
+
+        known_probe_ids = [slot_a, slot_b, session_key]
+        for c in (full_legacy, trunc_legacy):
+            if c not in known_probe_ids:
+                known_probe_ids.append(c)
 
         client = self._get_translate_client(user_id)
         project_id = self._get_project_id(user_id)
@@ -263,23 +274,33 @@ class GlossarySyncManager:
 
         matches: list[translate.Glossary] = []
         try:
-            glossary_iter = client.list_glossaries(parent=parent)
-            if glossary_iter:
-                for g in glossary_iter:
-                    g_name = getattr(g, "name", "")
-                    g_id = g_name.split("/")[-1]
-                    # Disallow partial prefix overlaps: match EXACT legacy ID or exact hash key
-                    if g_id == legacy_exact_id or g_id == session_key or g_id.startswith(f"{session_key}-"):
-                        matches.append(g)
+            # Query list_glossaries with retry for resilience against transient GCP errors
+            glossary_iter = _retry_with_backoff(
+                f"list_glossaries for session {session_id}",
+                lambda: list(client.list_glossaries(parent=parent)),
+            )
+            for g in glossary_iter:
+                g_name = getattr(g, "name", "")
+                g_id = g_name.split("/")[-1]
+                # Match EXACT legacy candidates or exact session hash key / slots
+                if (
+                    g_id in legacy_candidates
+                    or g_id == session_key
+                    or g_id == slot_a
+                    or g_id == slot_b
+                    or g_id.startswith(f"{session_key}-")
+                ):
+                    matches.append(g)
         except Exception:
-            logger.debug("list_glossaries check failed; falling back to get_glossary")
+            logger.warning(
+                "list_glossaries failed during session search; probing known slot and legacy candidate IDs directly"
+            )
 
-        # Fallback to direct get_glossary lookup if list_glossaries returned no matches
+        # Fallback to direct get_glossary probe for all known slots and legacy candidate IDs
+        # Guarantees versioned glossaries (-a, -b) and legacy glossaries are discovered
+        # even if list_glossaries fails or is restricted!
         if not matches:
-            candidates = [session_key]
-            if legacy_exact_id != session_key:
-                candidates.append(legacy_exact_id)
-            for candidate_id in candidates:
+            for candidate_id in known_probe_ids:
                 exact = self.get_glossary(user_id, candidate_id)
                 if exact is not None:
                     matches.append(exact)
@@ -306,8 +327,8 @@ class GlossarySyncManager:
 
         Combines base foundation terms, persistent user vocabulary, and session overrides.
         Uses zero-downtime blue-green replacement: provisions the replacement glossary
-        under a distinct versioned identifier and verifies it is fully READY before safely
-        deleting superseded glossary resources.
+        under an alternating slot identifier (`-a` / `-b`) and verifies it is fully READY
+        before safely deleting superseded glossary resources.
 
         Parameters
         ----------
@@ -339,13 +360,17 @@ class GlossarySyncManager:
             include_user_vocab=True,
         )
 
-        # 3. Generate distinct versioned glossary ID with exact SHA-256 session token
+        # 3. Choose next Blue-Green slot (slot A or slot B) to bound quota and enable deterministic fallback probing
         session_key = self._session_id_prefix(session_id)
-        version_suffix = uuid.uuid4().hex[:6]
-        new_glossary_id = f"{session_key}-{version_suffix}"
+        slot_a_id = f"{session_key}-a"
+        slot_b_id = f"{session_key}-b"
+
+        active_ids = {getattr(g, "name", "").split("/")[-1] for g in existing_glossaries}
+        # If slot A is currently active, provision slot B; otherwise provision slot A
+        new_glossary_id = slot_b_id if slot_a_id in active_ids else slot_a_id
         new_glossary_name = self._format_glossary_name(project_id, new_glossary_id)
 
-        # 4. Stage new TSV to GCS
+        # 4. Stage new TSV to GCS under the chosen slot's deterministic path
         gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{new_glossary_id}.tsv"
         self._upload_tsv_to_gcs(user_id, gcs_uri, tsv_bytes)
 
