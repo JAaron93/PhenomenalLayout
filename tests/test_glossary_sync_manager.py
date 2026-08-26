@@ -176,8 +176,7 @@ class TestBookSessionGlossarySync:
     ) -> None:
         mock_trans = mock_creds_mgr.get_translation_client.return_value
         existing = MagicMock()
-        existing.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101"
-        # First call checks if exists (returns existing), then delete called, then create called
+        existing.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-old"
         mock_trans.get_glossary.return_value = existing
 
         mock_delete_op = MagicMock()
@@ -185,7 +184,7 @@ class TestBookSessionGlossarySync:
 
         mock_lro = MagicMock()
         created = MagicMock()
-        created.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101"
+        created.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-new"
         mock_lro.result.return_value = created
         mock_trans.create_glossary.return_value = mock_lro
 
@@ -196,8 +195,9 @@ class TestBookSessionGlossarySync:
             overwrite=True,
         )
         assert res_name == created.name
-        mock_trans.delete_glossary.assert_called_once()
+        # Blue-green verification: new glossary created first, old deleted only after new is live
         mock_trans.create_glossary.assert_called_once()
+        mock_trans.delete_glossary.assert_called_once_with(name=existing.name)
 
     def test_sync_book_session_glossary_upload_failure_leaves_existing_untouched(
         self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
@@ -222,21 +222,16 @@ class TestBookSessionGlossarySync:
         # Existing glossary must NOT have been deleted
         mock_trans.delete_glossary.assert_not_called()
 
-    def test_sync_book_session_glossary_creation_failure_attempts_rollback(
+    def test_sync_book_session_glossary_creation_failure_leaves_existing_untouched(
         self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
     ) -> None:
         mock_trans = mock_creds_mgr.get_translation_client.return_value
         existing = MagicMock()
         existing.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101"
-        existing.input_config.gcs_source.input_uri = "gs://user-trans-bucket/glossaries/sessions/prev.tsv"
         mock_trans.get_glossary.return_value = existing
 
-        # First create fails (raises), second create (rollback) succeeds
-        mock_lro_rollback = MagicMock()
-        mock_trans.create_glossary.side_effect = [
-            RuntimeError("GCP creation failed"),
-            mock_lro_rollback,
-        ]
+        # Create fails: zero-downtime invariant guarantees existing glossary is never deleted!
+        mock_trans.create_glossary.side_effect = RuntimeError("GCP creation failed")
 
         with pytest.raises(RuntimeError, match="GCP creation failed"):
             sync_mgr.sync_book_session_glossary(
@@ -246,8 +241,8 @@ class TestBookSessionGlossarySync:
                 overwrite=True,
             )
 
-        # Verify old was deleted, create failed, and rollback create was called
-        assert mock_trans.create_glossary.call_count == 2
+        # Existing glossary was NEVER deleted because new was not yet ready
+        mock_trans.delete_glossary.assert_not_called()
 
 
 class TestRetryAndResilience:

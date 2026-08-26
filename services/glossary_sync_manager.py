@@ -233,6 +233,33 @@ class GlossarySyncManager:
             gcs_input_uri=gcs_uri,
         )
 
+    def _find_session_glossaries(self, user_id: str, session_id: str) -> list[translate.Glossary]:
+        """Find active regional glossaries matching *session_id*."""
+        prefix = sanitize_glossary_id(f"sess-{session_id}")[:55].rstrip("-")
+        client = self._get_translate_client(user_id)
+        project_id = self._get_project_id(user_id)
+        parent = f"projects/{project_id}/locations/{self._location}"
+
+        matches: list[translate.Glossary] = []
+        try:
+            glossary_iter = client.list_glossaries(parent=parent)
+            if glossary_iter:
+                for g in glossary_iter:
+                    g_name = getattr(g, "name", "")
+                    g_id = g_name.split("/")[-1]
+                    if g_id == prefix or g_id.startswith(f"{prefix}-") or g_id.startswith(f"{prefix}_"):
+                        matches.append(g)
+        except Exception:
+            logger.debug("list_glossaries check failed; falling back to get_glossary")
+
+        # Fallback to direct get_glossary lookup if list_glossaries returned no matches
+        if not matches:
+            exact = self.get_glossary(user_id, prefix)
+            if exact is not None:
+                matches.append(exact)
+
+        return matches
+
     def sync_book_session_glossary(
         self,
         user_id: str,
@@ -243,7 +270,9 @@ class GlossarySyncManager:
         """Synchronize dynamic Tier 2 book session glossary in user's GCP region.
 
         Combines base foundation terms, persistent user vocabulary, and session overrides.
-        Uploads TSV to `gs://<bucket>/glossaries/sessions/<session_id>.tsv` and creates glossary.
+        Uses zero-downtime blue-green replacement: provisions the replacement glossary
+        under a distinct versioned identifier and verifies it is fully READY before safely
+        deleting superseded glossary resources.
 
         Parameters
         ----------
@@ -254,23 +283,20 @@ class GlossarySyncManager:
         user_choices:
             Dynamic session-level terminology overrides.
         overwrite:
-            If True (default) and a session glossary already exists in GCP, deletes the
-            outdated glossary first to guarantee updated terminology is ingested.
+            If True (default) and a session glossary already exists in GCP, creates a new
+            verified replacement glossary before deleting the superseded resource.
+            If False, returns existing active glossary immediately without recreation.
         """
         project_id = self._get_project_id(user_id)
         bucket_name = self._get_bucket_name(user_id)
 
-        glossary_id = sanitize_glossary_id(f"sess-{session_id}")
-        glossary_name = self._format_glossary_name(project_id, glossary_id)
+        # 1. Check if an active glossary already exists for this session
+        existing_glossaries = self._find_session_glossaries(user_id, session_id)
+        if existing_glossaries and not overwrite:
+            logger.info("Tier 2 session glossary already exists: %s", existing_glossaries[0].name)
+            return existing_glossaries[0].name
 
-        logger.info(
-            "Synchronizing Tier 2 session glossary %s for user %s session %s",
-            glossary_id,
-            user_id,
-            session_id,
-        )
-
-        # 1. Compile merged TSV (Book Overrides > User Vocab > Base Dictionary) FIRST
+        # 2. Compile merged TSV (Book Overrides > User Vocab > Base Dictionary)
         tsv_bytes = self._compiler.compile_tsv(
             session_overrides=user_choices,
             user_id=user_id,
@@ -278,91 +304,57 @@ class GlossarySyncManager:
             include_user_vocab=True,
         )
 
-        # 2. Stage TSV to GCS with a unique version suffix so active known-good TSVs
-        # referenced by existing glossaries are never overwritten before replacement succeeds
-        version_suffix = uuid.uuid4().hex[:8]
-        gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{glossary_id}_{version_suffix}.tsv"
+        # 3. Generate distinct versioned glossary ID for zero-downtime blue-green provisioning
+        prefix = sanitize_glossary_id(f"sess-{session_id}")[:55].rstrip("-")
+        version_suffix = uuid.uuid4().hex[:6]
+        new_glossary_id = f"{prefix}-{version_suffix}"
+        new_glossary_name = self._format_glossary_name(project_id, new_glossary_id)
+
+        # 4. Stage new TSV to GCS
+        gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{new_glossary_id}.tsv"
         self._upload_tsv_to_gcs(user_id, gcs_uri, tsv_bytes)
 
-        # 3. Check if glossary is already provisioned
-        existing = self.get_glossary(user_id, glossary_id)
-        if existing is not None:
-            if not overwrite:
-                logger.info("Tier 2 session glossary already exists: %s", existing.name)
-                return existing.name
+        logger.info(
+            "Provisioning replacement Tier 2 glossary %s (blue-green) for user %s session %s",
+            new_glossary_id,
+            user_id,
+            session_id,
+        )
 
-            logger.info(
-                "Tier 2 session glossary %s exists; replacing with staged updated terminology",
-                glossary_id,
-            )
-            # Retain previous GCS URI for rollback restoration if replacement fails
-            prev_input_uri: str | None = None
-            try:
-                if (
-                    hasattr(existing, "input_config")
-                    and hasattr(existing.input_config, "gcs_source")
-                    and hasattr(existing.input_config.gcs_source, "input_uri")
-                ):
-                    prev_input_uri = existing.input_config.gcs_source.input_uri
-            except Exception:
-                prev_input_uri = None
-
-            self.delete_glossary(user_id, glossary_id)
-
-            try:
-                created_name = self._create_glossary_resource(
-                    user_id=user_id,
-                    project_id=project_id,
-                    glossary_id=glossary_id,
-                    glossary_name=glossary_name,
-                    gcs_input_uri=gcs_uri,
-                )
-                # Clean up superseded TSV blob now that replacement glossary is live
-                if (
-                    prev_input_uri
-                    and prev_input_uri != gcs_uri
-                    and prev_input_uri.startswith("gs://")
-                ):
-                    try:
-                        p_parts = prev_input_uri[5:].split("/", 1)
-                        if len(p_parts) == 2:
-                            storage_client = self._get_storage_client(user_id)
-                            storage_client.bucket(p_parts[0]).blob(p_parts[1]).delete()
-                            logger.debug("Cleaned up superseded session TSV: %s", prev_input_uri)
-                    except Exception:
-                        logger.debug("Failed to delete superseded session TSV %s", prev_input_uri)
-                return created_name
-            except Exception:
-                logger.exception(
-                    "Creation of replacement glossary %s failed. Attempting rollback...",
-                    glossary_name,
-                )
-                if prev_input_uri:
-                    try:
-                        self._create_glossary_resource(
-                            user_id=user_id,
-                            project_id=project_id,
-                            glossary_id=glossary_id,
-                            glossary_name=glossary_name,
-                            gcs_input_uri=prev_input_uri,
-                        )
-                        logger.info(
-                            "Successfully restored previous working glossary %s from %s",
-                            glossary_name,
-                            prev_input_uri,
-                        )
-                    except Exception:
-                        logger.exception("Failed to restore previous glossary %s during rollback", glossary_name)
-                raise
-
-        # 4. Create regional glossary resource (first-time provisioning)
-        return self._create_glossary_resource(
+        # 5. Create new replacement glossary FIRST and await full READY status
+        # Notice: Existing working glossary remains 100% active during this window!
+        new_resource_name = self._create_glossary_resource(
             user_id=user_id,
             project_id=project_id,
-            glossary_id=glossary_id,
-            glossary_name=glossary_name,
+            glossary_id=new_glossary_id,
+            glossary_name=new_glossary_name,
             gcs_input_uri=gcs_uri,
         )
+
+        # 6. ONLY AFTER the new replacement is verified live, safely clean up superseded glossaries
+        if existing_glossaries:
+            for old_g in existing_glossaries:
+                old_name = getattr(old_g, "name", "")
+                if old_name and old_name != new_resource_name:
+                    logger.info("Safely retiring superseded glossary %s", old_name)
+                    try:
+                        self.delete_glossary(user_id, old_name)
+                    except Exception:
+                        logger.exception("Error retiring superseded glossary %s", old_name)
+
+                    # Clean up old GCS TSV if available
+                    if hasattr(old_g, "input_config") and hasattr(old_g.input_config, "gcs_source"):
+                        old_input_uri = getattr(old_g.input_config.gcs_source, "input_uri", "")
+                        if old_input_uri and old_input_uri != gcs_uri and old_input_uri.startswith("gs://"):
+                            try:
+                                parts = old_input_uri[5:].split("/", 1)
+                                if len(parts) == 2:
+                                    self._get_storage_client(user_id).bucket(parts[0]).blob(parts[1]).delete()
+                                    logger.debug("Cleaned up superseded session TSV: %s", old_input_uri)
+                            except Exception:
+                                pass
+
+        return new_resource_name
 
     def _create_glossary_resource(
         self,
