@@ -363,6 +363,7 @@ class GlossarySyncManager:
 
         # 1. Check if an active glossary already exists for this session
         existing_glossaries = self._find_session_glossaries(user_id, session_id)
+        existing_glossaries.sort(key=self._glossary_timestamp, reverse=True)
         if existing_glossaries and not overwrite:
             logger.info("Tier 2 session glossary already exists: %s", existing_glossaries[0].name)
             return existing_glossaries[0].name
@@ -380,10 +381,17 @@ class GlossarySyncManager:
         slot_b_id = f"{session_key}-b"
         active_ids = {getattr(g, "name", "").split("/")[-1] for g in existing_glossaries}
 
-        # 3. Strictly enforce two-slot bound: if both slots A and B are active because
-        # retirement previously failed, retire the older superseded slot first.
-        # This guarantees regional quota is strictly capped to 2 slots with no unbounded UUID growth.
-        if slot_a_id in active_ids and slot_b_id in active_ids:
+        older_slot: translate.Glossary | None = None
+        older_input_uri: str | None = None
+
+        # 3. Determine target slot
+        if slot_a_id not in active_ids:
+            new_glossary_id = slot_a_id
+        elif slot_b_id not in active_ids:
+            new_glossary_id = slot_b_id
+        else:
+            # Both slots are active because an earlier retirement failed.
+            # Select the older superseded slot to replace, keeping the newer working slot live.
             slot_glossaries = [
                 g
                 for g in existing_glossaries
@@ -391,6 +399,18 @@ class GlossarySyncManager:
             ]
             slot_glossaries.sort(key=self._glossary_timestamp)
             older_slot = slot_glossaries[0]
+            new_glossary_id = getattr(older_slot, "name", "").split("/")[-1]
+            if hasattr(older_slot, "input_config") and hasattr(older_slot.input_config, "gcs_source"):
+                older_input_uri = getattr(older_slot.input_config.gcs_source, "input_uri", None)
+
+        new_glossary_name = self._format_glossary_name(project_id, new_glossary_id)
+
+        # 4. Stage new TSV to GCS FIRST before deleting any active or superseded slot
+        gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{new_glossary_id}.tsv"
+        self._upload_tsv_to_gcs(user_id, gcs_uri, tsv_bytes)
+
+        # If both slots were active, safely retire the older slot now that TSV is staged
+        if older_slot is not None:
             older_name = getattr(older_slot, "name", "")
             logger.info(
                 "Retiring older superseded slot %s before provisioning replacement",
@@ -400,15 +420,6 @@ class GlossarySyncManager:
             existing_glossaries = [
                 g for g in existing_glossaries if getattr(g, "name", "") != older_name
             ]
-            active_ids.discard(older_name.split("/")[-1])
-
-        # Choose the free slot (slot B if slot A is active; otherwise slot A)
-        new_glossary_id = slot_b_id if slot_a_id in active_ids else slot_a_id
-        new_glossary_name = self._format_glossary_name(project_id, new_glossary_id)
-
-        # 4. Stage new TSV to GCS under the chosen slot's deterministic path
-        gcs_uri = f"gs://{bucket_name}/glossaries/sessions/{new_glossary_id}.tsv"
-        self._upload_tsv_to_gcs(user_id, gcs_uri, tsv_bytes)
 
         logger.info(
             "Provisioning replacement Tier 2 glossary %s (blue-green) for user %s session %s",
@@ -417,15 +428,31 @@ class GlossarySyncManager:
             session_id,
         )
 
-        # 5. Create new replacement glossary FIRST and await full READY status
-        # Notice: Existing working glossary remains 100% active during this window!
-        new_resource_name = self._create_glossary_resource(
-            user_id=user_id,
-            project_id=project_id,
-            glossary_id=new_glossary_id,
-            glossary_name=new_glossary_name,
-            gcs_input_uri=gcs_uri,
-        )
+        # 5. Create new replacement glossary and await full READY status.
+        # If creation fails and an older slot was deleted during dual-slot recovery, attempt rollback restoration.
+        try:
+            new_resource_name = self._create_glossary_resource(
+                user_id=user_id,
+                project_id=project_id,
+                glossary_id=new_glossary_id,
+                glossary_name=new_glossary_name,
+                gcs_input_uri=gcs_uri,
+            )
+        except Exception:
+            if older_slot is not None and older_input_uri:
+                logger.exception("Creation of replacement slot failed; attempting rollback restoration of %s", new_glossary_name)
+                try:
+                    self._create_glossary_resource(
+                        user_id=user_id,
+                        project_id=project_id,
+                        glossary_id=new_glossary_id,
+                        glossary_name=new_glossary_name,
+                        gcs_input_uri=older_input_uri,
+                    )
+                    logger.info("Successfully restored older slot %s during rollback", new_glossary_name)
+                except Exception:
+                    logger.exception("Rollback restoration of older slot %s failed", new_glossary_name)
+            raise
 
         # 6. ONLY AFTER the new replacement is verified live, safely clean up superseded glossaries
         if existing_glossaries:

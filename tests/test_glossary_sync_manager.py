@@ -383,6 +383,42 @@ class TestBookSessionGlossarySync:
         assert calls[0] == slot_a.name  # Cleaned up first before create
         assert calls[1] == slot_b.name  # Cleaned up after new slot is live
 
+    def test_sync_book_session_glossary_dual_slots_creation_failure_attempts_rollback(
+        self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
+    ) -> None:
+        import datetime
+        mock_trans = mock_creds_mgr.get_translation_client.return_value
+
+        session_key = sync_mgr._session_id_prefix("book-101")
+        slot_a = MagicMock()
+        slot_a.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-a"
+        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+        slot_a.input_config.gcs_source.input_uri = "gs://user-trans-bucket/glossaries/sessions/old_a.tsv"
+
+        slot_b = MagicMock()
+        slot_b.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-b"
+        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.timezone.utc)
+
+        mock_trans.list_glossaries.return_value = [slot_a, slot_b]
+
+        # First create fails, second create (rollback restoration of slot A) succeeds
+        mock_lro_rollback = MagicMock()
+        mock_trans.create_glossary.side_effect = [
+            RuntimeError("Creation failed"),
+            mock_lro_rollback,
+        ]
+
+        with pytest.raises(RuntimeError, match="Creation failed"):
+            sync_mgr.sync_book_session_glossary(
+                user_id="user_1",
+                session_id="book-101",
+                user_choices={"Term": "Trans"},
+                overwrite=True,
+            )
+
+        # Rollback was attempted for the older slot!
+        assert mock_trans.create_glossary.call_count == 2
+
 
 class TestRetryAndResilience:
     """Test retry behavior on transient errors (429/503)."""
