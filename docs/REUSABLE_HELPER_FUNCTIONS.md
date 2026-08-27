@@ -42,7 +42,7 @@ This reference document catalogs all centralized, reusable helper functions acro
 * **Signature**:
   - `retry_gcp_call(fn: Callable[..., T], *args, max_retries: int = 5, base_delay: float = 1.0, max_delay: float = 30.0, **kwargs) -> T`
   - `@retry_gcp_operation(max_retries: int = 5, base_delay: float = 1.0, max_delay: float = 30.0)`
-* **Purpose**: Retries callables upon encountering transient Google Cloud exceptions (`ResourceExhausted` / HTTP 429, `ServiceUnavailable` / HTTP 503, gRPC status 8 and 14) using truncated exponential backoff with $\pm 20\%$ random jitter to eliminate thundering herd behavior.
+* **Purpose**: Retries callables upon encountering transient Google Cloud and Google Drive API exceptions (`ResourceExhausted` / HTTP 429, `ServiceUnavailable` / HTTP 503, `InternalServerError` / HTTP 500, gRPC status 8 and 14, or `googleapiclient.errors.HttpError` transient status codes) using truncated exponential backoff with $\pm 20\%$ random jitter to eliminate thundering herd behavior.
 * **Complexity**: Time: $O(\text{attempts})$, Space: $O(1)$.
 * **Canonical Usage**:
   ```python
@@ -104,11 +104,12 @@ This reference document catalogs all centralized, reusable helper functions acro
 
 ## 4. Crash-Safe File Persistence (`utils/file_handler.py`)
 
-### 4.1 `atomic_write_json` and `atomic_write_text`
+### 4.1 `atomic_write_json`, `atomic_write_text`, and `atomic_write_bytes`
 * **Location**: [`utils/file_handler.py`](../utils/file_handler.py)
 * **Signatures**:
   - `atomic_write_json(target_path: Path, data: Any, indent: int = 2) -> None`
   - `atomic_write_text(target_path: Path, text: str, encoding: str = "utf-8") -> None`
+  - `atomic_write_bytes(target_path: Path, data: bytes) -> None`
 * **Purpose**: Atomically persists data to disk by writing to a temporary file in the target parent directory, executing `flush()` and `os.fsync()`, and performing an atomic rename via `os.replace()`. Prevents file corruption if the Modal container scales down mid-write.
 * **Complexity**: Time: $O(M)$, Space: $O(M)$ disk temporary allocation.
 

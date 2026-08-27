@@ -255,12 +255,13 @@ source .venv/bin/activate
 python -m pip install -U pip
 python -m pip install -r requirements-dev.txt
 
-# Run all GCP migration test suites (Track 1 & Track 2 - 97 tests)
-pytest -o addopts="" tests/test_gcp_settings.py tests/test_byok_credentials_manager.py \
-  tests/test_gcp_batch_translation_service.py tests/test_lro_progress_monitor.py \
-  tests/test_cost_estimator.py tests/test_google_drive_exporter.py \
-  tests/test_user_vocabulary_store.py tests/test_glossary_compiler.py \
-  tests/test_glossary_sync_manager.py tests/test_session_glossary_lifecycle.py -v
+# Run all GCP migration test suites (Track 1 & Track 2 - 123 tests)
+pytest -o addopts="" tests/test_dry_helpers.py tests/test_gcp_settings.py \
+  tests/test_byok_credentials_manager.py tests/test_gcp_batch_translation_service.py \
+  tests/test_lro_progress_monitor.py tests/test_cost_estimator.py \
+  tests/test_google_drive_exporter.py tests/test_user_vocabulary_store.py \
+  tests/test_glossary_compiler.py tests/test_glossary_sync_manager.py \
+  tests/test_session_glossary_lifecycle.py -v
 
 # Run linter and formatter manually
 ruff check .
@@ -331,7 +332,10 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 - `config.py` - Main configuration with parallel processing settings
 - `config/settings.py` - Additional configuration management
-- `utils/` - File handling and validation utilities
+- `utils/gcp_helpers.py` - Canonical GCS URI parsing, blob deletion, regional glossary naming, and exponential backoff retry utilities
+- `utils/tsv_utils.py` - RFC 4180 compliant TSV quoting, formatting, and bytes serialization
+- `utils/pdf_stream.py` - Polymorphic streaming context manager for PDF inputs with deterministic descriptor cleanup
+- `utils/file_handler.py` - File handling, validation, and crash-safe atomic write routines (`atomic_write_json`, `atomic_write_text`, `atomic_write_bytes`)
 
 ### Testing & Examples
 
