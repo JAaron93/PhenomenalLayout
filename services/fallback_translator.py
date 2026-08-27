@@ -20,6 +20,7 @@ import contextlib
 import io
 import logging
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
@@ -27,13 +28,7 @@ from typing import BinaryIO
 import pypdf
 from google.api_core import exceptions as api_exceptions
 from google.cloud import translate_v3 as translate
-from pypdf.generic import (
-    ArrayObject,
-    DecodedStreamObject,
-    DictionaryObject,
-    NameObject,
-    NumberObject,
-)
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from config.settings import gcp_settings
 from services.byok_credentials_manager import BYOKCredentialsManager
@@ -48,6 +43,80 @@ _BACKOFF_MULTIPLIER: float = 2.0
 # Pagination constants for fallback plaintext PDF generation
 _MAX_LINES_PER_PAGE: int = 40
 _MAX_LINE_CHARS: int = 80
+
+# Transliteration mappings for Type 1 Helvetica with WinAnsiEncoding
+_SAFE_TRANSLITERATIONS: dict[str, str] = {
+    "\u2010": "-",  # hyphen
+    "\u2011": "-",  # non-breaking hyphen
+    "\u2012": "-",  # figure dash
+    "\u2015": "—",  # horizontal bar
+    "\u202f": " ",  # narrow no-break space
+    "\ufeff": "",  # zero-width no-break space
+    "≠": "!=",
+    "≤": "<=",
+    "≥": ">=",
+    "≈": "~",
+    "∞": "inf",
+}
+
+_GREEK_MAP: dict[str, str] = {
+    "\u03b1": "a",
+    "\u03b2": "b",
+    "\u03b3": "g",
+    "\u03b4": "d",
+    "\u03b5": "e",
+    "\u03b6": "z",
+    "\u03b7": "e",
+    "\u03b8": "th",
+    "\u03b9": "i",
+    "\u03ba": "k",
+    "\u03bb": "l",
+    "\u03bc": "m",
+    "\u03bd": "n",
+    "\u03be": "x",
+    "\u03bf": "o",
+    "\u03c0": "p",
+    "\u03c1": "r",
+    "\u03c3": "s",
+    "\u03c2": "s",
+    "\u03c4": "t",
+    "\u03c5": "y",
+    "\u03c6": "ph",
+    "\u03c7": "ch",
+    "\u03c8": "ps",
+    "\u03c9": "o",
+    "\u03ac": "a",
+    "\u03ad": "e",
+    "\u03ae": "e",
+    "\u03af": "i",
+    "\u03cc": "o",
+    "\u03cd": "y",
+    "\u03ce": "o",
+    "\u0391": "A",
+    "\u0392": "B",
+    "\u0393": "G",
+    "\u0394": "D",
+    "\u0395": "E",
+    "\u0396": "Z",
+    "\u0397": "E",
+    "\u0398": "Th",
+    "\u0399": "I",
+    "\u039a": "K",
+    "\u039b": "L",
+    "\u039c": "M",
+    "\u039d": "N",
+    "\u039e": "X",
+    "\u039f": "O",
+    "\u03a0": "P",
+    "\u03a1": "R",
+    "\u03a3": "S",
+    "\u03a4": "T",
+    "\u03a5": "Y",
+    "\u03a6": "Ph",
+    "\u03a7": "Ch",
+    "\u03a8": "Ps",
+    "\u03a9": "O",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -260,12 +329,11 @@ class FallbackPageTranslator:
             for idx in range(total_pages):
                 if idx in replacements:
                     replacement = replacements[idx]
-                    pages = self._render_fallback_pages(
+                    fallback_page = self._render_fallback_page(
                         text=replacement.translated_text,
                         page_number=idx + 1,
                     )
-                    for rep_page in pages:
-                        writer.add_page(rep_page)
+                    writer.add_page(fallback_page)
                 else:
                     writer.add_page(reader.pages[idx])
 
@@ -356,147 +424,170 @@ class FallbackPageTranslator:
         assert last_exc is not None
         raise last_exc
 
-    @staticmethod
-    def _create_unicode_type0_font() -> DictionaryObject:
-        """Create a composite Type 0 PDF font with identity ToUnicode CMap.
-
-        Maps character codes directly to Unicode codepoints in UTF-16BE,
-        enabling 100% lossless multi-lingual rendering across all character
-        sets (Greek, Fraktur, CJK, accents, mathematical symbols) without
-        transliteration or replacement.
-        """
-        cmap_stream = (
-            b"/CIDInit /ProcSet findresource begin\n"
-            b"12 dict begin\n"
-            b"begincmap\n"
-            b"/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n"
-            b"/CMapName /Custom-ToUnicode def\n"
-            b"/CMapType 2 def\n"
-            b"1 begincodespacerange\n"
-            b"<0000> <FFFF>\n"
-            b"endcodespacerange\n"
-            b"1 beginbfrange\n"
-            b"<0000> <FFFF> <0000>\n"
-            b"endbfrange\n"
-            b"endcmap\n"
-            b"CMapName currentdict /CMap defineresource pop\n"
-            b"end\n"
-            b"end"
-        )
-        tounicode_obj = DecodedStreamObject()
-        tounicode_obj.set_data(cmap_stream)
-
-        cid_font = DictionaryObject(
-            {
-                NameObject("/Type"): NameObject("/Font"),
-                NameObject("/Subtype"): NameObject("/CIDFontType2"),
-                NameObject("/BaseFont"): NameObject("/Helvetica"),
-                NameObject("/CIDSystemInfo"): DictionaryObject(
-                    {
-                        NameObject("/Registry"): NameObject("/Adobe"),
-                        NameObject("/Ordering"): NameObject("/UCS"),
-                        NameObject("/Supplement"): NumberObject(0),
-                    }
-                ),
-            }
-        )
-
-        return DictionaryObject(
-            {
-                NameObject("/Type"): NameObject("/Font"),
-                NameObject("/Subtype"): NameObject("/Type0"),
-                NameObject("/BaseFont"): NameObject("/Helvetica"),
-                NameObject("/Encoding"): NameObject("/Identity-H"),
-                NameObject("/DescendantFonts"): ArrayObject([cid_font]),
-                NameObject("/ToUnicode"): tounicode_obj,
-            }
-        )
-
     @classmethod
-    def _render_fallback_pages(
-        cls, text: str, page_number: int
-    ) -> list[pypdf.PageObject]:
-        """Render plaintext fallback pages via pure pypdf stream generation.
+    def _sanitize_for_winansi(cls, text: str) -> str:
+        """Sanitize text to guarantee renderability in Type 1 Helvetica with WinAnsiEncoding.
 
-        Handles line-wrapping and paginates overflow text across continuation
-        pages to ensure zero text clipping, without relying on deprecated
-        ReportLab canvas components.
+        Preserves German umlauts, smart punctuation, dashes, quotes, and mathematical
+        symbols (x, +-). Transliterates Greek philosophical terms and mathematical operators
+        without generating unrendered glyphs or '?' corruption.
         """
-        wrapped_lines: list[str] = []
+        for orig, repl in _SAFE_TRANSLITERATIONS.items():
+            text = text.replace(orig, repl)
+
+        out_chars: list[str] = []
+        for char in text:
+            try:
+                char.encode("cp1252")
+                out_chars.append(char)
+            except UnicodeEncodeError:
+                if char in _GREEK_MAP:
+                    out_chars.append(_GREEK_MAP[char])
+                else:
+                    decomposed = unicodedata.normalize("NFKD", char)
+                    ascii_chars = "".join(
+                        c for c in decomposed if not unicodedata.combining(c)
+                    )
+                    try:
+                        ascii_chars.encode("cp1252")
+                        out_chars.append(ascii_chars if ascii_chars else " ")
+                    except UnicodeEncodeError:
+                        out_chars.append(" ")
+
+        return "".join(out_chars)
+
+    @staticmethod
+    def _escape_pdf_literal(text: str) -> bytes:
+        """Encode to cp1252 and escape PDF string special characters."""
+        raw = text.encode("cp1252")
+        return raw.replace(b"\\", b"\\\\").replace(b"(", b"\\(").replace(b")", b"\\)")
+
+    @staticmethod
+    def _wrap_text(text: str, max_chars: int) -> list[str]:
+        """Wrap lines respecting words and paragraph breaks."""
+        wrapped: list[str] = []
         for raw_line in text.split("\n"):
             words = raw_line.split(" ")
-            current_line: list[str] = []
+            current: list[str] = []
             for word in words:
-                current_line.append(word)
-                if len(" ".join(current_line)) > _MAX_LINE_CHARS:
-                    wrapped_lines.append(" ".join(current_line))
-                    current_line = []
-            if current_line:
-                wrapped_lines.append(" ".join(current_line))
+                current.append(word)
+                if len(" ".join(current)) > max_chars:
+                    wrapped.append(" ".join(current))
+                    current = []
+            if current:
+                wrapped.append(" ".join(current))
+        return wrapped or [""]
 
-        if not wrapped_lines:
-            wrapped_lines = [""]
+    @classmethod
+    def _render_fallback_page(cls, text: str, page_number: int) -> pypdf.PageObject:
+        """Render a single plaintext fallback page via pure pypdf stream generation.
 
-        # Chunk into pages to prevent vertical text clipping
-        chunks = [
-            wrapped_lines[i : i + _MAX_LINES_PER_PAGE]
-            for i in range(0, len(wrapped_lines), _MAX_LINES_PER_PAGE)
-        ]
-        total_parts = len(chunks)
-        generated_pages: list[pypdf.PageObject] = []
-        type0_font = cls._create_unicode_type0_font()
+        Replaces the failed layout page with exactly 1 fallback page to preserve
+        strict 1-to-1 page alignment across German original and English translation
+        (preventing page desynchronization in DualPaneViewerController).
 
-        for part_idx, chunk in enumerate(chunks):
-            writer = pypdf.PdfWriter()
-            page = writer.add_blank_page(width=612, height=792)
+        Uses standard Type 1 Helvetica with WinAnsiEncoding to guarantee that every
+        glyph is universally and cleanly rendered by all standard PDF viewers.
+        """
+        writer = pypdf.PdfWriter()
+        page = writer.add_blank_page(width=612, height=792)
 
-            if "/Resources" not in page:
-                page[NameObject("/Resources")] = DictionaryObject()
-            page["/Resources"][NameObject("/Font")] = DictionaryObject(
-                {NameObject("/F1"): type0_font}
-            )
+        font_dict = DictionaryObject(
+            {
+                NameObject("/Type"): NameObject("/Font"),
+                NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica"),
+                NameObject("/Encoding"): NameObject("/WinAnsiEncoding"),
+            }
+        )
+        if "/Resources" not in page:
+            page[NameObject("/Resources")] = DictionaryObject()
+        page["/Resources"][NameObject("/Font")] = DictionaryObject(
+            {NameObject("/F1"): font_dict}
+        )
 
-            part_suffix = (
-                f" (Part {part_idx + 1}/{total_parts})" if total_parts > 1 else ""
-            )
-            header_str = (
-                f"[Fallback Plaintext Translation - Page {page_number}{part_suffix}]"
-            )
-            footer_str = f"PhenomenalLayout Scholarly Resilience Fallback Engine | Page {page_number}"
+        header_str = f"[Fallback Plaintext Translation - Page {page_number}]"
+        footer_str = f"PhenomenalLayout Scholarly Resilience Fallback Engine | Page {page_number}"
 
-            header_hex = header_str.encode("utf-16be").hex()
-            footer_hex = footer_str.encode("utf-16be").hex()
+        sanitized_text = cls._sanitize_for_winansi(text)
+        single_col_lines = cls._wrap_text(sanitized_text, max_chars=80)
+        line_count = len(single_col_lines)
 
-            ops: list[str] = [
-                "BT",
-                "/F1 10 Tf",
-                "14 TL",
-                "50 740 Td",
-                f"<{header_hex}> Tj",
-                "0 -25 Td",
+        ops: list[bytes] = []
+
+        # Header
+        header_bytes = cls._escape_pdf_literal(header_str)
+        footer_bytes = cls._escape_pdf_literal(footer_str)
+
+        ops.extend(
+            [
+                b"BT",
+                b"/F1 10 Tf",
+                b"14 TL",
+                b"50 740 Td",
+                b"(" + header_bytes + b") Tj",
+                b"ET",
             ]
-            for line in chunk:
-                line_hex = line.encode("utf-16be").hex()
-                ops.append(f"<{line_hex}> '")
+        )
 
-            # Position and draw footer
-            ops.extend(
-                [
-                    "ET",
-                    "BT",
-                    "/F1 8 Tf",
-                    "50 35 Td",
-                    f"<{footer_hex}> Tj",
-                    "ET",
-                ]
-            )
+        if line_count <= 45:
+            ops.extend([b"BT", b"/F1 10 Tf", b"13 TL", b"50 710 Td"])
+            for idx, line in enumerate(single_col_lines):
+                line_bytes = cls._escape_pdf_literal(line)
+                if idx == 0:
+                    ops.append(b"(" + line_bytes + b") Tj")
+                else:
+                    ops.append(b"(" + line_bytes + b") '")
+            ops.append(b"ET")
+        elif line_count <= 65:
+            ops.extend([b"BT", b"/F1 8 Tf", b"10 TL", b"50 715 Td"])
+            for idx, line in enumerate(single_col_lines):
+                line_bytes = cls._escape_pdf_literal(line)
+                if idx == 0:
+                    ops.append(b"(" + line_bytes + b") Tj")
+                else:
+                    ops.append(b"(" + line_bytes + b") '")
+            ops.append(b"ET")
+        else:
+            two_col_lines = cls._wrap_text(sanitized_text, max_chars=42)
+            lines_per_col = 65
+            col1 = two_col_lines[:lines_per_col]
+            col2 = two_col_lines[lines_per_col : lines_per_col * 2]
 
-            stream = DecodedStreamObject()
-            stream.set_data("\n".join(ops).encode("ascii"))
-            page[NameObject("/Contents")] = stream
-            generated_pages.append(page)
+            ops.extend([b"BT", b"/F1 7.5 Tf", b"9.5 TL", b"50 715 Td"])
+            for idx, line in enumerate(col1):
+                line_bytes = cls._escape_pdf_literal(line)
+                if idx == 0:
+                    ops.append(b"(" + line_bytes + b") Tj")
+                else:
+                    ops.append(b"(" + line_bytes + b") '")
+            ops.append(b"ET")
 
-        return generated_pages
+            if col2:
+                ops.extend([b"BT", b"/F1 7.5 Tf", b"9.5 TL", b"315 715 Td"])
+                for idx, line in enumerate(col2):
+                    line_bytes = cls._escape_pdf_literal(line)
+                    if idx == 0:
+                        ops.append(b"(" + line_bytes + b") Tj")
+                    else:
+                        ops.append(b"(" + line_bytes + b") '")
+                ops.append(b"ET")
+
+        # Footer
+        ops.extend(
+            [
+                b"BT",
+                b"/F1 8 Tf",
+                b"50 35 Td",
+                b"(" + footer_bytes + b") Tj",
+                b"ET",
+            ]
+        )
+
+        stream = DecodedStreamObject()
+        stream.set_data(b"\n".join(ops))
+        page[NameObject("/Contents")] = stream
+        return page
 
     @staticmethod
     def _open_source(
