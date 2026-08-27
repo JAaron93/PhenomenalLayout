@@ -36,10 +36,14 @@ python -m pip install -r requirements-dev.txt
 
 ### Manual Quality Checks
 
-Run the Track 1 test suite:
+Run the complete Track 1 and Track 2 GCP migration test suite (97 tests):
 
 ```bash
-FOCUSED=1 pytest tests/test_gcp_settings.py tests/test_byok_credentials_manager.py tests/test_gcp_batch_translation_service.py tests/test_lro_progress_monitor.py tests/test_cost_estimator.py tests/test_google_drive_exporter.py -v
+pytest -o addopts="" tests/test_gcp_settings.py tests/test_byok_credentials_manager.py \
+  tests/test_gcp_batch_translation_service.py tests/test_lro_progress_monitor.py \
+  tests/test_cost_estimator.py tests/test_google_drive_exporter.py \
+  tests/test_user_vocabulary_store.py tests/test_glossary_compiler.py \
+  tests/test_glossary_sync_manager.py tests/test_session_glossary_lifecycle.py -v
 ```
 
 Lint and type-check:
@@ -69,18 +73,17 @@ With `pytest-asyncio>=0.23` and pytest 8, the asyncio mode must be declared. We 
 
 ## Layout Preservation Development Guidelines
 
-When contributing to PhenomenalLayout's core functionality, please follow these guidelines:
+> [!NOTE]
+> Under [ADR 0001](docs/adr/0001-migrate-to-google-cloud-document-translation.md), full-length PDF document translation and pixel-perfect layout preservation are handled natively by **Google Cloud Document Translation Advanced (v3)**. Custom canvas painting, ReportLab box placement, and dynamic programming text scaling are deprecated.
 
-### Text Fitting Algorithm Development
-- **Test with multiple languages**: Ensure algorithms work across different character densities (German→English, English→Chinese, etc.)
-- **Quality metrics**: Always include quality scoring for layout preservation strategies
-- **Fallback handling**: Implement graceful degradation when optimal fitting isn't possible
-- **Performance considerations**: Test with large documents (1000+ pages) to ensure scalability
+When contributing to PhenomenalLayout, focus on:
+- **Neologism Detection & Morphological Analysis**: Accurate German compound decomposition and philosophical term recognition.
+- **Dual-Tier Glossary Synchronization**: Ensuring RFC 4180 TSV compliance, zero-downtime Blue-Green replacement, and regional quota bounds in GCP `us-central1`.
+- **Scholarly Resilience**: Fraktur OCR assessment, job recovery, and side-by-side verification.
 
 ### Integration Testing
-- **External service mocking**: Mock Lingo.dev and Dolphin OCR APIs for consistent testing
-- **Layout preservation validation**: Include visual regression tests for complex layouts
-- **Quality threshold testing**: Verify that layout preservation quality meets minimum standards (>0.7 score)
+- **External service mocking**: Mock Google Cloud Translation and Google Cloud Storage APIs using standard `unittest.mock` fixtures.
+- **Quality threshold testing**: Maintain $\ge 90\%$ test coverage on all newly added services and bug fixes.
 
 ### Documentation Requirements
 - **Algorithm explanations**: Document the mathematical basis for text fitting strategies

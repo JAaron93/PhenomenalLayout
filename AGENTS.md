@@ -67,6 +67,16 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 * **Deterministic File Handle Cleanup**: Any service accepting `Path | bytes | BinaryIO` for offline processing (e.g. `GCPCostEstimator`) MUST deterministically close internally opened file descriptors using `try...finally` blocks or context managers, preventing file descriptor exhaustion in serverless environments.
 * **Package Export Symmetry**: All optional or conditional services recorded in internal availability registries MUST explicitly define and export their corresponding boolean availability flag (e.g., `GCP_BATCH_SERVICES_AVAILABLE`) in the top-level package `__all__`.
 
+### 2.11 Zero-Downtime Blue-Green Glossary & Quota Bounding Invariants
+* **Zero Creation Window Outages (Blue-Green Replacement)**: When updating or resynchronizing Tier 2 session glossaries, the system MUST provision the replacement glossary under an alternating slot (`-a` / `-b`) and verify it is fully `READY` before retiring superseded resources. Active working glossaries must NEVER be deleted prior to replacement verification.
+* **Strict Two-Slot Bound (No Unbounded UUID Slots)**: A session MUST NEVER allocate arbitrary UUID overflow slots. Total active regional slots per session must be strictly bounded to at most 2 (`-a` and `-b`). If both slots remain active due to an earlier interrupted retirement:
+  1. Determine the older superseded slot by comparing `submit_time` timestamps.
+  2. Stage the replacement TSV to GCS first.
+  3. Retire the older superseded slot to free its slot identifier.
+  4. Provision the replacement in that freed slot while the newer working slot continues serving traffic.
+* **Versioned GCS Staging & Rollback Preservation**: Staged session TSVs in GCS MUST use versioned object names (`.../{slot}_{version}.tsv`) so that uploading replacement terminology NEVER overwrites the older known-good TSV in GCS. If replacement creation fails, the system MUST execute automated rollback restoration using the preserved previous GCS input URI.
+* **Cryptographic Token Session Isolation**: Session prefix matching MUST incorporate a deterministic 16-character SHA-256 token (`sess-{slug}-{token}-a`) to prevent false prefix matches between sibling sessions (e.g., preventing `book-101` from deleting `book-101-extra`).
+
 ---
 
 ## 3. Modal Labs Serverless Deployment Architecture
@@ -90,6 +100,9 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | **Absolute Local Worktree Links** (`file:///Users/...`) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`.kiro/specs/gcp-migration/design.md`). |
 | **Blocking Sync I/O in Async Paths** | Degrades throughput on multi-chapter books. | Use `asyncio` and non-blocking streaming I/O for GCS uploads and LRO polling. |
 | **Hardcoded Credentials or `.env` Commits** | Security vulnerability. | Use session-scoped BYOK vaults or Google Cloud Application Default Credentials (ADC). |
+| **Premature Glossary Deletion** (Deleting working glossary before replacement is READY) | Leaves translations without a glossary during creation windows or upon creation failures. | Zero-downtime Blue-Green replacement: provision alternating slot (`-a` / `-b`), verify `READY`, then retire old slot. |
+| **Unbounded UUID Overflow Slots** (`sess-{token}-{uuid}`) | Exhausts the regional 1,000 glossary quota in `us-central1` during repeated failures. | Strict 2-slot bound: identify and retire the older superseded slot via `submit_time` before provisioning replacement. |
+| **Overwriting Unversioned Staged TSVs in GCS** | Overwrites known-good terminology before the replacement is verified live, breaking rollback restoration. | Versioned GCS object paths (`.../{slot}_{version}.tsv`) preserving the prior input URI until cleanup. |
 
 ---
 

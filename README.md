@@ -120,6 +120,27 @@ flowchart TD
    - Document upload, unauthenticated cost estimation, and terminology review
    - One-click asynchronous document translation and synchronized dual-pane viewer
 
+9. **Persistent User Vocabulary Store** (`services/user_vocabulary_store.py`)
+   - Thread-safe persistent SQLite storage in WAL mode (`/data/user_vocabularies/{user_id}.sqlite`)
+   - Remembers user translation choices and `keep_untranslated` directives across book pre-scans
+   - Automatic graceful fallback to local directory when `/data` volume root is read-only
+
+10. **RFC 4180 Glossary TSV Compiler** (`services/glossary_compiler.py`)
+    - Compiles UTF-8 RFC 4180 TSVs (`de\ten\n`) enforcing strict 3-tier precedence:
+      `Book Session Overrides` > `User Persistent Vocabulary` > `Base Foundation Dictionary`
+    - RFC 4180 quote escaping (`""`), alphabetical ordering, and German character preservation
+
+11. **Dual-Tier Glossary Sync Manager** (`services/glossary_sync_manager.py`)
+    - Idempotent regional provisioning of Tier 1 Base foundation glossary (`klages-philosophical-base-v1`)
+    - Zero-downtime Blue-Green replacement (`-a` and `-b` slots) for Tier 2 Book Session glossaries
+    - Strict 2-slot quota bounding, versioned GCS staging paths, and automatic rollback restoration on failure
+    - Deterministic SHA-256 session token prefix isolation preventing collisions across sibling sessions
+
+12. **Session Glossary Lifecycle Manager** (`services/session_glossary_lifecycle.py`)
+    - Persistent session metadata tracking surviving serverless container restarts (`/data/session_glossaries.json`)
+    - Automated cleanup of transient GCP glossaries and GCS staging TSVs upon book completion
+    - Regional quota auditing (alerting at 900 of 1,000 regional quota limit in `us-central1`) and expiration pruning
+
 ## 🔬 Technical Deep-Dive: Layout Preservation Innovation
 
 ### The Translation-Layout Challenge
@@ -215,8 +236,12 @@ source .venv/bin/activate
 python -m pip install -U pip
 python -m pip install -r requirements-dev.txt
 
-# Run focused Track 1 tests
-FOCUSED=1 pytest tests/test_gcp_settings.py tests/test_byok_credentials_manager.py tests/test_gcp_batch_translation_service.py tests/test_lro_progress_monitor.py tests/test_cost_estimator.py tests/test_google_drive_exporter.py -v
+# Run all GCP migration test suites (Track 1 & Track 2 - 97 tests)
+pytest -o addopts="" tests/test_gcp_settings.py tests/test_byok_credentials_manager.py \
+  tests/test_gcp_batch_translation_service.py tests/test_lro_progress_monitor.py \
+  tests/test_cost_estimator.py tests/test_google_drive_exporter.py \
+  tests/test_user_vocabulary_store.py tests/test_glossary_compiler.py \
+  tests/test_glossary_sync_manager.py tests/test_session_glossary_lifecycle.py -v
 
 # Run linter and formatter manually
 ruff check .
@@ -264,11 +289,18 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 - `app.py` - Main application with advanced Gradio interface
 - `services/enhanced_document_processor.py` - PDF-only document handler
 
-### Translation Services
+### Translation & Cloud Document Services
 
-- `services/translation_service.py` - Base translation service with Lingo.dev integration
-- `services/enhanced_translation_service.py` - **NEW**: Drop-in replacement with parallel processing
-- `services/parallel_translation_service.py` - **NEW**: High-performance parallel translation engine
+- `services/gcp_batch_translation_service.py` - Primary asynchronous GCS batch translation engine (`batchTranslateDocument`)
+- `services/byok_credentials_manager.py` - In-memory BYOK credentials vault with non-billable validation
+- `services/lro_progress_monitor.py` - Long-Running Operation (LRO) batch progress monitor
+- `services/cost_estimator.py` - Pre-auth zero-credential PDF translation & GCS retention estimator
+- `services/google_drive_exporter.py` - Streamed Google Drive export via Google Identity Services OAuth
+- `services/glossary_sync_manager.py` - Dual-tier GCP regional glossary synchronizer (Blue-Green replacement)
+- `services/session_glossary_lifecycle.py` - Session glossary tracking, regional quota auditing, and auto-cleanup
+- `services/glossary_compiler.py` - RFC 4180 TSV glossary compiler enforcing 3-tier precedence
+- `services/user_vocabulary_store.py` - Persistent user terminology store on Modal Volume SQLite
+- `services/translation_service.py` - Legacy translation service with Lingo.dev integration
 
 ### Supporting Services
 
@@ -424,6 +456,18 @@ safety check                     # Check for known vulnerabilities
 ```
 
 ## 🔧 Configuration
+
+### Google Cloud & Dual-Tier Glossary Settings
+Configure environment variables for Google Cloud Document Translation v3 and regional glossary synchronization:
+
+- `GCP_PROJECT_ID` (str): Target Google Cloud project identifier.
+- `GCS_BUCKET_NAME` (str): Google Cloud Storage bucket for document staging and TSV glossary storage.
+- `GCP_TRANSLATION_LOCATION` (str): Regional GCP endpoint (default: `"us-central1"`).
+- `GCP_BASE_GLOSSARY_ID` (str): Regional glossary ID for the Tier 1 base philosophical foundation dictionary (default: `"klages-philosophical-base-v1"`).
+- `GCP_BASE_GLOSSARY_TSV_PATH` (str): Local path to the base terminology dictionary (default: `"config/klages_terminology.json"`).
+- `GCP_GLOSSARY_QUOTA_ALERT_THRESHOLD` (int): Number of regional glossaries that triggers warning alerts (default: `900`).
+- `GCP_GLOSSARY_QUOTA_LIMIT` (int): Hard regional limit for GCP Translation glossaries (default: `1000`).
+- `GCP_SESSION_GLOSSARY_TTL_HOURS` (int): Time-to-live before pruning expired session glossaries (default: `24`).
 
 ### PDF Processing Settings
 - `PDF_DPI` (int): Resolution for PDF rendering; affects pdf2image conversion. Default: 300 DPI.

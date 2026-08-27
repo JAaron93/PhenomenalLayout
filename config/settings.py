@@ -59,11 +59,15 @@ class GCPSettings:
     # Maximum acceptable deviation between estimate and actual GCP bill (USD)
     cost_estimate_tolerance_usd: float = 5.00
 
-    # --- GCP Glossary quota ---
+    # --- GCP Glossary quota and Tier 1 base glossary ---
     # Hard regional limit for Cloud Translation glossaries per project
     gcp_glossary_quota_limit: int = 1000
     # Soft warning threshold (alert when approaching quota)
     gcp_glossary_warning_threshold: int = 900
+    # Regional base glossary identifier for Tier 1 philosophical foundation dictionary
+    gcp_base_glossary_id: str = "klages-philosophical-base-v1"
+    # Local path to Tier 1 base terminology JSON file
+    base_dictionary_path: str = "config/klages_terminology.json"
 
     @classmethod
     def from_env(cls) -> "GCPSettings":
@@ -98,6 +102,18 @@ class GCPSettings:
             modal_volume_path=os.getenv("MODAL_VOLUME_PATH", "/data"),
             cost_estimate_tolerance_usd=float(
                 os.getenv("COST_ESTIMATE_TOLERANCE_USD", "5.00")
+            ),
+            gcp_glossary_quota_limit=int(
+                os.getenv("GCP_GLOSSARY_QUOTA_LIMIT", "1000")
+            ),
+            gcp_glossary_warning_threshold=int(
+                os.getenv("GCP_GLOSSARY_WARNING_THRESHOLD", "900")
+            ),
+            gcp_base_glossary_id=os.getenv(
+                "GCP_BASE_GLOSSARY_ID", "klages-philosophical-base-v1"
+            ),
+            base_dictionary_path=os.getenv(
+                "BASE_DICTIONARY_PATH", "config/klages_terminology.json"
             ),
         )
 

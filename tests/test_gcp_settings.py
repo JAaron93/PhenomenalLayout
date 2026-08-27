@@ -76,6 +76,14 @@ class TestGCPSettingsDefaults:
         s = GCPSettings()
         assert s.gcp_glossary_warning_threshold == 900
 
+    def test_gcp_base_glossary_id(self) -> None:
+        s = GCPSettings()
+        assert s.gcp_base_glossary_id == "klages-philosophical-base-v1"
+
+    def test_base_dictionary_path(self) -> None:
+        s = GCPSettings()
+        assert s.base_dictionary_path == "config/klages_terminology.json"
+
 
 class TestGCPSettingsNoSecretsRequired:
     """Verify that defaults load cleanly without any environment variables."""
@@ -143,6 +151,17 @@ class TestGCPSettingsEnvOverride:
         monkeypatch.setenv("MODAL_VOLUME_PATH", "/mnt/data")
         s = GCPSettings.from_env()
         assert s.modal_volume_path == "/mnt/data"
+
+    def test_override_glossary_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("GCP_BASE_GLOSSARY_ID", "custom-base-v2")
+        monkeypatch.setenv("BASE_DICTIONARY_PATH", "custom/dict.json")
+        monkeypatch.setenv("GCP_GLOSSARY_QUOTA_LIMIT", "800")
+        monkeypatch.setenv("GCP_GLOSSARY_WARNING_THRESHOLD", "750")
+        s = GCPSettings.from_env()
+        assert s.gcp_base_glossary_id == "custom-base-v2"
+        assert s.base_dictionary_path == "custom/dict.json"
+        assert s.gcp_glossary_quota_limit == 800
+        assert s.gcp_glossary_warning_threshold == 750
 
 
 class TestGCPSettingsSingleton:
