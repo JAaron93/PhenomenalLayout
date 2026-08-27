@@ -8,6 +8,15 @@ that can be used across the codebase for performance optimization.
 
 from __future__ import annotations
 
+import warnings
+
+warnings.warn(
+    "core.dynamic_programming has been retired and deprecated under ADR 0001 / Track 4. "
+    "Core caching and metric utilities are retained for backward compatibility.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import dataclasses
 import functools
 import hashlib

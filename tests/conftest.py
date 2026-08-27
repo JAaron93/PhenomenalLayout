@@ -59,6 +59,8 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ.setdefault("MEMORY_API_ENABLE_AUTH", "true")
     os.environ.setdefault("MEMORY_API_JWT_SECRET", "test-secret-key")
     os.environ.setdefault("MEMORY_API_KEY", "test-admin-key")
+    # Set mock Lingo API key to ensure safe collection for legacy translation services
+    os.environ.setdefault("LINGO_API_KEY", "mock_lingo_api_key_for_tests")
     # When focusing, quiet output at runtime without relying on pre-parsed
     # addopts
     if os.getenv("FOCUSED"):

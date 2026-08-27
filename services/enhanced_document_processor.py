@@ -8,11 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dolphin_ocr.layout import BoundingBox, FontInfo
-
-# PDFToImageConverter and DolphinOCRService removed in favor of direct PDF submission via dolphin_client
-# Migrated off legacy PDF engine; uses pdf2image + Dolphin OCR (PDF-only)
-from .pdf_document_reconstructor import PDFDocumentReconstructor
+# PDFToImageConverter, DolphinOCRService, and PDFDocumentReconstructor removed under ADR 0001
+# Layout preservation is handled natively by Google Cloud Document Translation.
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +102,8 @@ class EnhancedDocumentProcessor:
         """
         self.dpi = dpi
         self.preserve_images = preserve_images
-        # Removed local pdf_converter and ocr service in favor of direct PDF submission
-        self.reconstructor = PDFDocumentReconstructor()
+        # PDFDocumentReconstructor retired and deleted under ADR 0001
+        self.reconstructor = None
 
     def _generate_text_preview(self, text: str, max_chars: int = 1000) -> str:
         """Generate a text preview with ellipsis if needed.
@@ -253,113 +250,23 @@ class EnhancedDocumentProcessor:
         else:
             raise ValueError(f"Unsupported content type: {content_type}")
 
-    def _create_translated_pdf(
+    async def reconstruct_document(
         self,
         original_content: dict[str, Any],
         translated_texts: dict[int, list[str]],
-        output_path: str,
+        output_path: str | None = None,
     ) -> str:
-        """Create translated PDF with preserved formatting.
+        """Reconstruct translated document (deprecated).
 
-        Uses ``PDFDocumentReconstructor.reconstruct_pdf_document``.
-        Raises NotImplementedError if reconstruction backend is
-        unavailable in the environment.
+        Raises:
+            NotImplementedError: Legacy ReportLab canvas reconstruction has been
+                retired and deleted under ADR 0001 in favor of Google Cloud
+                Document Translation.
         """
-        # Build TranslatedLayout from the content we have
-        try:
-            from services.pdf_document_reconstructor import (
-                DocumentReconstructionError,
-                TranslatedElement,
-                TranslatedLayout,
-                TranslatedPage,
-            )
-        except ImportError as e:  # pragma: no cover
-            raise NotImplementedError(
-                "PDF reconstruction is not available: missing dependencies"
-            ) from e
-
-        # Translate the minimal dolphin-derived structure into
-        # TranslatedLayout for the reconstructor.
-
-        pages: list[TranslatedPage] = []
-        dolphin_layout = original_content.get("dolphin_layout")
-        for page_index, texts in sorted(
-            original_content.get("text_by_page", {}).items()
-        ):
-            elements: list[TranslatedElement] = []
-            for i, original in enumerate(texts):
-                translated = translated_texts.get(page_index, [])
-                translated_text = translated[i] if i < len(translated) else original
-
-                # Defaults
-                bbox = BoundingBox(x=0.0, y=0.0, width=612.0, height=12.0)
-                font_info = FontInfo(family="Helvetica", size=12.0)
-
-                # Try to use dolphin_layout data if available
-                try:
-                    if isinstance(dolphin_layout, dict) and page_index < len(
-                        dolphin_layout.get("pages", [])
-                    ):
-                        page_data = dolphin_layout["pages"][page_index]
-                        blocks = page_data.get("text_blocks", [])
-                        if i < len(blocks):
-                            block = blocks[i]
-                            if isinstance(block, dict):
-                                bbox_data = block.get("bbox")
-                                if (
-                                    isinstance(bbox_data, (list, tuple))
-                                    and len(bbox_data) >= 4
-                                ):
-                                    bbox = BoundingBox(
-                                        x=float(bbox_data[0]),
-                                        y=float(bbox_data[1]),
-                                        width=float(bbox_data[2]) - float(bbox_data[0]),
-                                        height=float(bbox_data[3])
-                                        - float(bbox_data[1]),
-                                    )
-                                font_data = block.get("font_info", {})
-                                if isinstance(font_data, dict):
-                                    font_info = FontInfo(
-                                        name=str(font_data.get("family", "Helvetica")),
-                                        size=float(font_data.get("size", 12.0)),
-                                    )
-                except Exception:
-                    # Best-effort only; fall back to defaults silently
-                    pass
-
-                elements.append(
-                    TranslatedElement(
-                        original_text=original,
-                        translated_text=translated_text,
-                        adjusted_text=None,
-                        bbox=bbox,
-                        font_info=font_info,
-                    )
-                )
-            pages.append(
-                TranslatedPage(page_number=page_index, translated_elements=elements)
-            )
-
-        layout = TranslatedLayout(pages=pages)
-
-        reconstructor = self.reconstructor
-        try:
-            result = reconstructor.reconstruct_pdf_document(
-                translated_layout=layout,
-                original_file_path=original_content.get("file_path", ""),
-                output_path=output_path,
-            )
-        except (DocumentReconstructionError, OSError, ValueError) as e:
-            raise NotImplementedError(
-                f"PDF reconstruction failed or is unavailable: {e}"
-            ) from e
-
-        if not result.success:
-            raise NotImplementedError(
-                f"PDF reconstruction did not complete successfully. Warnings: {getattr(result, 'warnings', [])}"
-            )
-
-        return result.output_path
+        raise NotImplementedError(
+            "Legacy PDF document reconstruction has been retired and deleted under "
+            "ADR 0001 / Track 4. Use Google Cloud Document Translation."
+        )
 
     # TXT output helpers removed (PDF-only)
 

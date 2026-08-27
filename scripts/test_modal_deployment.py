@@ -16,12 +16,8 @@ sys.path.insert(0, str(project_root))
 
 try:
     from services.dolphin_client import get_layout
-except ModuleNotFoundError as e:
-    print(
-        f"❌ Could not import dolphin_client: {e}. Ensure the project is properly set up.",
-        file=sys.stderr,
-    )
-    sys.exit(1)
+except (ImportError, ModuleNotFoundError):
+    get_layout = None  # Retired under ADR 0001
 
 # ---------------------------------------------------------------------------
 # Test-data paths searched by the helper functions
@@ -192,6 +188,10 @@ async def main() -> None:
     """Main test function."""
     print("🧪 Modal Labs Deployment Test")
     print("=" * 40)
+
+    if get_layout is None:
+        print("[INFO] Dolphin OCR client has been retired and deleted under ADR 0001.")
+        return
 
     # Check authentication
     if not check_modal_authentication():
