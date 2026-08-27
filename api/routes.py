@@ -5,16 +5,32 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import json
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Body,
     File,
+    Form,
     HTTPException,
+    Query,
     Request,
+    Response,
     UploadFile,
 )
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
+
+from services.byok_credentials_manager import BYOKCredentialsManager, GuideStep, ValidationResult
+from services.cost_estimator import CostQuote, GCPCostEstimator
+from services.user_vocabulary_store import TermPreference, UserVocabularyStore
+from services.book_translation_orchestrator import (
+    BookJobHandle,
+    BookScanResult,
+    BookTranslationOrchestrator,
+    CompletionSummary,
+    FallbackResult,
+)
 
 from api.memory_routes import router as memory_router
 from core.state_manager import state, translation_jobs
@@ -948,3 +964,646 @@ async def calculate_confidence(
     except Exception as e:
         logger.error("Error calculating confidence: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+# ===========================================================================
+# Track 5: GCP Migration Endpoints (TASK-5.2)
+# ===========================================================================
+
+_cost_estimator: GCPCostEstimator | None = None
+_byok_manager: BYOKCredentialsManager | None = None
+_user_vocabulary_store: UserVocabularyStore | None = None
+_book_orchestrator: BookTranslationOrchestrator | None = None
+
+
+def get_cost_estimator() -> GCPCostEstimator:
+    """Return singleton GCPCostEstimator instance."""
+    global _cost_estimator
+    if _cost_estimator is None:
+        _cost_estimator = GCPCostEstimator()
+    return _cost_estimator
+
+
+def get_byok_credentials_manager() -> BYOKCredentialsManager:
+    """Return singleton BYOKCredentialsManager instance."""
+    global _byok_manager
+    if _byok_manager is None:
+        _byok_manager = BYOKCredentialsManager()
+    return _byok_manager
+
+
+def get_user_vocabulary_store() -> UserVocabularyStore:
+    """Return singleton UserVocabularyStore instance."""
+    global _user_vocabulary_store
+    if _user_vocabulary_store is None:
+        _user_vocabulary_store = UserVocabularyStore()
+    return _user_vocabulary_store
+
+
+def get_book_orchestrator() -> BookTranslationOrchestrator:
+    """Return singleton BookTranslationOrchestrator instance."""
+    global _book_orchestrator
+    if _book_orchestrator is None:
+        _book_orchestrator = BookTranslationOrchestrator(
+            credentials_manager=get_byok_credentials_manager(),
+            vocabulary_store=get_user_vocabulary_store(),
+            cost_estimator=get_cost_estimator(),
+        )
+    return _book_orchestrator
+
+
+@api_router.post("/cost/estimate")
+async def estimate_cost(
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Zero-auth GCP translation and storage budget estimator."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported for cost estimation")
+    try:
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+        quote = get_cost_estimator().estimate_book_cost(contents)
+        return {
+            "total_pages": quote.total_pages,
+            "file_size_mb": quote.file_size_mb,
+            "base_cost": quote.base_cost,
+            "staging_overhead_cost": quote.staging_overhead_cost,
+            "storage_cost_1mo": quote.storage_cost_1mo,
+            "storage_cost_12mo": quote.storage_cost_12mo,
+            "free_tier_covered": quote.free_tier_covered,
+            "total_estimate": quote.total_estimate,
+            "tolerance_range": list(quote.tolerance_range),
+            "estimation_time_sec": quote.estimation_time_sec,
+        }
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Error calculating cost estimate: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/byok/onboarding-guide")
+async def get_onboarding_guide() -> dict[str, Any]:
+    """Interactive 6-step GCP BYOK onboarding guide with console links and gcloud script."""
+    try:
+        mgr = get_byok_credentials_manager()
+        steps = mgr.get_onboarding_guide()
+        steps_data = [
+            {
+                "step_number": s.step_number,
+                "title": s.title,
+                "description": s.description,
+                "console_link": s.console_link,
+                "gcloud_snippet": getattr(s, "gcloud_command", getattr(s, "gcloud_snippet", "")),
+                "gcloud_command": getattr(s, "gcloud_command", getattr(s, "gcloud_snippet", "")),
+            }
+            for s in steps
+        ]
+        gcloud_script = getattr(
+            mgr,
+            "generate_gcloud_setup_script",
+            lambda: "\n".join(
+                getattr(s, "gcloud_command", getattr(s, "gcloud_snippet", ""))
+                for s in steps
+                if getattr(s, "gcloud_command", getattr(s, "gcloud_snippet", None))
+            ),
+        )()
+        return {
+            "steps": steps_data,
+            "gcloud_script": gcloud_script,
+        }
+    except Exception as exc:
+        logger.error("Error retrieving onboarding guide: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/byok/credentials")
+async def set_byok_credentials(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Store BYOK credentials in session memory and validate them via zero-cost API calls."""
+    user_id = payload.get("user_id", "").strip()
+    project_id = payload.get("project_id", "").strip()
+    bucket_name = payload.get("bucket_name", "").strip()
+    sa_json = payload.get("sa_json") or payload.get("service_account_json")
+
+    if not user_id or not project_id or not bucket_name or not sa_json:
+        raise HTTPException(status_code=400, detail="user_id, project_id, bucket_name, and sa_json are required")
+
+    try:
+        mgr = get_byok_credentials_manager()
+        mgr.set_credentials(
+            user_id=user_id,
+            project_id=project_id,
+            bucket_name=bucket_name,
+            service_account_json=sa_json,
+        )
+        val = mgr.validate_credentials(user_id)
+        is_valid = getattr(val, "is_valid", getattr(val, "status", "") == "VALID")
+        trans_ok = getattr(val, "translation_api_ok", getattr(val, "translation_check_passed", False))
+        stor_ok = getattr(val, "storage_bucket_ok", getattr(val, "storage_check_passed", False))
+        details = getattr(val, "details", getattr(val, "error_details", "OK" if is_valid else "Validation failed"))
+        proj = getattr(val, "project_id", project_id)
+        bkt = getattr(val, "bucket_name", bucket_name)
+        return {
+            "is_valid": is_valid,
+            "status": "VALID" if is_valid else "INVALID",
+            "project_id": proj,
+            "bucket_name": bkt,
+            "translation_api_ok": trans_ok,
+            "storage_bucket_ok": stor_ok,
+            "translation_check_passed": trans_ok,
+            "storage_check_passed": stor_ok,
+            "details": details,
+        }
+    except Exception as exc:
+        logger.error("Error setting BYOK credentials: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/byok/validate")
+async def validate_byok_credentials(
+    user_id: str = Query(..., description="User identifier to validate"),
+) -> dict[str, Any]:
+    """Run dual non-billable validation on user's active session credentials."""
+    try:
+        mgr = get_byok_credentials_manager()
+        val = mgr.validate_credentials(user_id)
+        is_valid = getattr(val, "is_valid", getattr(val, "status", "") == "VALID")
+        trans_ok = getattr(val, "translation_api_ok", getattr(val, "translation_check_passed", False))
+        stor_ok = getattr(val, "storage_bucket_ok", getattr(val, "storage_check_passed", False))
+        details = getattr(val, "details", getattr(val, "error_details", "OK" if is_valid else "Validation failed"))
+        proj = getattr(val, "project_id", getattr(mgr, "get_project_id", lambda u: "")(user_id) if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id) else "")
+        bkt = getattr(val, "bucket_name", getattr(mgr, "get_bucket_name", lambda u: "")(user_id) if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id) else "")
+        return {
+            "is_valid": is_valid,
+            "status": "VALID" if is_valid else "INVALID",
+            "project_id": proj,
+            "bucket_name": bkt,
+            "translation_api_ok": trans_ok,
+            "storage_bucket_ok": stor_ok,
+            "translation_check_passed": trans_ok,
+            "storage_check_passed": stor_ok,
+            "details": details,
+        }
+    except Exception as exc:
+        logger.error("Error validating credentials for %s: %s", user_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.delete("/byok/credentials")
+async def clear_byok_credentials(
+    user_id: str = Query(..., description="User identifier to clear"),
+) -> dict[str, Any]:
+    """Evict session credentials from memory."""
+    try:
+        mgr = get_byok_credentials_manager()
+        if hasattr(mgr, "clear_credentials"):
+            mgr.clear_credentials(user_id)
+        return {"success": True, "message": f"Credentials cleared for user '{user_id}'"}
+    except Exception as exc:
+        logger.error("Error clearing credentials: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/book/pre-scan")
+async def pre_scan_book_endpoint(
+    user_id: str = Form(...),
+    max_pages: int | None = Form(None),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Pre-scan book PDF for neologisms, Fraktur OCR confidence rating, and vocabulary recall."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    try:
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+        orch = get_book_orchestrator()
+        result = orch.pre_scan_book(user_id=user_id, source=contents, max_pages=max_pages)
+
+        # Convert dataclasses to dicts
+        prefilled = {k: v.to_dict() if hasattr(v, "to_dict") else v.__dict__ for k, v in result.prefilled_terms.items()}
+        quote_dict = {
+            "total_pages": result.cost_quote.total_pages,
+            "file_size_mb": result.cost_quote.file_size_mb,
+            "base_cost": result.cost_quote.base_cost,
+            "staging_overhead_cost": result.cost_quote.staging_overhead_cost,
+            "storage_cost_1mo": result.cost_quote.storage_cost_1mo,
+            "storage_cost_12mo": result.cost_quote.storage_cost_12mo,
+            "free_tier_covered": result.cost_quote.free_tier_covered,
+            "total_estimate": result.cost_quote.total_estimate,
+            "tolerance_range": list(result.cost_quote.tolerance_range),
+            "estimation_time_sec": result.cost_quote.estimation_time_sec,
+        }
+        ocr_conf_dict = {
+            "confidence_score": result.ocr_confidence.confidence_score,
+            "script_type": result.ocr_confidence.script_type,
+            "recommended_action": result.ocr_confidence.recommended_action,
+            "preview_recommended": result.ocr_confidence.preview_recommended,
+        }
+        script_dict = {
+            "script_type": result.script_analysis.script_type.value if hasattr(result.script_analysis.script_type, "value") else str(result.script_analysis.script_type),
+            "ocr_confidence_score": result.script_analysis.ocr_confidence_score,
+            "fraktur_ratio": result.script_analysis.fraktur_ratio,
+            "recommended_action": result.script_analysis.recommended_action,
+            "font_descriptors": result.script_analysis.font_descriptors,
+            "ligature_counts": result.script_analysis.ligature_counts,
+        }
+
+        return {
+            "total_pages": result.total_pages,
+            "script_analysis": script_dict,
+            "ocr_confidence": ocr_conf_dict,
+            "detected_neologisms": [
+                getattr(n, "to_dict", lambda: n.__dict__ if hasattr(n, "__dict__") else str(n))()
+                for n in result.detected_neologisms
+            ],
+            "prefilled_terms": prefilled,
+            "cost_quote": quote_dict,
+            "sample_text": result.sample_text,
+        }
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Pre-scan failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/vocabulary/{user_id}")
+async def get_user_vocabulary_endpoint(user_id: str) -> dict[str, Any]:
+    """Retrieve saved terminology memory preferences for *user_id*."""
+    try:
+        store = get_user_vocabulary_store()
+        prefs = store.get_user_preferences(user_id) if hasattr(store, "get_user_preferences") else store.get_preferences(user_id)
+        return {k: v.to_dict() if hasattr(v, "to_dict") else v.__dict__ for k, v in prefs.items()}
+    except Exception as exc:
+        logger.error("Error fetching vocabulary for %s: %s", user_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/vocabulary/{user_id}")
+async def save_user_vocabulary_endpoint(
+    user_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Save or update user terminology memory preference."""
+    german_term = payload.get("german_term", "").strip()
+    preferred_translation = payload.get("preferred_translation", "").strip()
+    notes = payload.get("notes", "")
+    keep_untranslated = bool(payload.get("keep_untranslated", False))
+    confidence = float(payload.get("confidence", 1.0))
+
+    if not german_term or not preferred_translation:
+        raise HTTPException(status_code=400, detail="german_term and preferred_translation are required")
+
+    try:
+        store = get_user_vocabulary_store()
+        saved = store.save_preference(
+            user_id=user_id,
+            german_term=german_term,
+            preferred_translation=preferred_translation,
+            notes=notes,
+            keep_untranslated=keep_untranslated,
+            confidence=confidence,
+        )
+        if hasattr(saved, "to_dict"):
+            res = saved.to_dict()
+            if isinstance(res, dict):
+                return res
+        if hasattr(saved, "__dict__") and isinstance(saved.__dict__, dict):
+            return {k: v for k, v in saved.__dict__.items() if not k.startswith("_")}
+        return {
+            "german_term": german_term,
+            "preferred_translation": preferred_translation,
+            "notes": notes,
+            "keep_untranslated": keep_untranslated,
+            "confidence": confidence,
+        }
+    except Exception as exc:
+        logger.error("Error saving vocabulary preference: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/vocabulary/{user_id}/bulk")
+async def bulk_save_vocabulary_endpoint(
+    user_id: str,
+    payload: Any = Body(...),
+) -> dict[str, Any]:
+    """Bulk save or update user terminology preferences."""
+    if isinstance(payload, dict):
+        preferences = payload.get("preferences", payload)
+    else:
+        preferences = payload
+    try:
+        store = get_user_vocabulary_store()
+        count = store.bulk_save_preferences(user_id, preferences)
+        return {"saved_count": count}
+    except Exception as exc:
+        logger.error("Error in bulk saving preferences: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/vocabulary/{user_id}/import")
+async def import_vocabulary_tsv_endpoint(
+    user_id: str,
+    payload: Any = Body(...),
+) -> dict[str, Any]:
+    """Import terminology from RFC 4180 TSV content."""
+    if isinstance(payload, dict):
+        tsv_content = payload.get("tsv_content", "")
+    elif isinstance(payload, bytes):
+        tsv_content = payload.decode("utf-8")
+    else:
+        tsv_content = str(payload)
+    try:
+        store = get_user_vocabulary_store()
+        if hasattr(store, "import_rfc4180_tsv"):
+            imported = store.import_rfc4180_tsv(user_id, tsv_content)
+        elif hasattr(store, "import_tsv"):
+            imported = store.import_tsv(user_id, tsv_content)
+        else:
+            imported = 0
+        count = len(imported) if isinstance(imported, (list, dict, set)) else int(imported or 0)
+        return {"imported_count": count}
+    except Exception as exc:
+        logger.error("Error importing TSV vocabulary: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/vocabulary/{user_id}/export")
+async def export_vocabulary_tsv_endpoint(user_id: str) -> Response:
+    """Export user terminology preferences as RFC 4180 TSV."""
+    try:
+        store = get_user_vocabulary_store()
+        if hasattr(store, "export_tsv"):
+            tsv_content = store.export_tsv(user_id)
+        elif hasattr(store, "export_rfc4180_tsv"):
+            tsv_content = store.export_rfc4180_tsv(user_id)
+        else:
+            tsv_content = b"de\ten\n"
+        return Response(
+            content=tsv_content,
+            media_type="text/tab-separated-values",
+            headers={"Content-Disposition": f"attachment; filename={user_id}_vocabulary.tsv"},
+        )
+    except Exception as exc:
+        logger.error("Error exporting TSV vocabulary: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/book/translate")
+async def start_batch_translation_endpoint(
+    user_id: str = Form(...),
+    session_id: str = Form(...),
+    book_id: str = Form(...),
+    user_choices: str | None = Form(None),
+    source_lang: str = Form("de"),
+    target_lang: str = Form("en-US"),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Stage book in GCS, synchronize session glossary, and dispatch asynchronous batch translation."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    try:
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+        parsed_choices = json.loads(user_choices) if user_choices else None
+
+        orch = get_book_orchestrator()
+        state = orch.start_book_translation(
+            user_id=user_id,
+            session_id=session_id,
+            book_id=book_id,
+            source=contents,
+            user_choices=parsed_choices,
+            source_lang=source_lang,
+            target_lang=target_lang,
+        )
+        return state.to_dict() if hasattr(state, "to_dict") else state.__dict__
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed starting book batch translation: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/book/status/{session_id}")
+async def get_book_status_endpoint(
+    session_id: str,
+    user_id: str = Query(...),
+) -> dict[str, Any]:
+    """Poll live LRO progress and synchronize with BatchJobRecoveryManager."""
+    try:
+        orch = get_book_orchestrator()
+        update = orch.poll_translation_progress(user_id=user_id, session_id=session_id)
+        return {
+            "operation_name": update.operation_name,
+            "state": update.state,
+            "total_pages": update.total_pages,
+            "translated_pages": update.translated_pages,
+            "failed_pages": update.failed_pages,
+            "completion_pct": update.completion_pct,
+            "is_done": update.is_done,
+            "error_message": update.error_message,
+        }
+    except Exception as exc:
+        logger.error("Error polling progress for %s: %s", session_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/book/resume/{session_id}")
+async def resume_book_job_endpoint(
+    session_id: str,
+    user_id: str | None = Query(None),
+) -> dict[str, Any]:
+    """Reconnect to active or interrupted LRO job."""
+    try:
+        orch = get_book_orchestrator()
+        state = orch.resume_job(session_id=session_id, user_id=user_id)
+        return state.to_dict() if hasattr(state, "to_dict") else state.__dict__
+    except Exception as exc:
+        logger.error("Error resuming job %s: %s", session_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/book/jobs/{user_id}")
+async def list_user_jobs_endpoint(user_id: str) -> list[dict[str, Any]]:
+    """List active or recent batch translation jobs for *user_id*."""
+    try:
+        orch = get_book_orchestrator()
+        if hasattr(orch, "list_user_jobs"):
+            jobs = orch.list_user_jobs(user_id)
+        else:
+            jobs = orch.recovery_manager.list_active_jobs(user_id)
+        return [j.to_dict() if hasattr(j, "to_dict") else (j.__dict__ if hasattr(j, "__dict__") else dict(j)) for j in jobs]
+    except Exception as exc:
+        logger.error("Error listing jobs for %s: %s", user_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/book/complete/{session_id}")
+async def complete_job_endpoint(
+    session_id: str,
+    user_id: str = Query(...),
+) -> dict[str, Any]:
+    """Evaluate completed job and trigger session glossary cleanup if 0 failed pages."""
+    try:
+        orch = get_book_orchestrator()
+        summary = orch.handle_job_completion(user_id=user_id, session_id=session_id)
+        return summary.__dict__ if hasattr(summary, "__dict__") else {}
+    except Exception as exc:
+        logger.error("Error handling completion for %s: %s", session_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/book/export-drive")
+async def export_to_drive_endpoint(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Stream translated PDF directly from GCS to Google Drive using client GIS OAuth token."""
+    user_id = payload.get("user_id", "").strip()
+    session_id = payload.get("session_id", "").strip()
+    access_token = payload.get("access_token", "").strip()
+    filename = payload.get("filename")
+
+    if not user_id or not session_id or not access_token:
+        raise HTTPException(status_code=400, detail="user_id, session_id, and access_token are required")
+
+    try:
+        orch = get_book_orchestrator()
+        result = orch.export_to_google_drive(
+            user_id=user_id,
+            session_id=session_id,
+            access_token=access_token,
+            filename=filename,
+        )
+        return {
+            "file_id": result.file_id,
+            "file_name": result.file_name,
+            "web_view_link": result.web_view_link,
+            "web_content_link": result.web_content_link,
+            "created_time": result.created_time,
+        }
+    except Exception as exc:
+        logger.error("Drive export failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/book/download/{session_id}")
+async def download_translated_book_endpoint(
+    session_id: str,
+    user_id: str = Query(...),
+) -> Response:
+    """Stream translated PDF directly from user's GCS bucket for direct browser download."""
+    try:
+        orch = get_book_orchestrator()
+        if hasattr(orch, "download_translated_book"):
+            res = orch.download_translated_book(user_id=user_id, session_id=session_id)
+            if isinstance(res, tuple):
+                stream_or_bytes, filename = res
+            else:
+                stream_or_bytes, filename = res, f"{session_id}_translated.pdf"
+            if isinstance(stream_or_bytes, (bytes, bytearray)):
+                return Response(
+                    content=bytes(stream_or_bytes),
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+                )
+            return StreamingResponse(
+                stream_or_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        state = orch.recovery_manager.resume_active_job(session_id, user_id=user_id)
+        gcs_output_uri = f"{state.gcs_output_uri.rstrip('/')}/{state.book_id}_translated.pdf"
+        stream = orch.batch_service.stream_translated_book(user_id, gcs_output_uri)
+        return StreamingResponse(
+            stream,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{state.book_id}_translated.pdf"'},
+        )
+    except Exception as exc:
+        logger.error("Download failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/book/fallback-translate")
+async def fallback_translate_endpoint(
+    user_id: str = Form(...),
+    session_id: str = Form(...),
+    failed_page_indices: str | None = Form(None),
+    source_lang: str = Form("de"),
+    target_lang: str = Form("en"),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Trigger plaintext fallback extraction, translation, and splicing for failed layout pages."""
+    try:
+        contents = await file.read()
+        indices: list[int] | None = None
+        if failed_page_indices:
+            indices = [int(p.strip()) for p in failed_page_indices.split(",") if p.strip().isdigit()]
+
+        orch = get_book_orchestrator()
+        res = orch.trigger_fallback_page_translation(
+            user_id=user_id,
+            session_id=session_id,
+            source_pdf=contents,
+            failed_page_indices=indices,
+            source_lang=source_lang,
+            target_lang=target_lang,
+        )
+        return {
+            "session_id": res.session_id,
+            "failed_pages_count": res.failed_pages_count,
+            "spliced_output_gcs_uri": res.spliced_output_gcs_uri,
+            "success": res.success,
+        }
+    except Exception as exc:
+        logger.error("Fallback translation failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/book/dual-pane/{session_id}")
+async def dual_pane_endpoint(
+    session_id: str,
+    user_id: str = Query(...),
+    page_number: int = Query(1),
+    render_images: bool = Query(True),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Fetch synchronized German and English page pair for side-by-side reading mode."""
+    try:
+        contents = await file.read()
+        orch = get_book_orchestrator()
+        pair = orch.get_bilingual_view(
+            user_id=user_id,
+            session_id=session_id,
+            german_source=contents,
+            page_number=page_number,
+            render_images=render_images,
+        )
+        return {
+            "page_number": pair.page_number,
+            "total_pages_german": pair.total_pages_german,
+            "total_pages_english": pair.total_pages_english,
+            "german_text": pair.german_text,
+            "english_text": pair.english_text,
+            "german_page_image_base64": getattr(pair, "german_page_image_base64", None),
+            "english_page_image_base64": getattr(pair, "english_page_image_base64", None),
+            "has_images": getattr(pair, "has_images", False),
+        }
+    except Exception as exc:
+        logger.error("Dual-pane view error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))

@@ -1,5 +1,5 @@
-"""services/book_translation_orchestrator.py
-============================================
+"""Book translation pipeline orchestrator.
+
 Track 5 — Book Orchestrator, Modal Deployment, UI & E2E Validation (TASK-5.1)
 Traceability: FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-10 to FR-14
 
@@ -15,7 +15,7 @@ Coordinates the full end-to-end German philosophical book translation pipeline:
 9. Synchronized side-by-side bilingual reading mode via DualPaneViewerController.
 
 Design Invariants:
-- Zero host PDF disk storage — streams directly to/from user GCS bucket and Drive.
+- Zero host PDF disk storage - streams directly to/from user GCS bucket and Drive.
 - Session-scoped BYOK credentials in memory only.
 - Strict fail-fast staging cleanup: raises RuntimeError if 7-day staging lifecycle is missing/fails.
 - Deterministic file descriptor cleanup in try...finally blocks.
@@ -23,6 +23,7 @@ Design Invariants:
 
 from __future__ import annotations
 
+import contextlib
 import io
 import logging
 import time
@@ -32,19 +33,25 @@ from typing import Any, BinaryIO
 
 import pypdf
 
-from config.settings import gcp_settings
-from services.batch_job_recovery import ActiveJobState, BatchJobRecoveryManager, JobNotFoundError
+from services.batch_job_recovery import (
+    ActiveJobState,
+    BatchJobRecoveryManager,
+)
 from services.byok_credentials_manager import BYOKCredentialsManager
 from services.cost_estimator import CostQuote, GCPCostEstimator
 from services.dual_pane_viewer import BilingualPagePair, DualPaneViewerController
-from services.fallback_translator import FallbackPageTranslator, PageText, TranslatedPage
+from services.fallback_translator import (
+    FallbackPageTranslator,
+    TranslatedPage,
+)
 from services.fraktur_classifier import (
     FrakturClassifier,
     OCRConfidence,
     ScriptAnalysisResult,
-    ScriptType,
 )
-from services.gcp_batch_translation_service import BatchJobHandle, GCPBatchTranslationService
+from services.gcp_batch_translation_service import (
+    GCPBatchTranslationService,
+)
 from services.glossary_sync_manager import GlossarySyncManager
 from services.google_drive_exporter import DriveExportResult, GoogleDriveExporter
 from services.lro_progress_monitor import LROProgressMonitor, ProgressUpdate
@@ -138,6 +145,7 @@ class BookTranslationOrchestrator:
         cost_estimator: GCPCostEstimator | None = None,
         neologism_detector: NeologismDetector | None = None,
     ) -> None:
+        """Initialize BookTranslationOrchestrator with all injected or default sub-services."""
         self.credentials_manager = credentials_manager or BYOKCredentialsManager()
         self.batch_service = batch_service or GCPBatchTranslationService(self.credentials_manager)
         self.progress_monitor = progress_monitor or LROProgressMonitor(self.credentials_manager)
@@ -194,7 +202,7 @@ class BookTranslationOrchestrator:
         max_pages:
             Optional page sampling limit for large manuscripts.
 
-        Returns
+        Returns:
         -------
         BookScanResult
             Aggregated pre-scan analysis report.
@@ -276,10 +284,8 @@ class BookTranslationOrchestrator:
             )
         finally:
             if should_close:
-                try:
+                with contextlib.suppress(Exception):
                     stream.close()
-                except Exception:
-                    pass
 
     # ------------------------------------------------------------------
     # Task 5.1 Step 2: Start Book Translation
@@ -314,12 +320,12 @@ class BookTranslationOrchestrator:
         target_lang:
             Target language code (default 'en-US').
 
-        Returns
+        Returns:
         -------
         ActiveJobState
             State of the persisted background batch job.
 
-        Raises
+        Raises:
         ------
         ValueError:
             If user credentials are not configured.
@@ -418,7 +424,7 @@ class BookTranslationOrchestrator:
         session_id:
             Active session identifier.
 
-        Returns
+        Returns:
         -------
         ProgressUpdate
             Live progress snapshot.
@@ -462,7 +468,7 @@ class BookTranslationOrchestrator:
         session_id:
             Target session identifier.
 
-        Returns
+        Returns:
         -------
         CompletionSummary
             Summary of the finished job.
@@ -522,7 +528,7 @@ class BookTranslationOrchestrator:
         target_lang:
             Target language code.
 
-        Returns
+        Returns:
         -------
         FallbackResult
             Result with spliced output GCS URI.
@@ -610,7 +616,7 @@ class BookTranslationOrchestrator:
         filename:
             Display name for the uploaded Google Drive file.
 
-        Returns
+        Returns:
         -------
         DriveExportResult
             Google Drive file metadata with web view link.
@@ -651,7 +657,7 @@ class BookTranslationOrchestrator:
         render_images:
             Whether to rasterize page images as base64 strings.
 
-        Returns
+        Returns:
         -------
         BilingualPagePair
             Synchronized page text and optional images.
@@ -666,3 +672,28 @@ class BookTranslationOrchestrator:
             page_number=page_number,
             render_images=render_images,
         )
+
+    def download_translated_book(
+        self,
+        user_id: str,
+        session_id: str,
+    ) -> tuple[Any, str]:
+        """Download or stream translated book PDF from user's GCS bucket.
+
+        Parameters
+        ----------
+        user_id:
+            BYOK user identifier.
+        session_id:
+            Active or completed job session identifier.
+
+        Returns:
+        -------
+        tuple[Any, str]
+            Binary stream / content and suggested output filename.
+        """
+        state = self.recovery_manager.resume_active_job(session_id, user_id=user_id)
+        filename = f"{state.book_id}_translated.pdf"
+        gcs_output_uri = f"{state.gcs_output_uri.rstrip('/')}/{filename}"
+        stream = self.batch_service.stream_translated_book(user_id, gcs_output_uri)
+        return stream, filename

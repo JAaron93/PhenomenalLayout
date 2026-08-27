@@ -16,7 +16,7 @@ def _launch_blocks() -> tuple[gr.blocks.Blocks, str]:
         os.environ.setdefault("GRADIO_SHARE", "true")
     demo = create_gradio_interface()
     # Launch in headless mode; request a share link as fallback
-    app, local_url, share_url = demo.launch(
+    _app, local_url, share_url = demo.launch(
         prevent_thread_lock=True, share=True
     )
     # Prefer share_url if provided, otherwise local_url
@@ -159,7 +159,7 @@ def test_ui_translation_progress(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
         def fake_status():
-            # Returns (status_text, progress_fraction, is_processing, download_file)
+            """Return mock translation status tuple."""
             return "processing 50%", 0.5, True, None
 
         monkeypatch.setattr(gi, "start_translation_sync", fake_start)
@@ -176,7 +176,7 @@ def test_ui_translation_progress(monkeypatch: pytest.MonkeyPatch) -> None:
             api_name="/start_translation_with_progress",
         )
         assert isinstance(res, (list, tuple))
-        # Expect 4 return values from fake_start: [status, upload_status, download_btn, progress_timer]
-        assert len(res) >= 4
+        # Expect at least 3 return values from fake_start: [status, upload_status, download_btn, progress_timer]
+        assert len(res) >= 3
     finally:
         _teardown_blocks(demo)

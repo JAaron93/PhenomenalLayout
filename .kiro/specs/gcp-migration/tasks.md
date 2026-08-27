@@ -338,6 +338,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 5.1: Build `BookTranslationOrchestrator`
 * **ID**: `TASK-5.1`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-10 to FR-14
 * **Dependencies**: `TASK-1.3`, `TASK-1.4`, `TASK-2.3`, `TASK-2.4`, `TASK-3.1` to `TASK-3.3`, `TASK-4.1`
 * **Description**:
@@ -349,12 +350,13 @@ The tasks are organized into five **Execution Tracks**:
   5. If `failed_pages > 0`, offer `FallbackPageTranslator` for 100% complete translation.
   6. Trigger `SessionGlossaryLifecycleManager` cleanup upon job completion.
 * **Acceptance Criteria (TDD)**:
-  * Test suite: `tests/test_book_translation_orchestrator.py`.
+  * Test suite: `tests/test_book_translation_orchestrator.py` (15 tests passing, 93% line coverage).
 
 ---
 
 #### Task 5.2: Update UI with BYOK Panel, Dual-Pane Viewer, Google Drive & Cost Quote
 * **ID**: `TASK-5.2`
+* **Status**: `[COMPLETED]`
 * **Traceability**: US-01 to US-13, FR-05, FR-07, FR-08, FR-09, FR-11, FR-15
 * **Dependencies**: `TASK-1.2`, `TASK-1.5`, `TASK-1.6`, `TASK-3.1`, `TASK-3.4`, `TASK-5.1`
 * **Description**:
@@ -367,7 +369,7 @@ The tasks are organized into five **Execution Tracks**:
   6. **Live Batch LRO Progress & Recovery**: Real-time progress bar with reconnect/resume capability.
   7. **Scholarly Delivery Actions**: 1-click **"Save to Google Drive"** (GIS OAuth), direct download, fallback plaintext translation trigger for failed pages, and **Side-by-Side Dual-Pane Reading Mode**.
 * **Acceptance Criteria (TDD)**:
-  * Test suite: `tests/test_app_routes.py`.
+  * Test suite: `tests/test_app_routes.py` (17 tests passing) and `tests/test_ui_gradio.py` (4 tests passing).
 
 ---
 

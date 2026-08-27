@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from reportlab.lib.pagesizes import letter
@@ -24,16 +24,18 @@ from reportlab.pdfgen import canvas
 
 from services.batch_job_recovery import ActiveJobState, BatchJobRecoveryManager
 from services.book_translation_orchestrator import (
-    BookJobHandle,
     BookScanResult,
     BookTranslationOrchestrator,
     CompletionSummary,
     FallbackResult,
 )
 from services.byok_credentials_manager import BYOKCredentialsManager
-from services.cost_estimator import CostQuote, GCPCostEstimator
 from services.dual_pane_viewer import BilingualPagePair, DualPaneViewerController
-from services.fallback_translator import FallbackPageTranslator, PageText, TranslatedPage
+from services.fallback_translator import (
+    FallbackPageTranslator,
+    PageText,
+    TranslatedPage,
+)
 from services.fraktur_classifier import (
     FrakturClassifier,
     OCRConfidence,
@@ -45,7 +47,7 @@ from services.glossary_sync_manager import GlossarySyncManager
 from services.google_drive_exporter import DriveExportResult, GoogleDriveExporter
 from services.lro_progress_monitor import LROProgressMonitor, ProgressUpdate
 from services.session_glossary_lifecycle import SessionGlossaryLifecycleManager
-from services.user_vocabulary_store import TermPreference, UserVocabularyStore
+from services.user_vocabulary_store import UserVocabularyStore
 
 
 def _create_sample_pdf(text: str = "Klages Geist Seele Dasein Schauung", pages: int = 2) -> bytes:
@@ -117,7 +119,7 @@ def mock_recovery_mgr(tmp_path: Path) -> MagicMock:
 
     mgr.save_active_job.side_effect = _save
 
-    def _resume(session_id: str, user_id: str | None = None, **kwargs):
+    def _resume(session_id: str, user_id: str | None = None, **_kwargs):
         if session_id in mgr._jobs:
             return mgr._jobs[session_id]
         return ActiveJobState(
@@ -299,7 +301,7 @@ class TestPreScanBook:
         self,
         orchestrator: BookTranslationOrchestrator,
     ) -> None:
-        with pytest.raises(ValueError, match="empty|invalid"):
+        with pytest.raises(ValueError, match=r"empty|invalid"):
             orchestrator.pre_scan_book(user_id="user-1", source=b"")
 
 
@@ -383,11 +385,11 @@ class TestStartBookTranslation:
 class TestPollAndResumeJob:
     """Test progress polling and job recovery."""
 
+    @pytest.mark.usefixtures("mock_progress_monitor")
     def test_poll_translation_progress(
         self,
         orchestrator: BookTranslationOrchestrator,
         mock_recovery_mgr: MagicMock,
-        mock_progress_monitor: MagicMock,
     ) -> None:
         update = orchestrator.poll_translation_progress(
             user_id="user-1",
@@ -412,10 +414,10 @@ class TestPollAndResumeJob:
 class TestHandleJobCompletion:
     """Test job completion and glossary cleanup."""
 
+    @pytest.mark.usefixtures("mock_recovery_mgr")
     def test_handle_completion_success_zero_failed_pages(
         self,
         orchestrator: BookTranslationOrchestrator,
-        mock_recovery_mgr: MagicMock,
         mock_progress_monitor: MagicMock,
         mock_lifecycle_mgr: MagicMock,
     ) -> None:
@@ -437,10 +439,10 @@ class TestHandleJobCompletion:
         assert summary.failed_pages == 0
         mock_lifecycle_mgr.cleanup_session_glossary.assert_called_once_with("user-1", "sess-01")
 
+    @pytest.mark.usefixtures("mock_recovery_mgr")
     def test_handle_completion_with_failed_pages(
         self,
         orchestrator: BookTranslationOrchestrator,
-        mock_recovery_mgr: MagicMock,
         mock_progress_monitor: MagicMock,
         mock_lifecycle_mgr: MagicMock,
     ) -> None:
@@ -467,10 +469,10 @@ class TestHandleJobCompletion:
 class TestTriggerFallbackPageTranslation:
     """Test trigger_fallback_page_translation workflow."""
 
+    @pytest.mark.usefixtures("mock_recovery_mgr")
     def test_trigger_fallback_successful(
         self,
         orchestrator: BookTranslationOrchestrator,
-        mock_recovery_mgr: MagicMock,
         mock_fallback_translator: MagicMock,
         mock_batch_service: MagicMock,
         mock_lifecycle_mgr: MagicMock,
@@ -534,3 +536,34 @@ class TestDeliveryActions:
         assert pair.page_number == 1
         mock_batch_service.stream_translated_book.assert_called_once()
         mock_viewer_controller.get_bilingual_page_pair.assert_called_once()
+
+    def test_download_translated_book(
+        self,
+        orchestrator: BookTranslationOrchestrator,
+        mock_batch_service: MagicMock,
+    ) -> None:
+        mock_batch_service.stream_translated_book.return_value = [b"chunk1", b"chunk2"]
+        stream, filename = orchestrator.download_translated_book(
+            user_id="user-1",
+            session_id="sess-01",
+        )
+        assert filename == "book-1_translated.pdf"
+        mock_batch_service.stream_translated_book.assert_called_once()
+        assert list(stream) == [b"chunk1", b"chunk2"]
+
+    def test_pre_scan_with_path_and_stream(
+        self,
+        orchestrator: BookTranslationOrchestrator,
+        tmp_path: Path,
+    ) -> None:
+        pdf_path = tmp_path / "book.pdf"
+        pdf_path.write_bytes(_create_sample_pdf(pages=2))
+
+        # Test Path input
+        res_path = orchestrator.pre_scan_book(user_id="user-1", source=pdf_path)
+        assert res_path.total_pages == 2
+
+        # Test stream/BytesIO input
+        with open(pdf_path, "rb") as f:
+            res_stream = orchestrator.pre_scan_book(user_id="user-1", source=f)
+            assert res_stream.total_pages == 2
