@@ -252,11 +252,66 @@ def estimate_cost_ui(file_obj: Any) -> str:
         return f"❌ Cost estimation failed: {exc}"
 
 
-def validate_byok_ui(user_id: str, project_id: str, bucket_name: str, sa_json: str) -> str:
-    """Validate user BYOK credentials via non-billable API calls."""
+def _authenticate_gradio_caller(
+    requested_user_id: str,
+    auth_token: str = "",
+    request: gr.Request | None = None,
+) -> None:
+    """Verify that the Gradio caller is authenticated and authorized to access requested_user_id.
+
+    Rejects unauthenticated requests with PermissionError to prevent visitors from tampering with
+    or disclosing other users' credentials, vocabulary, or jobs.
+    """
+    token = auth_token.strip()
+    if not token and request is not None and hasattr(request, "headers") and request.headers:
+        token = request.headers.get("x-api-key") or ""
+        if not token:
+            auth_hdr = request.headers.get("authorization", "")
+            if auth_hdr.lower().startswith("bearer "):
+                token = auth_hdr[7:].strip()
+
+    if not token:
+        raise PermissionError(
+            "Authentication required: Please provide an API Key or Bearer Token to access or modify user credentials and vocabulary."
+        )
+
+    from api.auth import UserRole, verify_api_key, verify_jwt_token
+
+    # 1. Check API Key
+    if verify_api_key(token):
+        return  # Admin API key has global access
+
+    # 2. Check JWT
+    try:
+        payload = verify_jwt_token(token)
+        role = payload.get("role")
+        auth_uid = payload.get("user_id")
+        if role == UserRole.ADMIN:
+            return
+        if auth_uid and auth_uid == requested_user_id:
+            return
+        raise PermissionError(
+            f"Access denied: Caller identity '{auth_uid}' cannot access or modify resources for '{requested_user_id}'."
+        )
+    except Exception as exc:
+        if isinstance(exc, PermissionError):
+            raise
+        raise PermissionError(f"Invalid authentication token: {exc}") from exc
+
+
+def validate_byok_ui(
+    user_id: str,
+    project_id: str,
+    bucket_name: str,
+    sa_json: str,
+    auth_token: str = "",
+    request: gr.Request | None = None,
+) -> str:
+    """Validate user BYOK credentials via non-billable API calls after enforcing ownership."""
     if not user_id.strip() or not project_id.strip() or not bucket_name.strip() or not sa_json.strip():
         return "❌ Please enter User ID, Project ID, Bucket Name, and Service Account JSON."
     try:
+        _authenticate_gradio_caller(user_id.strip(), auth_token=auth_token, request=request)
         from services.byok_credentials_manager import BYOKCredentialsManager
         mgr = BYOKCredentialsManager()
         mgr.set_credentials(user_id.strip(), project_id.strip(), bucket_name.strip(), sa_json.strip())
@@ -268,16 +323,24 @@ def validate_byok_ui(user_id: str, project_id: str, bucket_name: str, sa_json: s
             f"- **Cloud Storage Bucket:** {'✅ Passed' if val.storage_check_passed else '❌ Failed'}\n"
             f"- **Details:** {val.error_details or 'All validation checks passed successfully.'}"
         )
+    except PermissionError as exc:
+        return f"🔒 {exc}"
     except Exception as exc:
         return f"❌ Validation error: {exc}"
 
 
-def pre_scan_ui(user_id: str, file_obj: Any) -> tuple[str, str, str]:
-    """Pre-scan book PDF for neologisms, Fraktur confidence, and vocabulary recall."""
+def pre_scan_ui(
+    user_id: str,
+    file_obj: Any,
+    auth_token: str = "",
+    request: gr.Request | None = None,
+) -> tuple[str, str, str]:
+    """Pre-scan book PDF for neologisms, Fraktur confidence, and vocabulary recall after enforcing ownership."""
     if not user_id.strip() or file_obj is None:
         return "Please provide User ID and upload a PDF.", "", ""
     path = getattr(file_obj, "name", str(file_obj))
     try:
+        _authenticate_gradio_caller(user_id.strip(), auth_token=auth_token, request=request)
         from services.book_translation_orchestrator import BookTranslationOrchestrator
         orch = BookTranslationOrchestrator()
         res = orch.pre_scan_book(user_id=user_id.strip(), source=Path(path))
@@ -298,6 +361,8 @@ def pre_scan_ui(user_id: str, file_obj: Any) -> tuple[str, str, str]:
             pref = getattr(v, "preferred_translation", str(v))
             vocab += f"- **{k}** ➔ *{pref}*\n"
         return badge, neologisms, vocab
+    except PermissionError as exc:
+        return f"🔒 {exc}", "", ""
     except Exception as exc:
         return f"❌ Pre-scan failed: {exc}", "", ""
 
@@ -359,6 +424,7 @@ def create_gradio_interface() -> gr.Blocks:
                         )
 
                     gr.Markdown("### 🔑 3. Bring Your Own Key (BYOK) Setup")
+                    byok_token = gr.Textbox(label="API Key or Bearer Token", type="password", placeholder="Enter API key or JWT token (or login via session)")
                     byok_uid = gr.Textbox(label="User ID", value="scholar-01")
                     byok_pid = gr.Textbox(label="GCP Project ID", placeholder="my-gcp-project")
                     byok_bkt = gr.Textbox(label="GCS Bucket Name", placeholder="my-translation-bucket")
@@ -368,6 +434,7 @@ def create_gradio_interface() -> gr.Blocks:
 
                 with gr.Column():
                     gr.Markdown("### 🔍 4. Pre-Scan & Fraktur Script Confidence")
+                    prescan_token = gr.Textbox(label="API Key or Bearer Token", type="password", placeholder="Enter API key or JWT token (or login via session)")
                     prescan_uid = gr.Textbox(label="User ID", value="scholar-01")
                     prescan_input = gr.File(label="Select Book PDF", file_types=[".pdf"])
                     run_prescan_btn = gr.Button("Run Pre-Scan Assessment", variant="primary")
@@ -376,8 +443,8 @@ def create_gradio_interface() -> gr.Blocks:
                     vocab_display = gr.Markdown("Saved user terminology will be displayed here...")
 
             calc_quote_btn.click(fn=estimate_cost_ui, inputs=[cost_input], outputs=[cost_quote_display])
-            validate_key_btn.click(fn=validate_byok_ui, inputs=[byok_uid, byok_pid, byok_bkt, byok_key], outputs=[byok_status_display])
-            run_prescan_btn.click(fn=pre_scan_ui, inputs=[prescan_uid, prescan_input], outputs=[script_badge_display, neo_display, vocab_display])
+            validate_key_btn.click(fn=validate_byok_ui, inputs=[byok_uid, byok_pid, byok_bkt, byok_key, byok_token], outputs=[byok_status_display])
+            run_prescan_btn.click(fn=pre_scan_ui, inputs=[prescan_uid, prescan_input, prescan_token], outputs=[script_badge_display, neo_display, vocab_display])
 
         with gr.Row():
             with gr.Column(scale=1):

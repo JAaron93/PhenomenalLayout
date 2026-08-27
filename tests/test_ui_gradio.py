@@ -180,3 +180,33 @@ def test_ui_translation_progress(monkeypatch: pytest.MonkeyPatch) -> None:
         assert len(res) >= 3
     finally:
         _teardown_blocks(demo)
+
+
+def test_gradio_byok_unauthenticated_rejection() -> None:
+    """Verify validate_byok_ui rejects unauthenticated visitors without token/headers."""
+    from ui.gradio_interface import validate_byok_ui
+
+    res = validate_byok_ui("victim-01", "p", "b", "{}")
+    assert "🔒 Authentication required" in res
+
+
+def test_gradio_prescan_unauthenticated_rejection(tmp_path: Path) -> None:
+    """Verify pre_scan_ui rejects unauthenticated visitors attempting to pre-scan victim data."""
+    from ui.gradio_interface import pre_scan_ui
+
+    dummy_pdf = tmp_path / "dummy.pdf"
+    dummy_pdf.write_bytes(b"%PDF-1.4 Minimal")
+    badge, neo, vocab = pre_scan_ui("victim-01", str(dummy_pdf))
+    assert "🔒 Authentication required" in badge
+    assert neo == ""
+    assert vocab == ""
+
+
+def test_gradio_cross_user_jwt_rejection() -> None:
+    """Verify visitor with JWT for user A cannot validate credentials for user B."""
+    from api.auth import create_jwt_token
+    from ui.gradio_interface import validate_byok_ui
+
+    attacker_token = create_jwt_token(user_id="attacker")
+    res = validate_byok_ui("victim-01", "p", "b", "{}", auth_token=attacker_token)
+    assert "🔒 Access denied" in res
