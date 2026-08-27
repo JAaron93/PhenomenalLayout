@@ -150,6 +150,39 @@ class TestGetBilingualPagePair:
         assert pair.german_page_image_base64 == fake_b64
         assert pair.english_page_image_base64 == fake_b64
 
+    def test_render_images_with_open_binary_stream_rewound(
+        self,
+        viewer: DualPaneViewerController,
+        german_pdf_bytes: bytes,
+        english_pdf_bytes: bytes,
+    ) -> None:
+        """Verify that open BinaryIO stream is rewound so pdf2image receives the complete PDF."""
+        de_stream = io.BytesIO(german_pdf_bytes)
+        en_stream = io.BytesIO(english_pdf_bytes)
+
+        captured_bytes: list[bytes] = []
+
+        mock_image = MagicMock()
+        mock_image.save = lambda buf, *_args, **_kwargs: buf.write(b"fake-png-bytes")
+
+        def capture_convert(data, **_kwargs):
+            captured_bytes.append(data)
+            return [mock_image]
+
+        with patch("pdf2image.convert_from_bytes", side_effect=capture_convert):
+            pair = viewer.get_bilingual_page_pair(
+                german_source=de_stream,
+                english_source=en_stream,
+                page_number=1,
+                render_images=True,
+            )
+
+        assert pair.has_images is True
+        assert len(captured_bytes) == 2
+        # Verify that pdf2image received the full PDF content, not empty bytes
+        assert captured_bytes[0] == german_pdf_bytes
+        assert captured_bytes[1] == english_pdf_bytes
+
 
 class TestSearchTermAcrossPanes:
     """Verify neologism highlight coordinate extraction."""

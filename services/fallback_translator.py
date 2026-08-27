@@ -6,6 +6,9 @@ ancient charts, or corrupted vector paths (metadata.failed_pages > 0), this serv
 2. Translates the extracted text via Cloud Translation Text v3 using the active session glossary.
 3. Injects translated plaintext pages into the output PDF, delivering a 98% layout-preserved,
    100% fully translated scholarly edition (FR-13, BDD FR-13.1).
+4. Employs pure, zero-dependency PDF stream generation via pypdf to avoid legacy
+   canvas reconstruction components, and automatically paginates overflow text across
+   continuation pages so no translated scholarly content is clipped.
 
 Traceability: FR-13, NFR-02, NFR-09
 BDD Scenario: FR-13.1
@@ -24,8 +27,7 @@ from typing import BinaryIO
 import pypdf
 from google.api_core import exceptions as api_exceptions
 from google.cloud import translate_v3 as translate
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from config.settings import gcp_settings
 from services.byok_credentials_manager import BYOKCredentialsManager
@@ -36,6 +38,10 @@ logger: logging.Logger = logging.getLogger(__name__)
 _MAX_RETRIES: int = 5
 _BASE_BACKOFF_SECONDS: float = 1.0
 _BACKOFF_MULTIPLIER: float = 2.0
+
+# Pagination constants for fallback plaintext PDF generation
+_MAX_LINES_PER_PAGE: int = 40
+_MAX_LINE_CHARS: int = 80
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +230,7 @@ class FallbackPageTranslator:
         """Replace failed placeholder pages in layout PDF with translated text pages.
 
         Adheres to BDD FR-13.1: Delivers a 100% complete translated document.
+        Automatically handles text pagination without clipping.
 
         Args:
             layout_pdf: Layout-preserved PDF produced by GCP Batch Translation.
@@ -247,12 +254,12 @@ class FallbackPageTranslator:
             for idx in range(total_pages):
                 if idx in replacements:
                     replacement = replacements[idx]
-                    page_stream = self._render_text_page_pdf(
+                    pages = self._render_fallback_pages(
                         text=replacement.translated_text,
                         page_number=idx + 1,
                     )
-                    rep_reader = pypdf.PdfReader(page_stream)
-                    writer.add_page(rep_reader.pages[0])
+                    for rep_page in pages:
+                        writer.add_page(rep_page)
                 else:
                     writer.add_page(reader.pages[idx])
 
@@ -344,47 +351,97 @@ class FallbackPageTranslator:
         raise last_exc
 
     @staticmethod
-    def _render_text_page_pdf(text: str, page_number: int) -> io.BytesIO:
-        """Render a clean plaintext fallback page with header/footer using ReportLab."""
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf, pagesize=letter)
-        width, height = letter
+    def _escape_pdf_text(text: str) -> str:
+        """Escape backslashes and parentheses for PDF string literals."""
+        return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
-        # Header
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(
-            50, height - 40, f"[Fallback Plaintext Translation - Page {page_number}]"
-        )
-        c.line(50, height - 45, width - 50, height - 45)
+    @classmethod
+    def _render_fallback_pages(
+        cls, text: str, page_number: int
+    ) -> list[pypdf.PageObject]:
+        """Render plaintext fallback pages via pure pypdf stream generation.
 
-        # Body text with line wrapping
-        c.setFont("Helvetica", 10)
-        text_obj = c.beginText(50, height - 70)
-        text_obj.setLeading(14)
-
-        for line in text.split("\n"):
-            # Simple chunking for long lines
-            words = line.split(" ")
-            current_line = []
+        Handles line-wrapping and paginates overflow text across continuation
+        pages to ensure zero text clipping, without relying on deprecated
+        ReportLab canvas components.
+        """
+        wrapped_lines: list[str] = []
+        for raw_line in text.split("\n"):
+            words = raw_line.split(" ")
+            current_line: list[str] = []
             for word in words:
                 current_line.append(word)
-                if len(" ".join(current_line)) > 80:
-                    text_obj.textLine(" ".join(current_line))
+                if len(" ".join(current_line)) > _MAX_LINE_CHARS:
+                    wrapped_lines.append(" ".join(current_line))
                     current_line = []
             if current_line:
-                text_obj.textLine(" ".join(current_line))
+                wrapped_lines.append(" ".join(current_line))
 
-        c.drawText(text_obj)
+        if not wrapped_lines:
+            wrapped_lines = [""]
 
-        # Footer
-        c.setFont("Helvetica-Oblique", 8)
-        c.drawString(50, 35, "PhenomenalLayout Scholarly Resilience Fallback Engine")
-        c.drawRightString(width - 50, 35, f"Page {page_number}")
+        # Chunk into pages to prevent vertical text clipping
+        chunks = [
+            wrapped_lines[i : i + _MAX_LINES_PER_PAGE]
+            for i in range(0, len(wrapped_lines), _MAX_LINES_PER_PAGE)
+        ]
+        total_parts = len(chunks)
+        generated_pages: list[pypdf.PageObject] = []
 
-        c.showPage()
-        c.save()
-        buf.seek(0)
-        return buf
+        for part_idx, chunk in enumerate(chunks):
+            writer = pypdf.PdfWriter()
+            page = writer.add_blank_page(width=612, height=792)
+
+            font_dict = DictionaryObject(
+                {
+                    NameObject("/Type"): NameObject("/Font"),
+                    NameObject("/Subtype"): NameObject("/Type1"),
+                    NameObject("/BaseFont"): NameObject("/Helvetica"),
+                }
+            )
+            if "/Resources" not in page:
+                page[NameObject("/Resources")] = DictionaryObject()
+            page["/Resources"][NameObject("/Font")] = DictionaryObject(
+                {NameObject("/F1"): font_dict}
+            )
+
+            part_suffix = (
+                f" (Part {part_idx + 1}/{total_parts})" if total_parts > 1 else ""
+            )
+            header_str = (
+                f"[Fallback Plaintext Translation - Page {page_number}{part_suffix}]"
+            )
+            footer_str = f"PhenomenalLayout Scholarly Resilience Fallback Engine | Page {page_number}"
+
+            ops: list[str] = [
+                "BT",
+                "/F1 10 Tf",
+                "14 TL",
+                "50 740 Td",
+                f"({cls._escape_pdf_text(header_str)}) Tj",
+                "0 -25 Td",
+            ]
+            for line in chunk:
+                ops.append(f"({cls._escape_pdf_text(line)}) '")
+
+            # Position and draw footer
+            ops.extend(
+                [
+                    "ET",
+                    "BT",
+                    "/F1 8 Tf",
+                    "50 35 Td",
+                    f"({cls._escape_pdf_text(footer_str)}) Tj",
+                    "ET",
+                ]
+            )
+
+            stream = DecodedStreamObject()
+            stream.set_data("\n".join(ops).encode("latin-1", errors="replace"))
+            page[NameObject("/Contents")] = stream
+            generated_pages.append(page)
+
+        return generated_pages
 
     @staticmethod
     def _open_source(
@@ -399,6 +456,8 @@ class FallbackPageTranslator:
         elif isinstance(source, bytes):
             return io.BytesIO(source), True
         elif hasattr(source, "read") and hasattr(source, "seek"):
+            with contextlib.suppress(Exception):
+                source.seek(0)
             return source, False
         else:
             raise TypeError(f"Unsupported source type: {type(source)}")

@@ -114,6 +114,13 @@ class DualPaneViewerController:
         en_stream, en_close = self._open_source(english_source, "English")
 
         try:
+            if hasattr(de_stream, "seek"):
+                with contextlib.suppress(Exception):
+                    de_stream.seek(0)
+            if hasattr(en_stream, "seek"):
+                with contextlib.suppress(Exception):
+                    en_stream.seek(0)
+
             try:
                 reader_de = pypdf.PdfReader(de_stream)
                 total_de = len(reader_de.pages)
@@ -125,6 +132,13 @@ class DualPaneViewerController:
                 total_en = len(reader_en.pages)
             except Exception as exc:
                 raise ValueError(f"Failed to parse English PDF: {exc}") from exc
+
+            if hasattr(de_stream, "seek"):
+                with contextlib.suppress(Exception):
+                    de_stream.seek(0)
+            if hasattr(en_stream, "seek"):
+                with contextlib.suppress(Exception):
+                    en_stream.seek(0)
 
             if page_number > total_de:
                 raise ValueError(
@@ -323,9 +337,15 @@ class DualPaneViewerController:
 
             stream, should_close = self._open_source(source, "Raster")
             try:
+                if hasattr(stream, "seek"):
+                    with contextlib.suppress(Exception):
+                        stream.seek(0)
                 data_bytes = stream.read() if hasattr(stream, "read") else b""
                 if not data_bytes and hasattr(stream, "getvalue"):
                     data_bytes = stream.getvalue()  # type: ignore
+                if hasattr(stream, "seek"):
+                    with contextlib.suppress(Exception):
+                        stream.seek(0)
             finally:
                 if should_close:
                     with contextlib.suppress(Exception):
@@ -369,6 +389,8 @@ class DualPaneViewerController:
         elif isinstance(source, bytes):
             return io.BytesIO(source), True
         elif hasattr(source, "read") and hasattr(source, "seek"):
+            with contextlib.suppress(Exception):
+                source.seek(0)
             return source, False
         else:
             raise TypeError(f"Unsupported source type: {type(source)}")

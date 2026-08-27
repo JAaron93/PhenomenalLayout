@@ -247,6 +247,41 @@ class TestSpliceFallbackPages:
         # Page 3 (index 2) remains unchanged
         assert "Seite 3" in reader.pages[2].extract_text()
 
+    def test_splice_fallback_page_overflow_pagination_no_clipping(
+        self, fallback_translator: FallbackPageTranslator, sample_source_pdf: bytes
+    ) -> None:
+        """When text exceeds body area, multiple continuation pages are generated without clipping."""
+        long_text = "\n".join(
+            [
+                f"Scholarly explanation line {i} detailing metaphysics."
+                for i in range(1, 100)
+            ]
+        )
+        translated_pages = [
+            TranslatedPage(
+                page_index=1,
+                page_number=2,
+                translated_text=long_text,
+                source_text="long source...",
+                success=True,
+            )
+        ]
+
+        spliced_stream = fallback_translator.splice_fallback_pages(
+            layout_pdf=sample_source_pdf,
+            translated_pages=translated_pages,
+        )
+
+        assert isinstance(spliced_stream, io.BytesIO)
+        reader = pypdf.PdfReader(spliced_stream)
+        # Original had 3 pages (p0, p1, p2). p1 is replaced by continuation pages -> > 3 pages
+        assert len(reader.pages) > 3
+        all_text = " ".join([p.extract_text() for p in reader.pages])
+        assert "Scholarly explanation line 1" in all_text
+        assert "Scholarly explanation line 99" in all_text
+        # Page 3 (index 2 in original) remains unchanged
+        assert "Seite 3" in reader.pages[-1].extract_text()
+
     def test_splice_to_file_path(
         self,
         fallback_translator: FallbackPageTranslator,
