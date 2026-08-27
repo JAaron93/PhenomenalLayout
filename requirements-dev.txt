@@ -3,14 +3,14 @@
 -r requirements.txt
 
 # Test harness (dev-only)
-pytest==8.4.1
+pytest==8.4.2
 pytest-asyncio==0.23.8
 pytest-timeout==2.3.1
-pytest-cov==4.1.0
+pytest-cov==6.3.0
 
 # Linters/type-checkers (dev-only)
-mypy==1.11.2
-ruff==0.6.9
+mypy==1.20.2
+ruff==0.16.4
 
 # Optional: richer output and sharding (dev-only)
 pytest-xdist==3.6.1
