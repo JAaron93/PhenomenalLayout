@@ -613,3 +613,39 @@ class TestOwnershipAndAuthorization:
         res_anon = client.get("/api/v1/vocabulary/anonymous")
         assert res_anon.status_code == 401
         assert "Authentication required" in res_anon.json()["detail"]
+
+    def test_empty_identity_in_jwt_rejected(self) -> None:
+        """Verify non-admin caller with empty user_id cannot bypass ownership checks."""
+        app = FastAPI()
+        app.include_router(api_router, prefix="/api/v1")
+        from api.auth import get_current_user_dependency
+
+        # Caller with empty user_id
+        app.dependency_overrides[get_current_user_dependency] = lambda: {
+            "user_id": "",
+            "role": UserRole.READ_ONLY,
+            "authenticated": True,
+        }
+        client = TestClient(app)
+
+        res = client.get("/api/v1/vocabulary/scholar-01")
+        assert res.status_code == 403
+        assert "Access denied" in res.json()["detail"]
+
+    def test_disabled_authentication_permits_local_workflows(self) -> None:
+        """Verify workflows function seamlessly when MEMORY_API_ENABLE_AUTH=false."""
+        app = FastAPI()
+        app.include_router(api_router, prefix="/api/v1")
+        from api.auth import ANONYMOUS_USER, get_current_user_dependency
+
+        app.dependency_overrides[get_current_user_dependency] = lambda: ANONYMOUS_USER
+        client = TestClient(app)
+
+        with patch("api.routes.is_auth_enabled", return_value=False):
+            with patch("api.routes.get_user_vocabulary_store") as mock_store_getter:
+                mock_store = MagicMock()
+                mock_store.get_preferences.return_value = {}
+                mock_store_getter.return_value = mock_store
+
+                res = client.get("/api/v1/vocabulary/local-dev-user")
+                assert res.status_code == 200

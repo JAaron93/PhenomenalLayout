@@ -259,9 +259,16 @@ def _authenticate_gradio_caller(
 ) -> None:
     """Verify that the Gradio caller is authenticated and authorized to access requested_user_id.
 
-    Rejects unauthenticated requests with PermissionError to prevent visitors from tampering with
-    or disclosing other users' credentials, vocabulary, or jobs.
+    - When authentication is disabled (is_auth_enabled() is False), permits local dev workflows.
+    - When authentication is enabled:
+      - Rejects unauthenticated requests with PermissionError.
+      - Requires non-empty user_id matching requested_user_id for non-admin tokens.
     """
+    from api.auth import UserRole, is_auth_enabled, verify_api_key, verify_jwt_token
+
+    if not is_auth_enabled():
+        return
+
     token = auth_token.strip()
     if not token and request is not None and hasattr(request, "headers") and request.headers:
         token = request.headers.get("x-api-key") or ""
@@ -275,8 +282,6 @@ def _authenticate_gradio_caller(
             "Authentication required: Please provide an API Key or Bearer Token to access or modify user credentials and vocabulary."
         )
 
-    from api.auth import UserRole, verify_api_key, verify_jwt_token
-
     # 1. Check API Key
     if verify_api_key(token):
         return  # Admin API key has global access
@@ -288,11 +293,10 @@ def _authenticate_gradio_caller(
         auth_uid = payload.get("user_id")
         if role == UserRole.ADMIN:
             return
-        if auth_uid and auth_uid == requested_user_id:
-            return
-        raise PermissionError(
-            f"Access denied: Caller identity '{auth_uid}' cannot access or modify resources for '{requested_user_id}'."
-        )
+        if not auth_uid or auth_uid != requested_user_id:
+            raise PermissionError(
+                f"Access denied: Caller identity '{auth_uid}' cannot access or modify resources for '{requested_user_id}'."
+            )
     except Exception as exc:
         if isinstance(exc, PermissionError):
             raise

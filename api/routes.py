@@ -23,7 +23,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
-from api.auth import UserRole, get_current_user_dependency
+from api.auth import UserRole, get_current_user_dependency, is_auth_enabled
 
 from services.byok_credentials_manager import BYOKCredentialsManager, GuideStep, ValidationResult
 from services.cost_estimator import CostQuote, GCPCostEstimator
@@ -1089,11 +1089,16 @@ def _verify_resource_ownership(
 ) -> None:
     """Ensure authenticated caller owns the requested resource or possesses admin role.
 
-    Prevents anonymous or unauthenticated callers from accessing or mutating any user state:
-    - Unauthenticated callers are rejected with 401 UNAUTHORIZED, eliminating shared anonymous state.
-    - Authenticated administrators (UserRole.ADMIN) have global resource access.
-    - Authenticated non-admin callers can only access resources matching their own user_id.
+    - When authentication is disabled in config (is_auth_enabled() is False), permits local dev workflows.
+    - When authentication is enabled:
+      - Rejects unauthenticated callers with 401 UNAUTHORIZED, eliminating shared anonymous state.
+      - Authenticated administrators (UserRole.ADMIN) have global resource access.
+      - Authenticated non-admin callers must possess a non-empty identity matching requested_user_id.
     """
+    # When authentication is disabled globally, allow local development and test workflows
+    if not is_auth_enabled():
+        return
+
     if not current_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -1115,8 +1120,8 @@ def _verify_resource_ownership(
     if role == UserRole.ADMIN:
         return
 
-    # Authenticated non-admin must match requested user ID
-    if auth_uid and auth_uid != requested_user_id:
+    # Authenticated non-admin must match requested user ID and cannot be empty
+    if not auth_uid or auth_uid != requested_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Access denied: Cannot access or modify resources belonging to user '{requested_user_id}'",
