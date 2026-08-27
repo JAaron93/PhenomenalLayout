@@ -403,3 +403,34 @@ class TestFallbackCoverageAndErrorBranches:
         )
         assert res == out_stream
         assert len(out_stream.getvalue()) > 0
+
+    def test_unicode_punctuation_and_exotic_characters_preserved(
+        self, fallback_translator: FallbackPageTranslator, sample_source_pdf: bytes
+    ) -> None:
+        """Verify that smart quotes, em-dashes, ellipses, and Unicode characters are preserved without '?'."""
+        unicode_text = (
+            "“Philosophie des Lebens” — Geist als Widersacher… ä ö ü ß \u2010 hyphen"
+        )
+        translated_pages = [
+            TranslatedPage(
+                page_index=1,
+                page_number=2,
+                translated_text=unicode_text,
+                source_text="source",
+                success=True,
+            )
+        ]
+
+        spliced_stream = fallback_translator.splice_fallback_pages(
+            layout_pdf=sample_source_pdf,
+            translated_pages=translated_pages,
+        )
+
+        assert isinstance(spliced_stream, io.BytesIO)
+        reader = pypdf.PdfReader(spliced_stream)
+        p2_text = reader.pages[1].extract_text()
+        assert "“Philosophie des Lebens”" in p2_text
+        assert "—" in p2_text
+        assert "…" in p2_text
+        assert "ä ö ü ß" in p2_text
+        assert "?" not in p2_text

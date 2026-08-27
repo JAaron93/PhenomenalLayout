@@ -20,6 +20,7 @@ import contextlib
 import io
 import logging
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
@@ -351,9 +352,34 @@ class FallbackPageTranslator:
         raise last_exc
 
     @staticmethod
-    def _escape_pdf_text(text: str) -> str:
-        """Escape backslashes and parentheses for PDF string literals."""
-        return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    def _encode_pdf_text(text: str) -> bytes:
+        """Encode text to PDF WinAnsiEncoding (cp1252) with graceful transliteration for rare characters.
+
+        Ensures that smart quotes, em-dashes, ellipses, umlauts, and scholarly punctuation
+        are preserved without silent '?' corruption.
+        """
+        transliterations = {
+            "\u2010": "-",  # hyphen
+            "\u2011": "-",  # non-breaking hyphen
+            "\u2012": "-",  # figure dash
+            "\u2015": "--",  # horizontal bar
+            "\u202f": " ",  # narrow no-break space
+            "\ufeff": "",  # zero-width no-break space
+        }
+        for orig, repl in transliterations.items():
+            text = text.replace(orig, repl)
+
+        try:
+            raw_bytes = text.encode("cp1252")
+        except UnicodeEncodeError:
+            normalized = unicodedata.normalize("NFKD", text)
+            raw_bytes = normalized.encode("cp1252", errors="replace")
+
+        return (
+            raw_bytes.replace(b"\\", b"\\\\")
+            .replace(b"(", b"\\(")
+            .replace(b")", b"\\)")
+        )
 
     @classmethod
     def _render_fallback_pages(
@@ -397,6 +423,7 @@ class FallbackPageTranslator:
                     NameObject("/Type"): NameObject("/Font"),
                     NameObject("/Subtype"): NameObject("/Type1"),
                     NameObject("/BaseFont"): NameObject("/Helvetica"),
+                    NameObject("/Encoding"): NameObject("/WinAnsiEncoding"),
                 }
             )
             if "/Resources" not in page:
@@ -413,31 +440,34 @@ class FallbackPageTranslator:
             )
             footer_str = f"PhenomenalLayout Scholarly Resilience Fallback Engine | Page {page_number}"
 
-            ops: list[str] = [
-                "BT",
-                "/F1 10 Tf",
-                "14 TL",
-                "50 740 Td",
-                f"({cls._escape_pdf_text(header_str)}) Tj",
-                "0 -25 Td",
+            header_bytes = cls._encode_pdf_text(header_str)
+            footer_bytes = cls._encode_pdf_text(footer_str)
+
+            ops: list[bytes] = [
+                b"BT",
+                b"/F1 10 Tf",
+                b"14 TL",
+                b"50 740 Td",
+                b"(" + header_bytes + b") Tj",
+                b"0 -25 Td",
             ]
             for line in chunk:
-                ops.append(f"({cls._escape_pdf_text(line)}) '")
+                ops.append(b"(" + cls._encode_pdf_text(line) + b") '")
 
             # Position and draw footer
             ops.extend(
                 [
-                    "ET",
-                    "BT",
-                    "/F1 8 Tf",
-                    "50 35 Td",
-                    f"({cls._escape_pdf_text(footer_str)}) Tj",
-                    "ET",
+                    b"ET",
+                    b"BT",
+                    b"/F1 8 Tf",
+                    b"50 35 Td",
+                    b"(" + footer_bytes + b") Tj",
+                    b"ET",
                 ]
             )
 
             stream = DecodedStreamObject()
-            stream.set_data("\n".join(ops).encode("latin-1", errors="replace"))
+            stream.set_data(b"\n".join(ops))
             page[NameObject("/Contents")] = stream
             generated_pages.append(page)
 
