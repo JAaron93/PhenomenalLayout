@@ -77,6 +77,16 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 * **Versioned GCS Staging & Rollback Preservation**: Staged session TSVs in GCS MUST use versioned object names (`.../{slot}_{version}.tsv`) so that uploading replacement terminology NEVER overwrites the older known-good TSV in GCS. If replacement creation fails, the system MUST execute automated rollback restoration using the preserved previous GCS input URI.
 * **Cryptographic Token Session Isolation**: Session prefix matching MUST incorporate a deterministic 16-character SHA-256 token (`sess-{slug}-{token}-a`) to prevent false prefix matches between sibling sessions (e.g., preventing `book-101` from deleting `book-101-extra`).
 
+### 2.12 Fallback Plaintext Translation & Unicode Typography Invariants
+* **100% Content Completeness (Plaintext Scope)**: When Google Cloud Document Translation encounters layout parsing failures (`failed_pages > 0`), the secondary fallback engine (`FallbackPageTranslator`) is invoked strictly to guarantee 100% translation completeness so the scholar misses no translated text. The fallback page MUST be synthesized as clean, readable plaintext. It is explicitly exempted from attempting complex multi-column geometric replication or vector diagram reconstruction, which was deprecated under §4.
+* **Strict 1-to-1 Physical Page Alignment**: Each failed source page MUST be replaced by exactly one synthesized fallback page. Dynamic page height expansion MUST be used if needed to accommodate large text blocks with proper leading ($\ge 11.0\text{pt}$), ensuring physical page numbering matches the original German edition for synchronized side-by-side verification in `DualPaneViewerController`.
+* **Zero Transliteration / Substitution (Unicode Fidelity)**: Fallback rendering MUST preserve all Unicode characters (Greek, Cyrillic, Hebrew, Arabic, German umlauts, Fraktur ligatures, mathematical symbols, and CJK ideographs) verbatim. Transliterating non-Latin text into ASCII approximations (e.g. `бытие` $\rightarrow$ `bytie`) or placeholder tokens (`[CJK UNIFIED IDEOGRAPH...]`) is strictly prohibited.
+* **Dynamic Sequential 16-Bit CID Allocation & Format 12 TrueType CMap Parsing**: When generating PDF composite Type 0 fonts (`/CIDFontType2`) via `pypdf`:
+  1. The engine MUST parse both format 4 (BMP) and format 12 (32-bit supplementary planes) `cmap` subtables from embedded font programs.
+  2. The engine MUST dynamically allocate unique 16-bit sequential CIDs ($1 \dots N$) to all unique characters on the page. Emitting raw UTF-16 code units directly into `/Identity-H` content streams is strictly prohibited because it fragments supplementary Unicode characters ($> \text{U+FFFF}$) into two separate surrogate CIDs.
+  3. The engine MUST generate dynamic big-endian `/CIDToGIDMap` stream objects mapping each dynamic CID to its TrueType glyph ID, and `/W` arrays with exact advance widths.
+* **Fallback Limitations Documentation**: Any modification to the fallback translation engine MUST keep `docs/FALLBACK_TRANSLATION_LIMITATIONS.md` up to date, documenting font glyph coverage limits, lack of vector diagram reproduction, and table line-wrapping behaviors.
+
 ---
 
 ## 3. Modal Labs Serverless Deployment Architecture
@@ -103,6 +113,8 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | **Premature Glossary Deletion** (Deleting working glossary before replacement is READY) | Leaves translations without a glossary during creation windows or upon creation failures. | Zero-downtime Blue-Green replacement: provision alternating slot (`-a` / `-b`), verify `READY`, then retire old slot. |
 | **Unbounded UUID Overflow Slots** (`sess-{token}-{uuid}`) | Exhausts the regional 1,000 glossary quota in `us-central1` during repeated failures. | Strict 2-slot bound: identify and retire the older superseded slot via `submit_time` before provisioning replacement. |
 | **Overwriting Unversioned Staged TSVs in GCS** | Overwrites known-good terminology before the replacement is verified live, breaking rollback restoration. | Versioned GCS object paths (`.../{slot}_{version}.tsv`) preserving the prior input URI until cleanup. |
+| **Lossy Transliteration of Non-Latin Characters in Fallbacks** | Alters translated text and misrepresents scholarly and philosophical terminology. | Dynamic 16-bit CID allocation with embedded TrueType font programs and `/ToUnicode` CMaps. |
+| **Raw UTF-16BE Content Streams with `/Identity` CIDToGIDMap** | Treats Unicode code points as glyph IDs and splits supplementary plane characters ($> \text{U+FFFF}$) into unrenderable surrogate CIDs. | Dynamic sequential CID allocation with format 4/12 `cmap` parsing and dynamic `/CIDToGIDMap` stream objects. |
 
 ---
 
