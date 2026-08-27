@@ -581,3 +581,38 @@ class TestOwnershipAndAuthorization:
         res = client.get("/api/v1/book/resume/victim-sess-123?user_id=victim")
         assert res.status_code == 403
         assert "Access denied" in res.json()["detail"]
+
+    def test_anonymous_caller_cannot_access_named_user_resources(self) -> None:
+        """Verify unauthenticated/anonymous caller cannot access or mutate named user resources."""
+        app = FastAPI()
+        app.include_router(api_router, prefix="/api/v1")
+        from api.auth import ANONYMOUS_USER, get_current_user_dependency
+
+        # Simulate unauthenticated anonymous request
+        app.dependency_overrides[get_current_user_dependency] = lambda: ANONYMOUS_USER
+        client = TestClient(app)
+
+        # Attempt to set credentials for victim
+        res = client.post(
+            "/api/v1/byok/credentials",
+            json={
+                "user_id": "victim",
+                "project_id": "victim-proj",
+                "bucket_name": "victim-bkt",
+                "sa_json": '{"type": "service_account"}',
+            },
+        )
+        assert res.status_code == 401
+        assert "Authentication required" in res.json()["detail"]
+
+        # Attempt to access victim vocabulary
+        res_voc = client.get("/api/v1/vocabulary/victim")
+        assert res_voc.status_code == 401
+
+        # Attempt to access anonymous vocabulary is permitted
+        with patch("api.routes.get_user_vocabulary_store") as mock_store_getter:
+            mock_store = MagicMock()
+            mock_store.get_preferences.return_value = {}
+            mock_store_getter.return_value = mock_store
+            res_anon = client.get("/api/v1/vocabulary/anonymous")
+            assert res_anon.status_code == 200

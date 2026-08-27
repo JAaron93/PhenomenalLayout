@@ -1089,20 +1089,36 @@ def _verify_resource_ownership(
 ) -> None:
     """Ensure authenticated caller owns the requested resource or possesses admin role.
 
-    When authentication is disabled in configuration (_default_config.enable_auth=False),
-    current_user is ANONYMOUS_USER with UserRole.ADMIN, enabling seamless local dev and tests.
-    When authentication is enabled, non-admin callers attempting to access another user's
-    resources are rejected with 403 FORBIDDEN.
+    Prevents anonymous or unauthenticated callers from bypassing ownership even when
+    ENABLE_AUTH is False or ANONYMOUS_USER is returned:
+    - An anonymous caller cannot act as an admin to access or mutate named user resources.
+    - An authenticated caller with UserRole.ADMIN can access any user's resources.
+    - An authenticated non-admin caller can only access their own resources (auth_uid == requested_user_id).
     """
     if not current_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
         )
+
+    is_authenticated = bool(current_user.get("authenticated", False))
     role = current_user.get("role")
     auth_uid = current_user.get("user_id")
+
+    # If caller is unauthenticated or anonymous, they cannot access named user resources
+    if not is_authenticated:
+        if requested_user_id not in ("anonymous", "default_user", ""):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Authentication required to access resources for user '{requested_user_id}'",
+            )
+        return
+
+    # Authenticated admin has global resource access
     if role == UserRole.ADMIN:
         return
+
+    # Authenticated non-admin must match requested user ID
     if auth_uid and auth_uid != requested_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
