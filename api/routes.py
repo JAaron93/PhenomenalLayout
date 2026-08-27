@@ -1095,8 +1095,19 @@ def _verify_resource_ownership(
       - Authenticated administrators (UserRole.ADMIN) have global resource access.
       - Authenticated non-admin callers must possess a non-empty identity matching requested_user_id.
     """
-    # When authentication is disabled globally, allow local development and test workflows
+    # When authentication is globally disabled (local dev mode):
+    # Enforce binding to local/default user namespaces so callers cannot tamper with arbitrary named users.
     if not is_auth_enabled():
+        allowed_namespaces = ("anonymous", "default_user", "local_user")
+        auth_uid = (current_user or {}).get("user_id")
+        if requested_user_id not in allowed_namespaces and requested_user_id != auth_uid:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Access denied: When authentication is disabled, operations are restricted to "
+                    f"local/default namespaces ('default_user', 'anonymous') and cannot access '{requested_user_id}'."
+                ),
+            )
         return
 
     if not current_user:

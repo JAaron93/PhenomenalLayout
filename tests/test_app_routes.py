@@ -641,11 +641,19 @@ class TestOwnershipAndAuthorization:
         app.dependency_overrides[get_current_user_dependency] = lambda: ANONYMOUS_USER
         client = TestClient(app)
 
-        with patch("api.routes.is_auth_enabled", return_value=False):
-            with patch("api.routes.get_user_vocabulary_store") as mock_store_getter:
+        with (
+            patch("api.routes.is_auth_enabled", return_value=False),
+            patch("api.routes.get_user_vocabulary_store") as mock_store_getter,
+        ):
                 mock_store = MagicMock()
                 mock_store.get_preferences.return_value = {}
                 mock_store_getter.return_value = mock_store
 
-                res = client.get("/api/v1/vocabulary/local-dev-user")
+                # Local/default namespace succeeds
+                res = client.get("/api/v1/vocabulary/default_user")
                 assert res.status_code == 200
+
+                # Arbitrary victim namespace is rejected even when auth is disabled
+                res_victim = client.get("/api/v1/vocabulary/victim")
+                assert res_victim.status_code == 403
+                assert "Access denied" in res_victim.json()["detail"]

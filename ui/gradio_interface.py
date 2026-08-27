@@ -267,6 +267,12 @@ def _authenticate_gradio_caller(
     from api.auth import UserRole, is_auth_enabled, verify_api_key, verify_jwt_token
 
     if not is_auth_enabled():
+        allowed_namespaces = ("anonymous", "default_user", "local_user", "scholar-01")
+        if requested_user_id not in allowed_namespaces:
+            raise PermissionError(
+                f"Access denied: When authentication is disabled, operations are restricted to "
+                f"local/default namespaces and cannot access '{requested_user_id}'."
+            )
         return
 
     token = auth_token.strip()

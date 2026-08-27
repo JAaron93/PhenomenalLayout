@@ -210,3 +210,14 @@ def test_gradio_cross_user_jwt_rejection() -> None:
     attacker_token = create_jwt_token(user_id="attacker")
     res = validate_byok_ui("victim-01", "p", "b", "{}", auth_token=attacker_token)
     assert "🔒 Access denied" in res
+
+
+def test_gradio_disabled_auth_binds_to_default_namespace() -> None:
+    """Verify Gradio rejects non-default namespaces even when auth is disabled."""
+    from unittest.mock import patch
+
+    from ui.gradio_interface import validate_byok_ui
+
+    with patch("api.auth.is_auth_enabled", return_value=False):
+        res = validate_byok_ui("victim-01", "p", "b", "{}")
+        assert "🔒 Access denied" in res
