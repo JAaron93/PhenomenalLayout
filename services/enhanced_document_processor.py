@@ -4,9 +4,18 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+warnings.warn(
+    "services.enhanced_document_processor is deprecated and retired under ADR 0001 / Track 4. "
+    "Use services.gcp_batch_translation_service.GCPBatchTranslationService instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # PDFToImageConverter, DolphinOCRService, and PDFDocumentReconstructor removed under ADR 0001
 # Layout preservation is handled natively by Google Cloud Document Translation.
@@ -149,16 +158,14 @@ class EnhancedDocumentProcessor:
 
     async def _extract_pdf_content(self, pdf_path: str) -> dict[str, Any]:
         """Extract content from PDF with advanced layout preservation."""
-        import time
-
-        from services.dolphin_client import get_layout
-
         start_time = time.time()
 
         # Call Dolphin OCR directly with the PDF path
         try:
+            from services.dolphin_client import get_layout
+
             dolphin_layout = await get_layout(pdf_path)
-        except Exception as e:
+        except (ImportError, Exception) as e:
             logger.error("OCR processing failed for %s: %s", pdf_path, e, exc_info=True)
             # Graceful degradation: continue with empty layout
             dolphin_layout = {"pages": []}
@@ -236,14 +243,14 @@ class EnhancedDocumentProcessor:
         output_filename: str,
     ) -> str:
         """Create translated document preserving original formatting."""
-        output_path = os.path.join("downloads", output_filename)
-        os.makedirs("downloads", exist_ok=True)
-
+        del translated_texts
+        del output_filename
         content_type = original_content["type"]
 
         if content_type == "pdf_advanced":
-            return self._create_translated_pdf(
-                original_content, translated_texts, output_path
+            raise NotImplementedError(
+                "Legacy PDF document reconstruction has been retired and deleted under "
+                "ADR 0001 / Track 4. Use Google Cloud Document Translation."
             )
         elif content_type in {"docx", "txt"}:
             raise ValueError("Only PDF content is supported in this project")
