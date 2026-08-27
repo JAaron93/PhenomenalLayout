@@ -12,6 +12,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -106,11 +107,15 @@ class TestFrakturClassifierScriptAnalysis:
         self, classifier: FrakturClassifier, sample_pdf_bytes: bytes
     ) -> None:
         """Verify Fraktur font detection via font descriptor names."""
-        with patch.object(
-            FrakturClassifier, "_extract_page_fonts", lambda self, page, fonts: fonts.add("Walbaum-Fraktur")
+        with (
+            patch.object(
+                FrakturClassifier,
+                "_extract_page_fonts",
+                lambda _self, _page, fonts: fonts.add("Walbaum-Fraktur"),
+            ),
+            patch("pypdf.PageObject.extract_text", return_value="Einleitung"),
         ):
-            with patch("pypdf.PageObject.extract_text", return_value="Einleitung"):
-                result = classifier.classify_script(sample_pdf_bytes)
+            result = classifier.classify_script(sample_pdf_bytes)
 
         assert result.script_type == ScriptType.FRAKTUR
         assert "Walbaum-Fraktur" in result.font_descriptors
@@ -155,7 +160,10 @@ class TestOCRConfidenceRating:
     def test_ocr_confidence_rating_fraktur(
         self, classifier: FrakturClassifier, sample_pdf_bytes: bytes
     ) -> None:
-        with patch("pypdf.PageObject.extract_text", return_value="Weſen des Geiſtes mit ſch und tz"):
+        with patch(
+            "pypdf.PageObject.extract_text",
+            return_value="Weſen des Geiſtes mit ſch und tz",
+        ):
             conf = classifier.get_ocr_confidence_rating(sample_pdf_bytes)
 
         assert isinstance(conf, OCRConfidence)
@@ -207,7 +215,7 @@ class TestEdgeCasesAndDescriptorSafety:
         mock_page = MagicMock()
         mock_page.get.return_value = {"/Font": None}
         fonts: set[str] = set()
-        FrakturClassifier._extract_page_fonts(mock_page, fonts)
+        classifier._extract_page_fonts(mock_page, fonts)
         assert len(fonts) == 0
 
     def test_deterministic_stream_closing(

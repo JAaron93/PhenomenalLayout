@@ -13,6 +13,7 @@ BDD Scenario: FR-13.1
 
 from __future__ import annotations
 
+import contextlib
 import io
 import logging
 import time
@@ -137,10 +138,8 @@ class FallbackPageTranslator:
             raise ValueError(f"Failed to parse source PDF: {exc}") from exc
         finally:
             if should_close:
-                try:
+                with contextlib.suppress(Exception):
                     stream.close()
-                except Exception:  # noqa: BLE001
-                    pass
 
     def translate_failed_pages(
         self,
@@ -279,10 +278,8 @@ class FallbackPageTranslator:
             raise ValueError(f"Failed to parse layout PDF: {exc}") from exc
         finally:
             if should_close:
-                try:
+                with contextlib.suppress(Exception):
                     stream.close()
-                except Exception:  # noqa: BLE001
-                    pass
 
     # ------------------------------------------------------------------
     # Internal Helpers
@@ -325,7 +322,10 @@ class FallbackPageTranslator:
                     return response.translations[0].translated_text
                 return ""
 
-            except (api_exceptions.ResourceExhausted, api_exceptions.ServiceUnavailable) as exc:
+            except (
+                api_exceptions.ResourceExhausted,
+                api_exceptions.ServiceUnavailable,
+            ) as exc:
                 last_exc = exc
                 logger.warning(
                     "FallbackPageTranslator: Transient API error attempt %d/%d: %s",
@@ -352,7 +352,9 @@ class FallbackPageTranslator:
 
         # Header
         c.setFont("Helvetica-Bold", 10)
-        c.drawString(50, height - 40, f"[Fallback Plaintext Translation - Page {page_number}]")
+        c.drawString(
+            50, height - 40, f"[Fallback Plaintext Translation - Page {page_number}]"
+        )
         c.line(50, height - 45, width - 50, height - 45)
 
         # Body text with line wrapping

@@ -12,6 +12,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -20,7 +21,6 @@ from services.dual_pane_viewer import (
     BilingualPagePair,
     DualPaneViewerController,
     HighlightCoordinates,
-    TextBoundingBox,
 )
 
 
@@ -99,10 +99,14 @@ class TestGetBilingualPagePair:
         english_pdf_bytes: bytes,
     ) -> None:
         with pytest.raises(ValueError, match="Page number 0 is out of bounds"):
-            viewer.get_bilingual_page_pair(german_pdf_bytes, english_pdf_bytes, page_number=0)
+            viewer.get_bilingual_page_pair(
+                german_pdf_bytes, english_pdf_bytes, page_number=0
+            )
 
         with pytest.raises(ValueError, match="Page number 5 exceeds total pages"):
-            viewer.get_bilingual_page_pair(german_pdf_bytes, english_pdf_bytes, page_number=5)
+            viewer.get_bilingual_page_pair(
+                german_pdf_bytes, english_pdf_bytes, page_number=5
+            )
 
     def test_graceful_fallback_when_rendering_fails(
         self,
@@ -111,7 +115,9 @@ class TestGetBilingualPagePair:
         english_pdf_bytes: bytes,
     ) -> None:
         """When pdf2image or poppler is unavailable, gracefully fall back to text-only."""
-        with patch.object(DualPaneViewerController, "_render_page_image", return_value=None):
+        with patch.object(
+            DualPaneViewerController, "_render_page_image", return_value=None
+        ):
             pair = viewer.get_bilingual_page_pair(
                 german_source=german_pdf_bytes,
                 english_source=english_pdf_bytes,
@@ -130,7 +136,9 @@ class TestGetBilingualPagePair:
         english_pdf_bytes: bytes,
     ) -> None:
         fake_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-        with patch.object(DualPaneViewerController, "_render_page_image", return_value=fake_b64):
+        with patch.object(
+            DualPaneViewerController, "_render_page_image", return_value=fake_b64
+        ):
             pair = viewer.get_bilingual_page_pair(
                 german_source=german_pdf_bytes,
                 english_source=english_pdf_bytes,
@@ -267,7 +275,9 @@ class TestDualPaneViewerCoverageBranches:
         p_de = _create_sample_pdf(["p1", "p2", "p3"])
         p_en = _create_sample_pdf(["p1", "p2"])
 
-        with pytest.raises(ValueError, match="Page number 3 exceeds total pages in English PDF"):
+        with pytest.raises(
+            ValueError, match="Page number 3 exceeds total pages in English PDF"
+        ):
             viewer.get_bilingual_page_pair(p_de, p_en, page_number=3)
 
     def test_search_empty_term_returns_empty_list(
@@ -315,6 +325,7 @@ class TestDualPaneViewerCoverageBranches:
                 if visitor_text:
                     return ""
                 return "Dies ist eine Schauung der Welt."
+
             mock_extract.side_effect = side_effect
 
             coords = viewer.search_term_across_panes(
@@ -334,7 +345,7 @@ class TestDualPaneViewerCoverageBranches:
     ) -> None:
         """Exercise internal _render_page_image path by mocking convert_from_bytes."""
         mock_image = MagicMock()
-        mock_image.save = lambda buf, format: buf.write(b"fake-png-bytes")
+        mock_image.save = lambda buf, *_args, **_kwargs: buf.write(b"fake-png-bytes")
 
         with patch("pdf2image.convert_from_bytes", return_value=[mock_image]):
             b64 = viewer._render_page_image(german_pdf_bytes, page_number=1, dpi=150)
@@ -343,12 +354,18 @@ class TestDualPaneViewerCoverageBranches:
 
         # Empty image list from convert_from_bytes
         with patch("pdf2image.convert_from_bytes", return_value=[]):
-            b64_empty = viewer._render_page_image(german_pdf_bytes, page_number=1, dpi=150)
+            b64_empty = viewer._render_page_image(
+                german_pdf_bytes, page_number=1, dpi=150
+            )
             assert b64_empty is None
 
         # Exception from convert_from_bytes
-        with patch("pdf2image.convert_from_bytes", side_effect=RuntimeError("Poppler error")):
-            b64_err = viewer._render_page_image(german_pdf_bytes, page_number=1, dpi=150)
+        with patch(
+            "pdf2image.convert_from_bytes", side_effect=RuntimeError("Poppler error")
+        ):
+            b64_err = viewer._render_page_image(
+                german_pdf_bytes, page_number=1, dpi=150
+            )
             assert b64_err is None
 
     def test_missing_file_in_open_source(

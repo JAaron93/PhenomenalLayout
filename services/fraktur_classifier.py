@@ -10,11 +10,12 @@ BDD Scenario: FR-11.1
 
 from __future__ import annotations
 
+import contextlib
 import io
 import logging
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import BinaryIO
 
@@ -30,7 +31,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class ScriptType(str, Enum):
+class ScriptType(StrEnum):
     """Classification of typographic script family."""
 
     ANTIQUA = "Antiqua"
@@ -138,11 +139,17 @@ class FrakturClassifier:
             if total_pages == 0:
                 raise ValueError("Failed to parse PDF: empty document with 0 pages")
 
-            pages_to_scan = total_pages if max_pages is None else min(total_pages, max(1, max_pages))
+            pages_to_scan = (
+                total_pages
+                if max_pages is None
+                else min(total_pages, max(1, max_pages))
+            )
 
             total_chars = 0
             total_s_count = 0
-            ligature_counts: dict[str, int] = {k: 0 for k in _FRAKTUR_LIGATURE_PATTERNS}
+            ligature_counts: dict[str, int] = dict.fromkeys(
+                _FRAKTUR_LIGATURE_PATTERNS, 0
+            )
             font_descriptors: set[str] = set()
 
             fraktur_pages_count = 0
@@ -177,7 +184,11 @@ class FrakturClassifier:
                 page_long_s = page_ligatures.get("long_s", 0)
                 page_long_s_ratio = page_long_s / s_count if s_count > 0 else 0.0
 
-                if page_has_fraktur_font or page_long_s_ratio >= 0.15 or page_long_s >= 2:
+                if (
+                    page_has_fraktur_font
+                    or page_long_s_ratio >= 0.15
+                    or page_long_s >= 2
+                ):
                     fraktur_pages_count += 1
                 elif page_chars > 0:
                     antiqua_pages_count += 1
@@ -189,10 +200,7 @@ class FrakturClassifier:
             )
 
             # Fraktur ratio based on historical ligature prevalence and long-s proportion
-            if total_s_count > 0:
-                long_s_ratio = long_s_count / total_s_count
-            else:
-                long_s_ratio = 0.0
+            long_s_ratio = long_s_count / total_s_count if total_s_count > 0 else 0.0
 
             fraktur_features_count = (
                 long_s_count
@@ -212,12 +220,20 @@ class FrakturClassifier:
             # Script family classification
             if fraktur_pages_count > 0 and antiqua_pages_count > 0:
                 script_type = ScriptType.HYBRID
-                ocr_confidence_score = round(max(0.75, min(0.89, 0.85 - combined_fraktur_ratio * 0.1)), 2)
+                ocr_confidence_score = round(
+                    max(0.75, min(0.89, 0.85 - combined_fraktur_ratio * 0.1)), 2
+                )
                 recommended_action = "Preview 2 sample pages before full batch"
-            elif fraktur_pages_count > 0 or combined_fraktur_ratio >= 0.25 or fraktur_font_detected:
+            elif (
+                fraktur_pages_count > 0
+                or combined_fraktur_ratio >= 0.25
+                or fraktur_font_detected
+            ):
                 script_type = ScriptType.FRAKTUR
                 # BDD FR-11.1 calibration: Historical Fraktur scan confidence ~0.88
-                ocr_confidence_score = round(max(0.70, min(0.92, 0.88 - (combined_fraktur_ratio - 0.3) * 0.1)), 2)
+                ocr_confidence_score = round(
+                    max(0.70, min(0.92, 0.88 - (combined_fraktur_ratio - 0.3) * 0.1)), 2
+                )
                 recommended_action = "Preview 2 sample pages before full batch"
             else:
                 script_type = ScriptType.ANTIQUA
@@ -240,10 +256,8 @@ class FrakturClassifier:
             raise ValueError(f"Failed to parse PDF: {exc}") from exc
         finally:
             if should_close:
-                try:
+                with contextlib.suppress(Exception):
                     stream.close()
-                except Exception:  # noqa: BLE001
-                    pass
 
     def get_ocr_confidence_rating(
         self,
@@ -293,14 +307,14 @@ class FrakturClassifier:
     @staticmethod
     def _extract_page_fonts(page: pypdf.PageObject, font_descriptors: set[str]) -> None:
         """Extract font base names from page resources if present."""
-        try:
+        with contextlib.suppress(Exception):
             resources = page.get("/Resources")
             if not resources or not hasattr(resources, "get"):
                 return
             fonts = resources.get("/Font")
             if not fonts or not hasattr(fonts, "keys"):
                 return
-            for font_key in fonts.keys():
+            for font_key in fonts:
                 font_obj = fonts[font_key]
                 if hasattr(font_obj, "get"):
                     base_font = font_obj.get("/BaseFont")
@@ -308,5 +322,3 @@ class FrakturClassifier:
                         # Clean /FontName
                         name = str(base_font).lstrip("/")
                         font_descriptors.add(name)
-        except Exception:  # noqa: BLE001
-            pass

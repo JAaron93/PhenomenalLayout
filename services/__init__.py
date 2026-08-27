@@ -77,20 +77,22 @@ try:
         ProgressUpdate,
     )
 
-    _available_services.extend([
-        "BYOKCredentialsManager",
-        "CredentialNotFoundError",
-        "GuideStep",
-        "ValidationResult",
-        "GCPCostEstimator",
-        "CostQuote",
-        "GCPBatchTranslationService",
-        "BatchJobHandle",
-        "GoogleDriveExporter",
-        "DriveExportResult",
-        "LROProgressMonitor",
-        "ProgressUpdate",
-    ])
+    _available_services.extend(
+        [
+            "BYOKCredentialsManager",
+            "CredentialNotFoundError",
+            "GuideStep",
+            "ValidationResult",
+            "GCPCostEstimator",
+            "CostQuote",
+            "GCPBatchTranslationService",
+            "BatchJobHandle",
+            "GoogleDriveExporter",
+            "DriveExportResult",
+            "LROProgressMonitor",
+            "ProgressUpdate",
+        ]
+    )
     _service_availability["GCP_BATCH_SERVICES_AVAILABLE"] = True
     logger.debug("GCP Batch Translation services imported successfully")
 except ImportError as e:
@@ -116,21 +118,72 @@ try:
         UserVocabularyStore,
     )
 
-    _available_services.extend([
-        "UserVocabularyStore",
-        "TermPreference",
-        "GlossaryCompiler",
-        "compile_glossary_tsv",
-        "GlossarySyncManager",
-        "sanitize_glossary_id",
-        "SessionGlossaryLifecycleManager",
-        "SessionGlossaryRecord",
-    ])
+    _available_services.extend(
+        [
+            "UserVocabularyStore",
+            "TermPreference",
+            "GlossaryCompiler",
+            "compile_glossary_tsv",
+            "GlossarySyncManager",
+            "sanitize_glossary_id",
+            "SessionGlossaryLifecycleManager",
+            "SessionGlossaryRecord",
+        ]
+    )
     _service_availability["GLOSSARY_SYNC_SERVICES_AVAILABLE"] = True
     logger.debug("Dual-Tier Glossary Sync services imported successfully")
 except ImportError as e:
     logger.debug(f"Dual-Tier Glossary Sync services not available: {e}")
     _service_availability["GLOSSARY_SYNC_SERVICES_AVAILABLE"] = False
+
+# Track 3: Scholarly Resilience, Fraktur OCR & Failure Fallbacks
+try:
+    from .batch_job_recovery import (  # noqa: F401
+        ActiveJobState,
+        BatchJobRecoveryManager,
+        JobNotFoundError,
+    )
+    from .dual_pane_viewer import (  # noqa: F401
+        BilingualPagePair,
+        DualPaneViewerController,
+        HighlightCoordinates,
+        TextBoundingBox,
+    )
+    from .fallback_translator import (  # noqa: F401
+        FallbackPageTranslator,
+        PageText,
+        TranslatedPage,
+    )
+    from .fraktur_classifier import (  # noqa: F401
+        FrakturClassifier,
+        OCRConfidence,
+        ScriptAnalysisResult,
+        ScriptType,
+    )
+
+    _available_services.extend(
+        [
+            "FrakturClassifier",
+            "ScriptType",
+            "ScriptAnalysisResult",
+            "OCRConfidence",
+            "BatchJobRecoveryManager",
+            "ActiveJobState",
+            "JobNotFoundError",
+            "FallbackPageTranslator",
+            "PageText",
+            "TranslatedPage",
+            "DualPaneViewerController",
+            "BilingualPagePair",
+            "HighlightCoordinates",
+            "TextBoundingBox",
+        ]
+    )
+    _service_availability["SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE"] = True
+    logger.debug("Scholarly Resilience services imported successfully")
+except ImportError as e:
+    logger.debug(f"Scholarly Resilience services not available: {e}")
+    _service_availability["SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE"] = False
 
 # Dynamically build __all__ list based on successfully imported services
 # Include service symbols, availability flags, and summary counters
@@ -142,6 +195,7 @@ __all__: list[str] = [
     "ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE",
     "GCP_BATCH_SERVICES_AVAILABLE",
     "GLOSSARY_SYNC_SERVICES_AVAILABLE",
+    "SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE",
     "services_count",
     "services_list",
     "AVAILABLE_SERVICES",
@@ -164,13 +218,16 @@ GCP_BATCH_SERVICES_AVAILABLE: bool = _service_availability[
 GLOSSARY_SYNC_SERVICES_AVAILABLE: bool = _service_availability[
     "GLOSSARY_SYNC_SERVICES_AVAILABLE"
 ]
+SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE: bool = _service_availability[
+    "SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE"
+]
 
 # Log summary of available services
 services_count: int = len(_available_services)
 services_list: str = ", ".join(_available_services)
-AVAILABLE_SERVICES: list[
-    str
-] = _available_services.copy()  # Machine-friendly list of available services
+AVAILABLE_SERVICES: list[str] = (
+    _available_services.copy()
+)  # Machine-friendly list of available services
 logger.info(
     f"Services module initialized with {services_count} "
     f"available services: {services_list}"

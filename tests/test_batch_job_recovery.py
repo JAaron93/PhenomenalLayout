@@ -12,7 +12,8 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 import pytest
 
 from services.batch_job_recovery import (
@@ -62,9 +63,7 @@ class TestSaveAndListJobs:
         assert data["total_pages"] == 800
         assert data["status"] == "SUBMITTED"
 
-    def test_list_active_jobs(
-        self, recovery_manager: BatchJobRecoveryManager
-    ) -> None:
+    def test_list_active_jobs(self, recovery_manager: BatchJobRecoveryManager) -> None:
         recovery_manager.save_active_job(
             user_id="user-A",
             session_id="sess-A1",
@@ -172,7 +171,9 @@ class TestResumeActiveJob:
         elapsed = time.perf_counter() - start
 
         assert state.session_id == "sess-perf"
-        assert elapsed < 1.0, f"Resumption took {elapsed:.4f}s >= 1.0s (NFR-08 violation)"
+        assert elapsed < 1.0, (
+            f"Resumption took {elapsed:.4f}s >= 1.0s (NFR-08 violation)"
+        )
 
 
 class TestUpdateAndCleanup:

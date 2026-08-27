@@ -11,12 +11,13 @@ Traceability: FR-15, NFR-05, NFR-09
 from __future__ import annotations
 
 import base64
+import contextlib
 import io
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 import pypdf
 
@@ -105,7 +106,9 @@ class DualPaneViewerController:
             ValueError: If page_number is out of range or PDF parsing fails.
         """
         if page_number < 1:
-            raise ValueError(f"Page number {page_number} is out of bounds (must be >= 1)")
+            raise ValueError(
+                f"Page number {page_number} is out of bounds (must be >= 1)"
+            )
 
         de_stream, de_close = self._open_source(german_source, "German")
         en_stream, en_close = self._open_source(english_source, "English")
@@ -142,8 +145,12 @@ class DualPaneViewerController:
 
             if render_images:
                 resolution = dpi or self._default_dpi
-                de_img_b64 = self._render_page_image(german_source, page_number, resolution)
-                en_img_b64 = self._render_page_image(english_source, page_number, resolution)
+                de_img_b64 = self._render_page_image(
+                    german_source, page_number, resolution
+                )
+                en_img_b64 = self._render_page_image(
+                    english_source, page_number, resolution
+                )
                 has_images = de_img_b64 is not None and en_img_b64 is not None
 
             return BilingualPagePair(
@@ -159,15 +166,11 @@ class DualPaneViewerController:
 
         finally:
             if de_close:
-                try:
+                with contextlib.suppress(Exception):
                     de_stream.close()
-                except Exception:  # noqa: BLE001
-                    pass
             if en_close:
-                try:
+                with contextlib.suppress(Exception):
                     en_stream.close()
-                except Exception:  # noqa: BLE001
-                    pass
 
     def search_term_across_panes(
         self,
@@ -239,26 +242,27 @@ class DualPaneViewerController:
                 return matches
 
             page = reader.pages[page_number - 1]
-            page_width = float(page.mediabox.width)
             page_height = float(page.mediabox.height)
 
             extracted_fragments: list[dict[str, Any]] = []
 
-            def visitor_body(text: str, cm: Any, tm: Any, font_dict: Any, font_size: float) -> None:
+            def visitor_body(
+                text: str, _cm: Any, tm: Any, _font_dict: Any, font_size: float
+            ) -> None:
                 if text and text.strip():
                     x = float(tm[4]) if tm is not None and len(tm) > 4 else 50.0
                     y = float(tm[5]) if tm is not None and len(tm) > 5 else 700.0
-                    extracted_fragments.append({
-                        "text": text,
-                        "x": x,
-                        "y": y,
-                        "font_size": float(font_size) if font_size else 12.0,
-                    })
+                    extracted_fragments.append(
+                        {
+                            "text": text,
+                            "x": x,
+                            "y": y,
+                            "font_size": float(font_size) if font_size else 12.0,
+                        }
+                    )
 
-            try:
+            with contextlib.suppress(Exception):
                 page.extract_text(visitor_text=visitor_body)
-            except Exception:  # noqa: BLE001
-                pass
 
             flags = 0 if case_sensitive else re.IGNORECASE
             pattern = re.compile(re.escape(term), flags)
@@ -282,7 +286,7 @@ class DualPaneViewerController:
             # If fragment visitor yielded no matches, search whole page text as fallback
             if not matches:
                 full_text = page.extract_text() or ""
-                for match in pattern.finditer(full_text):
+                for _match in pattern.finditer(full_text):
                     # Default estimated coordinate centered on page
                     matches.append(
                         TextBoundingBox(
@@ -298,14 +302,14 @@ class DualPaneViewerController:
             return matches
 
         except Exception as exc:
-            logger.warning("Error searching term on %s page %d: %s", doc_label, page_number, exc)
+            logger.warning(
+                "Error searching term on %s page %d: %s", doc_label, page_number, exc
+            )
             return matches
         finally:
             if should_close:
-                try:
+                with contextlib.suppress(Exception):
                     stream.close()
-                except Exception:  # noqa: BLE001
-                    pass
 
     def _render_page_image(
         self,
@@ -319,15 +323,13 @@ class DualPaneViewerController:
 
             stream, should_close = self._open_source(source, "Raster")
             try:
-                data_bytes = stream.read() if hasattr(stream, "read") else bytes()
+                data_bytes = stream.read() if hasattr(stream, "read") else b""
                 if not data_bytes and hasattr(stream, "getvalue"):
                     data_bytes = stream.getvalue()  # type: ignore
             finally:
                 if should_close:
-                    try:
+                    with contextlib.suppress(Exception):
                         stream.close()
-                    except Exception:  # noqa: BLE001
-                        pass
 
             images = pdf2image.convert_from_bytes(
                 data_bytes,

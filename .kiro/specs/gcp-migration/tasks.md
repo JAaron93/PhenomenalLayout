@@ -260,6 +260,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 3.1: Implement `FrakturClassifier` (OCR Script Confidence Rating)
 * **ID**: `TASK-3.1`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-11, NFR-01, NFR-09
 * **Dependencies**: None
 * **Description**:
@@ -273,6 +274,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 3.2: Implement `BatchJobRecoveryManager` (Job Resumption)
 * **ID**: `TASK-3.2`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-12, NFR-02, NFR-08
 * **Dependencies**: `TASK-1.4`
 * **Description**:
@@ -287,6 +289,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 3.3: Implement `FallbackPageTranslator` (Raw Text Fallback for Complex Skipped Pages)
 * **ID**: `TASK-3.3`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-13, NFR-02, NFR-09
 * **Dependencies**: `TASK-1.3`
 * **Description**:
@@ -301,6 +304,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 3.4: Implement `DualPaneViewerController` (Side-by-Side Reading Mode)
 * **ID**: `TASK-3.4`
+* **Status**: `[COMPLETED]`
 * **Traceability**: FR-15, NFR-05, NFR-09
 * **Dependencies**: None
 * **Description**:

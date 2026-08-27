@@ -296,7 +296,7 @@ class BatchJobRecoveryManager:
                 data = json.loads(file_path.read_text(encoding="utf-8"))
                 if data.get("session_id") == session_id:
                     return file_path, ActiveJobState.from_dict(data)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 continue
         return None, None
 

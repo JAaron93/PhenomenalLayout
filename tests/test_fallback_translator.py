@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pypdf
 import pytest
 from google.api_core import exceptions as api_exceptions
@@ -118,7 +119,9 @@ class TestTranslateFailedPages:
     ) -> None:
         mock_client = mock_credentials_manager.get_translation_client.return_value
         mock_translation = MagicMock()
-        mock_translation.translated_text = "Page 2: Complex table of psychology with diagrams."
+        mock_translation.translated_text = (
+            "Page 2: Complex table of psychology with diagrams."
+        )
         mock_response = MagicMock()
         mock_response.glossary_translations = [mock_translation]
         mock_response.translations = []
@@ -170,7 +173,14 @@ class TestTranslateFailedPages:
             mock_response,
         ]
 
-        pages_text = [PageText(page_index=0, page_number=1, raw_text="Quelle", extracted_successfully=True)]
+        pages_text = [
+            PageText(
+                page_index=0,
+                page_number=1,
+                raw_text="Quelle",
+                extracted_successfully=True,
+            )
+        ]
 
         with patch("time.sleep"):  # Skip real backoff delay
             translated = fallback_translator.translate_failed_pages(
@@ -188,7 +198,11 @@ class TestTranslateFailedPages:
         mock_credentials_manager: MagicMock,
     ) -> None:
         mock_client = mock_credentials_manager.get_translation_client.return_value
-        pages_text = [PageText(page_index=0, page_number=1, raw_text="", extracted_successfully=False)]
+        pages_text = [
+            PageText(
+                page_index=0, page_number=1, raw_text="", extracted_successfully=False
+            )
+        ]
 
         translated = fallback_translator.translate_failed_pages(
             user_id="u1", pages_text=pages_text
@@ -294,9 +308,18 @@ class TestFallbackCoverageAndErrorBranches:
         mock_credentials_manager: MagicMock,
     ) -> None:
         mock_client = mock_credentials_manager.get_translation_client.return_value
-        mock_client.translate_text.side_effect = api_exceptions.InvalidArgument("Bad arg")
+        mock_client.translate_text.side_effect = api_exceptions.InvalidArgument(
+            "Bad arg"
+        )
 
-        pages = [PageText(page_index=0, page_number=1, raw_text="text", extracted_successfully=True)]
+        pages = [
+            PageText(
+                page_index=0,
+                page_number=1,
+                raw_text="text",
+                extracted_successfully=True,
+            )
+        ]
         with pytest.raises(api_exceptions.InvalidArgument):
             fallback_translator.translate_failed_pages(user_id="u1", pages_text=pages)
 
@@ -306,12 +329,20 @@ class TestFallbackCoverageAndErrorBranches:
         mock_credentials_manager: MagicMock,
     ) -> None:
         mock_client = mock_credentials_manager.get_translation_client.return_value
-        mock_client.translate_text.side_effect = api_exceptions.ResourceExhausted("Rate limit")
+        mock_client.translate_text.side_effect = api_exceptions.ResourceExhausted(
+            "Rate limit"
+        )
 
-        pages = [PageText(page_index=0, page_number=1, raw_text="text", extracted_successfully=True)]
-        with patch("time.sleep"):
-            with pytest.raises(api_exceptions.ResourceExhausted):
-                fallback_translator.translate_failed_pages(user_id="u1", pages_text=pages)
+        pages = [
+            PageText(
+                page_index=0,
+                page_number=1,
+                raw_text="text",
+                extracted_successfully=True,
+            )
+        ]
+        with patch("time.sleep"), pytest.raises(api_exceptions.ResourceExhausted):
+            fallback_translator.translate_failed_pages(user_id="u1", pages_text=pages)
 
     def test_unsupported_source_type_raises_type_error(
         self, fallback_translator: FallbackPageTranslator
