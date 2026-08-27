@@ -176,6 +176,23 @@ class GlossarySyncManager:
         logger.info("Uploaded glossary TSV to %s (%d bytes)", gcs_uri, len(tsv_bytes))
         return gcs_uri
 
+    def _delete_gcs_blob(self, user_id: str, gcs_uri: str) -> None:
+        """Safely delete a GCS blob by its gs:// URI, suppressing non-critical errors."""
+        if not gcs_uri or not gcs_uri.startswith("gs://"):
+            return
+
+        parts = gcs_uri[5:].split("/", 1)
+        if len(parts) != 2:
+            return
+
+        bucket_name, blob_name = parts[0], parts[1]
+        try:
+            storage_client = self._get_storage_client(user_id)
+            storage_client.bucket(bucket_name).blob(blob_name).delete()
+            logger.info("Cleaned up GCS TSV blob: %s", gcs_uri)
+        except Exception:
+            logger.debug("Failed to delete GCS blob %s", gcs_uri, exc_info=True)
+
     def get_glossary(self, user_id: str, glossary_id_or_name: str) -> translate.Glossary | None:
         """Retrieve existing glossary metadata from GCP Translation v3.
 
@@ -423,7 +440,8 @@ class GlossarySyncManager:
         )
 
         # 5. Create new replacement glossary and await full READY status.
-        # If creation fails and an older slot was deleted during dual-slot recovery, attempt rollback restoration.
+        # If creation fails, clean up the newly staged TSV so failed attempts do not leave orphaned objects.
+        # If an older slot was deleted during dual-slot recovery, attempt rollback restoration.
         try:
             new_resource_name = self._create_glossary_resource(
                 user_id=user_id,
@@ -433,6 +451,9 @@ class GlossarySyncManager:
                 gcs_input_uri=gcs_uri,
             )
         except Exception:
+            # Clean up the newly staged TSV blob so failed synchronizations do not orphan objects in GCS
+            self._delete_gcs_blob(user_id, gcs_uri)
+
             if older_slot is not None and older_input_uri:
                 logger.exception("Creation of replacement slot failed; attempting rollback restoration of %s", new_glossary_name)
                 try:
@@ -462,14 +483,8 @@ class GlossarySyncManager:
                     # Clean up old GCS TSV if available
                     if hasattr(old_g, "input_config") and hasattr(old_g.input_config, "gcs_source"):
                         old_input_uri = getattr(old_g.input_config.gcs_source, "input_uri", "")
-                        if old_input_uri and old_input_uri != gcs_uri and old_input_uri.startswith("gs://"):
-                            try:
-                                parts = old_input_uri[5:].split("/", 1)
-                                if len(parts) == 2:
-                                    self._get_storage_client(user_id).bucket(parts[0]).blob(parts[1]).delete()
-                                    logger.debug("Cleaned up superseded session TSV: %s", old_input_uri)
-                            except Exception:
-                                pass
+                        if old_input_uri and old_input_uri != gcs_uri:
+                            self._delete_gcs_blob(user_id, old_input_uri)
 
         return new_resource_name
 

@@ -244,6 +244,10 @@ class TestBookSessionGlossarySync:
         # Existing glossary was NEVER deleted because new was not yet ready
         mock_trans.delete_glossary.assert_not_called()
 
+        # Verified: newly staged TSV blob was deleted so failed attempts do not orphan objects
+        mock_storage = mock_creds_mgr.get_storage_client.return_value
+        mock_storage.bucket.return_value.blob.return_value.delete.assert_called_once()
+
     def test_sync_book_session_glossary_prefix_related_sessions_isolated(
         self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
     ) -> None:
