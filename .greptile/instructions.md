@@ -30,6 +30,17 @@ PhenomenalLayout has migrated away from custom, heuristic-heavy PDF layout recon
 | **Blocking Sync I/O in Async Paths** | Degrades throughput on multi-chapter books. | Use `asyncio` and non-blocking streaming I/O for GCS uploads and LRO polling. |
 | **Author-Specific Worktree Links** (`file:///Users/...`) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`.kiro/specs/gcp-migration/design.md`). |
 
+### 2.1 Track 4 Completed Deletions & Caller Decoupling (Do NOT Flag as Errors)
+Under **Track 4 (`TASK-4.1`)**, the following legacy components were permanently deleted or retired:
+* **Permanently Deleted**: `services/pdf_document_reconstructor.py`, `services/dolphin_client.py`, `services/dolphin_modal_service.py`, and legacy ReportLab test suites.
+* **Deprecated Stubs**: `core/dynamic_layout_engine.py` and `services/enhanced_document_processor.py` emit `DeprecationWarning` under ADR 0001.
+* **Dependency Removal**: `reportlab` was intentionally pruned from production `requirements.txt` (retained only in `requirements-dev.txt` for mock test fixtures).
+
+**Reviewer Instructions for Track 4 Deletions:**
+1. **Never Request Restoration**: Greptile must NEVER request restoring or re-importing `dolphin_client`, `dolphin_modal_service`, or `pdf_document_reconstructor`.
+2. **Accept Defensive Decoupling**: If legacy call sites handle the absence of these modules using `try...except (ImportError, Exception)` or raise `NotImplementedError` redirecting callers to `GCPBatchTranslationService`, this is the **approved and intended pattern**.
+3. **Accept Mock Test Stubs**: Test fixtures registering mock stubs for deleted clients in `conftest.py` are approved resilience patterns to prevent test harness regressions.
+
 ---
 
 ## 3. Core Architecture Standards

@@ -42,8 +42,11 @@ from models.user_choice_models import (
 from utils import pdf_validator
 from utils.language_utils import extract_text_sample_for_language_detection
 
-# Import dolphin client for configuration exposure
-from services.dolphin_client import DEFAULT_LOCAL_ENDPOINT, DEFAULT_MODAL_ENDPOINT
+# Default endpoints for legacy configuration compatibility (ADR 0001)
+DEFAULT_MODAL_ENDPOINT: str = (
+    "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
+)
+DEFAULT_LOCAL_ENDPOINT: str = "http://localhost:8501/layout"
 
 # Import services for configuration endpoints
 from services.philosophy_enhanced_translation_service import (

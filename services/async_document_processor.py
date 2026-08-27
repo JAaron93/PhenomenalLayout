@@ -9,31 +9,88 @@ This module complements the synchronous processor by providing a drop-in
 async alternative for higher throughput and responsive servers.
 """
 
+from __future__ import annotations
+
 import asyncio
 import inspect
 import logging
 import random
 import time
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 import httpx
 
 from dolphin_ocr.layout import BoundingBox, FontInfo
-from services import dolphin_client
 from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
     TextBlock,
 )
 from services.ocr_utils import parse_ocr_result
-from services.pdf_document_reconstructor import (
-    PDFDocumentReconstructor,
-    TranslatedElement,
-    TranslatedLayout,
-    TranslatedPage,
+
+warnings.warn(
+    "services.async_document_processor is deprecated and retired under ADR 0001. "
+    "Use services.gcp_batch_translation_service.GCPBatchTranslationService instead.",
+    DeprecationWarning,
+    stacklevel=2,
 )
+
+
+class _DolphinClientStub:
+    """Stub for retired dolphin_client."""
+
+    DEFAULT_LOCAL_ENDPOINT = "http://localhost:8501/layout"
+    DEFAULT_MODAL_ENDPOINT = (
+        "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
+    )
+
+    async def get_layout(self, *args: Any, **kwargs: Any) -> Any:
+        """Stub get_layout."""
+        raise NotImplementedError("DolphinClient has been deleted under ADR 0001.")
+
+
+dolphin_client = _DolphinClientStub()
+
+
+@dataclass
+class TranslatedElement:
+    """Stub for retired TranslatedElement."""
+
+    original_text: str = ""
+    translated_text: str = ""
+    adjusted_text: str | None = None
+    bbox: Any = None
+    font_info: Any = None
+
+
+@dataclass
+class TranslatedPage:
+    """Stub for retired TranslatedPage."""
+
+    page_number: int = 0
+    translated_elements: list[Any] = field(default_factory=list)
+
+
+@dataclass
+class TranslatedLayout:
+    """Stub for retired TranslatedLayout."""
+
+    pages: list[Any] = field(default_factory=list)
+
+
+class PDFDocumentReconstructor:
+    """Stub for retired PDFDocumentReconstructor."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize reconstructor stub."""
+        pass
+
+    def reconstruct_pdf_document(self, *args: Any, **kwargs: Any) -> Any:
+        """Reconstruct PDF document stub."""
+        raise NotImplementedError("PDFDocumentReconstructor has been deleted under ADR 0001.")
 
 logger = logging.getLogger(__name__)
 

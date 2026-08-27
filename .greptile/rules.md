@@ -9,6 +9,7 @@
    * Cross-user session credential contamination.
 2. **Reintroduction of Deprecated Engines**:
    * Creating new modules relying on Dolphin OCR, Modal GPU workers, or ReportLab canvas-overlay reconstruction.
+   * Requesting or attempting the restoration of deleted legacy modules (`services/dolphin_client.py`, `services/dolphin_modal_service.py`, `services/pdf_document_reconstructor.py`).
 3. **Host PDF Disk Storage Violations**:
    * Saving full-length book PDFs to host container disks or persistent Modal Volumes (violates Zero Host Storage invariant).
 4. **Third-Party Auth Middleware**:
@@ -38,6 +39,7 @@
 
 ### Approval (Score: 5/5 - Ready to Merge)
 * Zero blocking issues, clean test coverage ($\ge 90\%$), strict compliance with GCP Document Translation, BYOK, Zero Host Storage, Google Drive GIS export, and Scholarly Resilience architecture.
+* Defensive decoupling of callers from Track 4 deleted components using `NotImplementedError` or `try...except (ImportError, Exception)` is approved and must be awarded full passing score.
 
 ---
 

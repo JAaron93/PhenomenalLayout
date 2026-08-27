@@ -134,3 +134,12 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 * **Strict TDD Sequence**: All new services and bug fixes must be preceded by unit/integration tests with $\ge 90\%$ test coverage.
 * **Type Annotations**: Strict Python type hints on all signatures (`from __future__ import annotations`, `typing.Optional`, `Path`, etc.).
 * **Retry & Resilience**: All external GCP API interactions must implement exponential backoff retry for HTTP 429/503 errors.
+
+### 6.1 Architectural Pushback & AI Review Governance
+* **No Reflexive Acquiescence**: When automated AI reviewers (e.g., Greptile) flag intentional deprecations or deletions mandated by ADR 0001, agents MUST NOT restore obsolete code.
+* **Defensive Decoupling**: Decouple legacy callers with `NotImplementedError` or `try...except ImportError` fallbacks, post clear architectural pushback citing the ADR/spec on the PR thread, and drive the review to completion without regressing migration goals.
+
+### 6.2 Test Fixture Reload & Submodule Hygiene (Python 3.13)
+* **Safe Dynamic Reloading**: In tests that dynamically reload environment-dependent submodules via `importlib.reload(mod)`, always synchronize `sys.modules[mod.__name__] = mod` prior to calling `importlib.reload` to prevent Python 3.13 `sys.modules` identity desynchronization.
+* **Usefixtures for Side-Effect Fixtures**: Test functions that require an environment setup fixture solely for setup/teardown side effects MUST use `@pytest.mark.usefixtures("<fixture_name>")` instead of unpacking unused arguments, preventing `ARG001`, `RUF059`, and `N806` linter violations.
+* **Dead Documentation Pruning**: When completing dead code cleanups, all intermediate audit reports (`unused_code_report.md`, `reports/dead_code_*.md`) that have been addressed MUST be pruned to prevent documentation drift.

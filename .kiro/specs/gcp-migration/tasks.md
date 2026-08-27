@@ -320,6 +320,7 @@ The tasks are organized into five **Execution Tracks**:
 
 #### Task 4.1: Deprecate Legacy Heuristic Layout & Canvas Modules
 * **ID**: `TASK-4.1`
+* **Status**: `[COMPLETED]`
 * **Traceability**: Architecture Cleanup
 * **Dependencies**: None
 * **Description**:

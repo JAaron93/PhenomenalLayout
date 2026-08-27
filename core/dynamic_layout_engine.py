@@ -7,6 +7,15 @@ and performance optimization for layout preservation decisions.
 
 from __future__ import annotations
 
+import warnings
+
+warnings.warn(
+    "core.dynamic_layout_engine has been retired and deprecated under ADR 0001 / Track 4. "
+    "Google Cloud Document Translation natively handles layout preservation.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import itertools
 import logging
 import time

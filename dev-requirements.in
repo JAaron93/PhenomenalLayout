@@ -7,10 +7,11 @@ black>=25.1,<26.0
 ruff>=0.12,<1.0
 mypy>=1.17,<2.0
 
-# Testing Framework
+# Testing Framework & Fixtures
 pytest>=8.4,<9.0
 pytest-asyncio>=1.1,<2.0
 pytest-cov>=6.2,<7.0
+reportlab>=4.2,<5.0
 
 # Build Tools (already installed but good to have explicit)
 pip-tools>=7.5,<8.0
