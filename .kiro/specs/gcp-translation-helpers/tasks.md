@@ -72,7 +72,7 @@ The plan is organized into five **Execution Tracks**:
   - `format_gcp_glossary_name(project_id: str, location: str, glossary_id: str) -> str` returns standard GCP resource path.
   - `is_transient_gcp_error(exc: Exception) -> bool` detects HTTP 429, 503, and gRPC 8, 14.
   - `retry_gcp_call` and `@retry_gcp_operation` retry transient errors up to `max_retries` with jittered exponential backoff.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 1.2: Implement `utils/tsv_utils.py` [FR-03, US-03]
 * **Dependencies**: None.
@@ -81,7 +81,7 @@ The plan is organized into five **Execution Tracks**:
   - `escape_rfc4180_field(val: str) -> str` returns `val` immediately if no delimiter characters (`\t`, `\n`, `\r`, `"`) exist, avoiding string copying.
   - Escapes fields containing special characters with double quotes and doubled quotes (`""`).
   - `format_tsv_bytes(entries: Mapping[str, str], header: tuple[str, str] = ("de", "en")) -> bytes` returns sorted UTF-8 TSV byte payload with trailing newline.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 1.3: Implement `utils/pdf_stream.py` [FR-04, US-04]
 * **Dependencies**: None.
@@ -91,7 +91,7 @@ The plan is organized into five **Execution Tracks**:
   - Normalizes `Path` and `str` by opening in `"rb"` mode and calculating file size via `os.path.getsize(source)`. Deterministically closes file in `finally`.
   - Normalizes `bytes` into `io.BytesIO(source)`. Closes in `finally`.
   - Normalizes seekable `BinaryIO` by rewinding to 0 and measuring size via `seek(0, 2)`. Does not close external stream in `finally`.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 1.4: Implement `atomic_write_json` and `atomic_write_text` in `utils/file_handler.py` [FR-09, US-09]
 * **Dependencies**: None.
@@ -99,14 +99,14 @@ The plan is organized into five **Execution Tracks**:
 * **Acceptance Criteria**:
   - `atomic_write_json(target_path: Path, data: Any, indent: int = 2) -> None` writes JSON cleanly and renames atomically.
   - `atomic_write_text(target_path: Path, text: str, encoding: str = "utf-8") -> None` writes text cleanly and renames atomically.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 1.5: Create Centralized Documentation `docs/REUSABLE_HELPER_FUNCTIONS.md` [US-01 through US-09]
 * **Dependencies**: Tasks 1.1, 1.2, 1.3, 1.4.
 * **Goal**: Create codebase architectural note documenting all consolidated helper functions, signatures, complexity bounds, and canonical usage patterns as mandated by `/dry-helper-function-refactorer`.
 * **Acceptance Criteria**:
   - Markdown reference document detailing modules, functions, parameters, exceptions, time/space complexity, and migration examples.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 ---
 
