@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
+from api.auth import UserRole
 from api.routes import api_router
 from services.batch_job_recovery import ActiveJobState
 from services.book_translation_orchestrator import (
@@ -53,7 +54,7 @@ def _create_minimal_pdf_bytes(text: str = "Test Philosophical Document", pages: 
 def client() -> TestClient:
     test_app = FastAPI()
     test_app.include_router(api_router, prefix="/api/v1")
-    return TestClient(test_app)
+    return TestClient(test_app, headers={"X-API-Key": "test-admin-key"})
 
 
 class TestZeroAuthCostEstimatorRoute:
@@ -404,8 +405,12 @@ class TestScholarlyDeliveryRoutes:
         mock_orch.list_user_jobs.return_value = [mock_orch.resume_job.return_value]
         mock_get_orch.return_value = mock_orch
 
-        # Resume
-        res = client.get("/api/v1/book/resume/sess-resumed")
+        # Resume without user_id rejected
+        res_missing = client.get("/api/v1/book/resume/sess-resumed")
+        assert res_missing.status_code == 422
+
+        # Resume with user_id succeeds
+        res = client.get("/api/v1/book/resume/sess-resumed?user_id=user-123")
         assert res.status_code == 200
         assert res.json()["session_id"] == "sess-resumed"
 
@@ -496,3 +501,83 @@ class TestScholarlyDeliveryRoutes:
         # Empty vocabulary payload
         res = client.post("/api/v1/vocabulary/user-123", json={})
         assert res.status_code == 400
+
+
+class TestOwnershipAndAuthorization:
+    """Security verification ensuring caller cannot tamper with other users' resources."""
+
+    def test_cross_user_credential_modification_rejected(self) -> None:
+        """Verify non-admin caller cannot modify another user's BYOK credentials."""
+        app = FastAPI()
+        app.include_router(api_router, prefix="/api/v1")
+        # Override auth to simulate an authenticated non-admin user 'attacker'
+        from api.auth import get_current_user_dependency
+
+        app.dependency_overrides[get_current_user_dependency] = lambda: {
+            "user_id": "attacker",
+            "role": UserRole.READ_ONLY,
+            "authenticated": True,
+        }
+        client = TestClient(app)
+
+        # Attempt to set credentials for victim
+        res = client.post(
+            "/api/v1/byok/credentials",
+            json={
+                "user_id": "victim",
+                "project_id": "victim-proj",
+                "bucket_name": "victim-bkt",
+                "sa_json": '{"type": "service_account"}',
+            },
+        )
+        assert res.status_code == 403
+        assert "Access denied" in res.json()["detail"]
+
+        # Attempt to clear credentials for victim
+        res_del = client.delete("/api/v1/byok/credentials?user_id=victim")
+        assert res_del.status_code == 403
+
+    def test_cross_user_vocabulary_modification_rejected(self) -> None:
+        """Verify non-admin caller cannot alter another user's persistent vocabulary."""
+        app = FastAPI()
+        app.include_router(api_router, prefix="/api/v1")
+        from api.auth import get_current_user_dependency
+
+        app.dependency_overrides[get_current_user_dependency] = lambda: {
+            "user_id": "attacker",
+            "role": UserRole.READ_ONLY,
+            "authenticated": True,
+        }
+        client = TestClient(app)
+
+        # Attempt to save vocabulary for victim
+        res = client.post(
+            "/api/v1/vocabulary/victim",
+            json={"german_term": "Dasein", "preferred_translation": "Being"},
+        )
+        assert res.status_code == 403
+        assert "Access denied" in res.json()["detail"]
+
+        # Attempt to bulk save vocabulary for victim
+        res_bulk = client.post(
+            "/api/v1/vocabulary/victim/bulk",
+            json=[{"german_term": "Dasein", "preferred_translation": "Being"}],
+        )
+        assert res_bulk.status_code == 403
+
+    def test_cross_user_job_resume_rejected(self) -> None:
+        """Verify non-admin caller cannot resume or inspect another user's job session."""
+        app = FastAPI()
+        app.include_router(api_router, prefix="/api/v1")
+        from api.auth import get_current_user_dependency
+
+        app.dependency_overrides[get_current_user_dependency] = lambda: {
+            "user_id": "attacker",
+            "role": UserRole.READ_ONLY,
+            "authenticated": True,
+        }
+        client = TestClient(app)
+
+        res = client.get("/api/v1/book/resume/victim-sess-123?user_id=victim")
+        assert res.status_code == 403
+        assert "Access denied" in res.json()["detail"]

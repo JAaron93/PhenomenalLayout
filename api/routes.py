@@ -10,6 +10,7 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     Body,
+    Depends,
     File,
     Form,
     HTTPException,
@@ -17,9 +18,12 @@ from fastapi import (
     Request,
     Response,
     UploadFile,
+    status,
 )
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
+
+from api.auth import UserRole, get_current_user_dependency
 
 from services.byok_credentials_manager import BYOKCredentialsManager, GuideStep, ValidationResult
 from services.cost_estimator import CostQuote, GCPCostEstimator
@@ -1079,9 +1083,37 @@ async def get_onboarding_guide() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+def _verify_resource_ownership(
+    requested_user_id: str,
+    current_user: dict[str, Any] | None,
+) -> None:
+    """Ensure authenticated caller owns the requested resource or possesses admin role.
+
+    When authentication is disabled in configuration (_default_config.enable_auth=False),
+    current_user is ANONYMOUS_USER with UserRole.ADMIN, enabling seamless local dev and tests.
+    When authentication is enabled, non-admin callers attempting to access another user's
+    resources are rejected with 403 FORBIDDEN.
+    """
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    role = current_user.get("role")
+    auth_uid = current_user.get("user_id")
+    if role == UserRole.ADMIN:
+        return
+    if auth_uid and auth_uid != requested_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied: Cannot access or modify resources belonging to user '{requested_user_id}'",
+        )
+
+
 @api_router.post("/byok/credentials")
 async def set_byok_credentials(
     payload: dict[str, Any],
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Store BYOK credentials in session memory and validate them via zero-cost API calls."""
     user_id = payload.get("user_id", "").strip()
@@ -1091,6 +1123,8 @@ async def set_byok_credentials(
 
     if not user_id or not project_id or not bucket_name or not sa_json:
         raise HTTPException(status_code=400, detail="user_id, project_id, bucket_name, and sa_json are required")
+
+    _verify_resource_ownership(user_id, current_user)
 
     try:
         mgr = get_byok_credentials_manager()
@@ -1118,6 +1152,8 @@ async def set_byok_credentials(
             "storage_check_passed": stor_ok,
             "details": details,
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error setting BYOK credentials: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1126,8 +1162,10 @@ async def set_byok_credentials(
 @api_router.get("/byok/validate")
 async def validate_byok_credentials(
     user_id: str = Query(..., description="User identifier to validate"),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Run dual non-billable validation on user's active session credentials."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         mgr = get_byok_credentials_manager()
         val = mgr.validate_credentials(user_id)
@@ -1148,6 +1186,8 @@ async def validate_byok_credentials(
             "storage_check_passed": stor_ok,
             "details": details,
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error validating credentials for %s: %s", user_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1156,13 +1196,17 @@ async def validate_byok_credentials(
 @api_router.delete("/byok/credentials")
 async def clear_byok_credentials(
     user_id: str = Query(..., description="User identifier to clear"),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Evict session credentials from memory."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         mgr = get_byok_credentials_manager()
         if hasattr(mgr, "clear_credentials"):
             mgr.clear_credentials(user_id)
         return {"success": True, "message": f"Credentials cleared for user '{user_id}'"}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error clearing credentials: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1173,8 +1217,10 @@ async def pre_scan_book_endpoint(
     user_id: str = Form(...),
     max_pages: int | None = Form(None),
     file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Pre-scan book PDF for neologisms, Fraktur OCR confidence rating, and vocabulary recall."""
+    _verify_resource_ownership(user_id, current_user)
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
     try:
@@ -1236,12 +1282,18 @@ async def pre_scan_book_endpoint(
 
 
 @api_router.get("/vocabulary/{user_id}")
-async def get_user_vocabulary_endpoint(user_id: str) -> dict[str, Any]:
+async def get_user_vocabulary_endpoint(
+    user_id: str,
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
+) -> dict[str, Any]:
     """Retrieve saved terminology memory preferences for *user_id*."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         store = get_user_vocabulary_store()
         prefs = store.get_user_preferences(user_id) if hasattr(store, "get_user_preferences") else store.get_preferences(user_id)
         return {k: v.to_dict() if hasattr(v, "to_dict") else v.__dict__ for k, v in prefs.items()}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error fetching vocabulary for %s: %s", user_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1251,8 +1303,10 @@ async def get_user_vocabulary_endpoint(user_id: str) -> dict[str, Any]:
 async def save_user_vocabulary_endpoint(
     user_id: str,
     payload: dict[str, Any],
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Save or update user terminology memory preference."""
+    _verify_resource_ownership(user_id, current_user)
     german_term = payload.get("german_term", "").strip()
     preferred_translation = payload.get("preferred_translation", "").strip()
     notes = payload.get("notes", "")
@@ -1285,6 +1339,8 @@ async def save_user_vocabulary_endpoint(
             "keep_untranslated": keep_untranslated,
             "confidence": confidence,
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error saving vocabulary preference: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1294,8 +1350,10 @@ async def save_user_vocabulary_endpoint(
 async def bulk_save_vocabulary_endpoint(
     user_id: str,
     payload: Any = Body(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Bulk save or update user terminology preferences."""
+    _verify_resource_ownership(user_id, current_user)
     if isinstance(payload, dict):
         preferences = payload.get("preferences", payload)
     else:
@@ -1304,6 +1362,8 @@ async def bulk_save_vocabulary_endpoint(
         store = get_user_vocabulary_store()
         count = store.bulk_save_preferences(user_id, preferences)
         return {"saved_count": count}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error in bulk saving preferences: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1313,8 +1373,10 @@ async def bulk_save_vocabulary_endpoint(
 async def import_vocabulary_tsv_endpoint(
     user_id: str,
     payload: Any = Body(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Import terminology from RFC 4180 TSV content."""
+    _verify_resource_ownership(user_id, current_user)
     if isinstance(payload, dict):
         tsv_content = payload.get("tsv_content", "")
     elif isinstance(payload, bytes):
@@ -1331,14 +1393,20 @@ async def import_vocabulary_tsv_endpoint(
             imported = 0
         count = len(imported) if isinstance(imported, (list, dict, set)) else int(imported or 0)
         return {"imported_count": count}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error importing TSV vocabulary: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @api_router.get("/vocabulary/{user_id}/export")
-async def export_vocabulary_tsv_endpoint(user_id: str) -> Response:
+async def export_vocabulary_tsv_endpoint(
+    user_id: str,
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
+) -> Response:
     """Export user terminology preferences as RFC 4180 TSV."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         store = get_user_vocabulary_store()
         if hasattr(store, "export_tsv"):
@@ -1352,6 +1420,8 @@ async def export_vocabulary_tsv_endpoint(user_id: str) -> Response:
             media_type="text/tab-separated-values",
             headers={"Content-Disposition": f"attachment; filename={user_id}_vocabulary.tsv"},
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error exporting TSV vocabulary: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1366,8 +1436,10 @@ async def start_batch_translation_endpoint(
     source_lang: str = Form("de"),
     target_lang: str = Form("en-US"),
     file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Stage book in GCS, synchronize session glossary, and dispatch asynchronous batch translation."""
+    _verify_resource_ownership(user_id, current_user)
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
     try:
@@ -1403,8 +1475,10 @@ async def start_batch_translation_endpoint(
 async def get_book_status_endpoint(
     session_id: str,
     user_id: str = Query(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Poll live LRO progress and synchronize with BatchJobRecoveryManager."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         orch = get_book_orchestrator()
         update = orch.poll_translation_progress(user_id=user_id, session_id=session_id)
@@ -1418,6 +1492,8 @@ async def get_book_status_endpoint(
             "is_done": update.is_done,
             "error_message": update.error_message,
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error polling progress for %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1426,21 +1502,39 @@ async def get_book_status_endpoint(
 @api_router.get("/book/resume/{session_id}")
 async def resume_book_job_endpoint(
     session_id: str,
-    user_id: str | None = Query(None),
+    user_id: str = Query(..., description="Owner user identifier of the job session"),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
-    """Reconnect to active or interrupted LRO job."""
+    """Reconnect to active or interrupted LRO job scoped to authorized user."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         orch = get_book_orchestrator()
         state = orch.resume_job(session_id=session_id, user_id=user_id)
+        if not state:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No active job found for session '{session_id}' and user '{user_id}'",
+            )
+        if hasattr(state, "user_id") and state.user_id and state.user_id != user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: Resumed job belongs to another user",
+            )
         return state.to_dict() if hasattr(state, "to_dict") else state.__dict__
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.error("Error resuming job %s: %s", session_id, exc)
+        logger.error("Error resuming job %s for user %s: %s", session_id, user_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @api_router.get("/book/jobs/{user_id}")
-async def list_user_jobs_endpoint(user_id: str) -> list[dict[str, Any]]:
+async def list_user_jobs_endpoint(
+    user_id: str,
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
+) -> list[dict[str, Any]]:
     """List active or recent batch translation jobs for *user_id*."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         orch = get_book_orchestrator()
         if hasattr(orch, "list_user_jobs"):
@@ -1448,6 +1542,8 @@ async def list_user_jobs_endpoint(user_id: str) -> list[dict[str, Any]]:
         else:
             jobs = orch.recovery_manager.list_active_jobs(user_id)
         return [j.to_dict() if hasattr(j, "to_dict") else (j.__dict__ if hasattr(j, "__dict__") else dict(j)) for j in jobs]
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error listing jobs for %s: %s", user_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1457,12 +1553,16 @@ async def list_user_jobs_endpoint(user_id: str) -> list[dict[str, Any]]:
 async def complete_job_endpoint(
     session_id: str,
     user_id: str = Query(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Evaluate completed job and trigger session glossary cleanup if 0 failed pages."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         orch = get_book_orchestrator()
         summary = orch.handle_job_completion(user_id=user_id, session_id=session_id)
         return summary.__dict__ if hasattr(summary, "__dict__") else {}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error handling completion for %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1471,6 +1571,7 @@ async def complete_job_endpoint(
 @api_router.post("/book/export-drive")
 async def export_to_drive_endpoint(
     payload: dict[str, Any],
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Stream translated PDF directly from GCS to Google Drive using client GIS OAuth token."""
     user_id = payload.get("user_id", "").strip()
@@ -1480,6 +1581,8 @@ async def export_to_drive_endpoint(
 
     if not user_id or not session_id or not access_token:
         raise HTTPException(status_code=400, detail="user_id, session_id, and access_token are required")
+
+    _verify_resource_ownership(user_id, current_user)
 
     try:
         orch = get_book_orchestrator()
@@ -1496,6 +1599,8 @@ async def export_to_drive_endpoint(
             "web_content_link": result.web_content_link,
             "created_time": result.created_time,
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Drive export failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1505,8 +1610,10 @@ async def export_to_drive_endpoint(
 async def download_translated_book_endpoint(
     session_id: str,
     user_id: str = Query(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> Response:
     """Stream translated PDF directly from user's GCS bucket for direct browser download."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         orch = get_book_orchestrator()
         if hasattr(orch, "download_translated_book"):
@@ -1534,6 +1641,8 @@ async def download_translated_book_endpoint(
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{state.book_id}_translated.pdf"'},
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Download failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1547,8 +1656,10 @@ async def fallback_translate_endpoint(
     source_lang: str = Form("de"),
     target_lang: str = Form("en"),
     file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Trigger plaintext fallback extraction, translation, and splicing for failed layout pages."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         contents = await file.read()
         indices: list[int] | None = None
@@ -1570,6 +1681,8 @@ async def fallback_translate_endpoint(
             "spliced_output_gcs_uri": res.spliced_output_gcs_uri,
             "success": res.success,
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Fallback translation failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1582,8 +1695,10 @@ async def dual_pane_endpoint(
     page_number: int = Query(1),
     render_images: bool = Query(True),
     file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
     """Fetch synchronized German and English page pair for side-by-side reading mode."""
+    _verify_resource_ownership(user_id, current_user)
     try:
         contents = await file.read()
         orch = get_book_orchestrator()
@@ -1604,6 +1719,8 @@ async def dual_pane_endpoint(
             "english_page_image_base64": getattr(pair, "english_page_image_base64", None),
             "has_images": getattr(pair, "has_images", False),
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Dual-pane view error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
