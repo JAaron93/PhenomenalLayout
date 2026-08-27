@@ -259,20 +259,24 @@ def _authenticate_gradio_caller(
 ) -> None:
     """Verify that the Gradio caller is authenticated and authorized to access requested_user_id.
 
-    - When authentication is disabled (is_auth_enabled() is False), permits local dev workflows.
+    - Shared anonymous namespaces ('anonymous', 'default_user', 'local_user') are rejected
+      to prevent cross-visitor state collision.
+    - When authentication is disabled (is_auth_enabled() is False), permits local dev workflows
+      with distinct user identifiers.
     - When authentication is enabled:
       - Rejects unauthenticated requests with PermissionError.
       - Requires non-empty user_id matching requested_user_id for non-admin tokens.
     """
+    shared_namespaces = ("anonymous", "default_user", "local_user")
+    if requested_user_id.lower() in shared_namespaces:
+        raise PermissionError(
+            f"Invalid user_id '{requested_user_id}': Shared anonymous namespaces are prohibited "
+            "to isolate user credentials, vocabulary, and jobs. Please provide a distinct user identifier."
+        )
+
     from api.auth import UserRole, is_auth_enabled, verify_api_key, verify_jwt_token
 
     if not is_auth_enabled():
-        allowed_namespaces = ("anonymous", "default_user", "local_user", "scholar-01")
-        if requested_user_id not in allowed_namespaces:
-            raise PermissionError(
-                f"Access denied: When authentication is disabled, operations are restricted to "
-                f"local/default namespaces and cannot access '{requested_user_id}'."
-            )
         return
 
     token = auth_token.strip()

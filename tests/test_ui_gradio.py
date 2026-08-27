@@ -212,12 +212,9 @@ def test_gradio_cross_user_jwt_rejection() -> None:
     assert "🔒 Access denied" in res
 
 
-def test_gradio_disabled_auth_binds_to_default_namespace() -> None:
-    """Verify Gradio rejects non-default namespaces even when auth is disabled."""
-    from unittest.mock import patch
-
+def test_gradio_rejects_shared_anonymous_namespaces() -> None:
+    """Verify Gradio rejects shared anonymous namespaces to prevent multi-tenant collision."""
     from ui.gradio_interface import validate_byok_ui
 
-    with patch("api.auth.is_auth_enabled", return_value=False):
-        res = validate_byok_ui("victim-01", "p", "b", "{}")
-        assert "🔒 Access denied" in res
+    res_anon = validate_byok_ui("default_user", "p", "b", "{}")
+    assert "Shared anonymous namespaces are prohibited" in res_anon

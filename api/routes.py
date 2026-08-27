@@ -1089,26 +1089,26 @@ def _verify_resource_ownership(
 ) -> None:
     """Ensure authenticated caller owns the requested resource or possesses admin role.
 
-    - When authentication is disabled in config (is_auth_enabled() is False), permits local dev workflows.
+    Prevents shared state collisions and unauthorized cross-tenant mutations:
+    - Shared anonymous namespaces ('anonymous', 'default_user', 'local_user') are rejected
+      to ensure every visitor/session maintains isolated credentials, vocabulary, and jobs.
+    - When authentication is disabled in config (is_auth_enabled() is False), permits local dev
+      workflows with distinct user IDs bound to the caller's identity.
     - When authentication is enabled:
-      - Rejects unauthenticated callers with 401 UNAUTHORIZED, eliminating shared anonymous state.
+      - Rejects unauthenticated callers with 401 UNAUTHORIZED.
       - Authenticated administrators (UserRole.ADMIN) have global resource access.
       - Authenticated non-admin callers must possess a non-empty identity matching requested_user_id.
     """
-    # When authentication is globally disabled (local dev mode):
-    # Enforce binding to local/default user namespaces so callers cannot tamper with arbitrary named users.
-    if not is_auth_enabled():
-        allowed_namespaces = ("anonymous", "default_user", "local_user")
-        auth_uid = (current_user or {}).get("user_id")
-        if requested_user_id not in allowed_namespaces and requested_user_id != auth_uid:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    f"Access denied: When authentication is disabled, operations are restricted to "
-                    f"local/default namespaces ('default_user', 'anonymous') and cannot access '{requested_user_id}'."
-                ),
-            )
-        return
+    # Prohibit shared anonymous namespaces that cause multi-tenant state collision
+    shared_namespaces = ("anonymous", "default_user", "local_user")
+    if requested_user_id.lower() in shared_namespaces:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Invalid user_id '{requested_user_id}': Shared anonymous namespaces are prohibited "
+                "to isolate user credentials, vocabulary, and jobs. Please provide a distinct user identifier."
+            ),
+        )
 
     if not current_user:
         raise HTTPException(
@@ -1119,6 +1119,16 @@ def _verify_resource_ownership(
     is_authenticated = bool(current_user.get("authenticated", False))
     role = current_user.get("role")
     auth_uid = current_user.get("user_id")
+
+    # When authentication is globally disabled (local dev mode):
+    # Enforce binding to the caller's own identity so visitors cannot tamper with other namespaces.
+    if not is_auth_enabled():
+        if auth_uid and auth_uid != requested_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: Caller identity '{auth_uid}' cannot access resources for '{requested_user_id}'.",
+            )
+        return
 
     # Reject unauthenticated/anonymous access to any user state
     if not is_authenticated:

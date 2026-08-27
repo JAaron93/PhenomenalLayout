@@ -611,8 +611,8 @@ class TestOwnershipAndAuthorization:
 
         # Attempt to access anonymous vocabulary is also rejected to eliminate shared state
         res_anon = client.get("/api/v1/vocabulary/anonymous")
-        assert res_anon.status_code == 401
-        assert "Authentication required" in res_anon.json()["detail"]
+        assert res_anon.status_code == 400
+        assert "Shared anonymous namespaces are prohibited" in res_anon.json()["detail"]
 
     def test_empty_identity_in_jwt_rejected(self) -> None:
         """Verify non-admin caller with empty user_id cannot bypass ownership checks."""
@@ -636,27 +636,37 @@ class TestOwnershipAndAuthorization:
         """Verify workflows function seamlessly when MEMORY_API_ENABLE_AUTH=false."""
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
-        from api.auth import ANONYMOUS_USER, get_current_user_dependency
+        from api.auth import get_current_user_dependency
 
-        app.dependency_overrides[get_current_user_dependency] = lambda: ANONYMOUS_USER
+        app.dependency_overrides[get_current_user_dependency] = lambda: {
+            "user_id": "scholar-01",
+            "role": UserRole.READ_ONLY,
+            "authenticated": False,
+            "method": "disabled",
+        }
         client = TestClient(app)
 
         with (
             patch("api.routes.is_auth_enabled", return_value=False),
             patch("api.routes.get_user_vocabulary_store") as mock_store_getter,
         ):
-                mock_store = MagicMock()
-                mock_store.get_preferences.return_value = {}
-                mock_store_getter.return_value = mock_store
+            mock_store = MagicMock()
+            mock_store.get_preferences.return_value = {}
+            mock_store_getter.return_value = mock_store
 
-                # Local/default namespace succeeds
-                res = client.get("/api/v1/vocabulary/default_user")
-                assert res.status_code == 200
+            # Distinct user namespace matching caller succeeds
+            res = client.get("/api/v1/vocabulary/scholar-01")
+            assert res.status_code == 200
 
-                # Arbitrary victim namespace is rejected even when auth is disabled
-                res_victim = client.get("/api/v1/vocabulary/victim")
-                assert res_victim.status_code == 403
-                assert "Access denied" in res_victim.json()["detail"]
+            # Shared anonymous namespace is rejected to eliminate shared anonymous state
+            res_anon = client.get("/api/v1/vocabulary/default_user")
+            assert res_anon.status_code == 400
+            assert "Shared anonymous namespaces are prohibited" in res_anon.json()["detail"]
+
+            # Sibling victim namespace is rejected
+            res_victim = client.get("/api/v1/vocabulary/victim")
+            assert res_victim.status_code == 403
+            assert "Access denied" in res_victim.json()["detail"]
 
     def test_prefix_user_cannot_access_or_manipulate_victim_job(self) -> None:
         """Verify user 'usr' cannot recover or manipulate session of 'usr_victim' via prefix collision."""
