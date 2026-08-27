@@ -258,7 +258,7 @@ class TestSpliceFallbackPages:
         long_text = "\n".join(
             [
                 f"Scholarly explanation line {i} detailing metaphysics."
-                for i in range(1, 100)
+                for i in range(1, 161)
             ]
         )
         translated_pages = [
@@ -282,7 +282,7 @@ class TestSpliceFallbackPages:
         assert len(reader.pages) == 3
         p2_text = reader.pages[1].extract_text()
         assert "Scholarly explanation line 1" in p2_text
-        assert "Scholarly explanation line 99" in p2_text
+        assert "Scholarly explanation line 160" in p2_text
         # Page 3 (index 2 in original) remains at index 2 (exact 1-to-1 alignment)
         assert "Seite 3" in reader.pages[2].extract_text()
 

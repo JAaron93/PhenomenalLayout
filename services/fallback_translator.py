@@ -550,11 +550,22 @@ class FallbackPageTranslator:
             ops.append(b"ET")
         else:
             two_col_lines = cls._wrap_text(sanitized_text, max_chars=42)
-            lines_per_col = 65
+            lines_per_col = (len(two_col_lines) + 1) // 2
             col1 = two_col_lines[:lines_per_col]
-            col2 = two_col_lines[lines_per_col : lines_per_col * 2]
+            col2 = two_col_lines[lines_per_col:]
 
-            ops.extend([b"BT", b"/F1 7.5 Tf", b"9.5 TL", b"50 715 Td"])
+            available_height = 660.0
+            leading = min(9.5, max(3.5, available_height / max(lines_per_col, 1)))
+            font_size = min(7.5, max(3.0, leading * 0.8))
+
+            ops.extend(
+                [
+                    b"BT",
+                    f"/F1 {font_size:.1f} Tf".encode("ascii"),
+                    f"{leading:.1f} TL".encode("ascii"),
+                    b"50 715 Td",
+                ]
+            )
             for idx, line in enumerate(col1):
                 line_bytes = cls._escape_pdf_literal(line)
                 if idx == 0:
@@ -564,7 +575,14 @@ class FallbackPageTranslator:
             ops.append(b"ET")
 
             if col2:
-                ops.extend([b"BT", b"/F1 7.5 Tf", b"9.5 TL", b"315 715 Td"])
+                ops.extend(
+                    [
+                        b"BT",
+                        f"/F1 {font_size:.1f} Tf".encode("ascii"),
+                        f"{leading:.1f} TL".encode("ascii"),
+                        b"315 715 Td",
+                    ]
+                )
                 for idx, line in enumerate(col2):
                     line_bytes = cls._escape_pdf_literal(line)
                     if idx == 0:
