@@ -292,7 +292,7 @@ class GlossarySyncManager:
         for g in glossary_iter:
             g_name = getattr(g, "name", "")
             g_id = g_name.split("/")[-1]
-            # 1. Match exact legacy candidates or exact session hash key / slots
+            # Match exact legacy candidates or exact session hash key / slots
             if (
                 g_id in legacy_candidates
                 or g_id == session_key
@@ -302,14 +302,6 @@ class GlossarySyncManager:
             ):
                 matches.append(g)
                 continue
-
-            # 2. Match historical versioned legacy IDs ({legacy_prefix}-{hex_version})
-            for leg in legacy_candidates:
-                if g_id.startswith(f"{leg}-"):
-                    rem = g_id[len(leg) + 1 :]
-                    if re.fullmatch(r"[0-9a-f]{6,8}|[ab]", rem):
-                        matches.append(g)
-                        break
 
         # Fallback to direct get_glossary probe for all deterministic slots and legacy IDs
         # if list_glossaries returned no matches

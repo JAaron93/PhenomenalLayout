@@ -318,17 +318,20 @@ class TestBookSessionGlossarySync:
         # Verified: 55-char truncated legacy glossary was discovered and retired!
         mock_trans.delete_glossary.assert_called_once_with(name=legacy_g.name)
 
-    def test_sync_book_session_glossary_matches_historical_versioned_legacy_id(
+    def test_sync_book_session_glossary_does_not_match_longer_sibling_sessions(
         self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
     ) -> None:
         mock_trans = mock_creds_mgr.get_translation_client.return_value
 
-        # Historical versioned glossary: sess-{slug}-{6_char_hex}
-        hist_g = MagicMock()
-        hist_g.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-a1b2c3"
-        other_g = MagicMock()
-        other_g.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-extra"
-        mock_trans.list_glossaries.return_value = [hist_g, other_g]
+        # Sibling sessions with shared prefix: book-101-a, book-101-a1b2c3, book-101-extra
+        sibling_a = MagicMock()
+        sibling_a.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-a"
+        sibling_hex = MagicMock()
+        sibling_hex.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-a1b2c3"
+        sibling_extra = MagicMock()
+        sibling_extra.name = "projects/test-project-123/locations/us-central1/glossaries/sess-book-101-extra"
+        mock_trans.list_glossaries.return_value = [sibling_a, sibling_hex, sibling_extra]
+        mock_trans.get_glossary.side_effect = gcp_exceptions.NotFound("Not found")
 
         mock_lro = MagicMock()
         created = MagicMock()
@@ -343,8 +346,9 @@ class TestBookSessionGlossarySync:
             overwrite=True,
         )
 
-        # Verified: historical versioned glossary was retired, but other session was untouched
-        mock_trans.delete_glossary.assert_called_once_with(name=hist_g.name)
+        # Verified: none of the longer sibling sessions were classified as belonging to book-101
+        # and delete_glossary was NEVER called on any sibling session!
+        mock_trans.delete_glossary.assert_not_called()
 
     def test_sync_book_session_glossary_both_slots_active_retires_older_slot_first(
         self, sync_mgr: GlossarySyncManager, mock_creds_mgr: MagicMock
