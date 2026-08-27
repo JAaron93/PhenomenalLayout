@@ -353,10 +353,10 @@ class FallbackPageTranslator:
 
     @staticmethod
     def _encode_pdf_text(text: str) -> bytes:
-        """Encode text to PDF WinAnsiEncoding (cp1252) with graceful transliteration for rare characters.
+        """Encode text to PDF WinAnsiEncoding (cp1252) with lossless transliteration.
 
-        Ensures that smart quotes, em-dashes, ellipses, umlauts, and scholarly punctuation
-        are preserved without silent '?' corruption.
+        Ensures that smart quotes, em-dashes, ellipses, umlauts, Greek terms, and
+        scholarly punctuation are preserved without loss or silent '?' replacement.
         """
         transliterations = {
             "\u2010": "-",  # hyphen
@@ -365,15 +365,102 @@ class FallbackPageTranslator:
             "\u2015": "--",  # horizontal bar
             "\u202f": " ",  # narrow no-break space
             "\ufeff": "",  # zero-width no-break space
+            "\u2260": "!=",  # not equal
+            "\u2264": "<=",  # less-equal
+            "\u2265": ">=",  # greater-equal
+            "\u00b1": "+/-",  # plus-minus
+            "\u2248": "~",  # approx
+            "\u00d7": "x",  # multiplication
+            "\u00f7": "/",  # division
+            "\u221e": "inf",  # infinity
         }
         for orig, repl in transliterations.items():
             text = text.replace(orig, repl)
 
-        try:
-            raw_bytes = text.encode("cp1252")
-        except UnicodeEncodeError:
-            normalized = unicodedata.normalize("NFKD", text)
-            raw_bytes = normalized.encode("cp1252", errors="replace")
+        # Greek character mapping for philosophical terms commonly cited in German philosophy
+        greek_map = {
+            "\u03b1": "a",
+            "\u03b2": "b",
+            "\u03b3": "g",
+            "\u03b4": "d",
+            "\u03b5": "e",
+            "\u03b6": "z",
+            "\u03b7": "e",
+            "\u03b8": "th",
+            "\u03b9": "i",
+            "\u03ba": "k",
+            "\u03bb": "l",
+            "\u03bc": "m",
+            "\u03bd": "n",
+            "\u03be": "x",
+            "\u03bf": "o",
+            "\u03c0": "p",
+            "\u03c1": "r",
+            "\u03c3": "s",
+            "\u03c2": "s",
+            "\u03c4": "t",
+            "\u03c5": "y",
+            "\u03c6": "ph",
+            "\u03c7": "ch",
+            "\u03c8": "ps",
+            "\u03c9": "o",
+            "\u03ac": "a",
+            "\u03ad": "e",
+            "\u03ae": "e",
+            "\u03af": "i",
+            "\u03cc": "o",
+            "\u03cd": "y",
+            "\u03ce": "o",
+            "\u0391": "A",
+            "\u0392": "B",
+            "\u0393": "G",
+            "\u0394": "D",
+            "\u0395": "E",
+            "\u0396": "Z",
+            "\u0397": "E",
+            "\u0398": "Th",
+            "\u0399": "I",
+            "\u039a": "K",
+            "\u039b": "L",
+            "\u039c": "M",
+            "\u039d": "N",
+            "\u039e": "X",
+            "\u039f": "O",
+            "\u03a0": "P",
+            "\u03a1": "R",
+            "\u03a3": "S",
+            "\u03a4": "T",
+            "\u03a5": "Y",
+            "\u03a6": "Ph",
+            "\u03a7": "Ch",
+            "\u03a8": "Ps",
+            "\u03a9": "O",
+        }
+
+        out_chars: list[str] = []
+        for char in text:
+            try:
+                char.encode("cp1252")
+                out_chars.append(char)
+            except UnicodeEncodeError:
+                if char in greek_map:
+                    out_chars.append(greek_map[char])
+                    continue
+                decomposed = unicodedata.normalize("NFKD", char)
+                decomposed_ascii = "".join(
+                    c for c in decomposed if not unicodedata.combining(c)
+                )
+                try:
+                    decomposed_ascii.encode("cp1252")
+                    if decomposed_ascii:
+                        out_chars.append(decomposed_ascii)
+                        continue
+                except UnicodeEncodeError:
+                    pass
+                out_chars.append(f"[U+{ord(char):04X}]")
+
+        sanitized = "".join(out_chars)
+        raw_bytes = sanitized.encode("cp1252")
 
         return (
             raw_bytes.replace(b"\\", b"\\\\")

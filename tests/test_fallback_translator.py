@@ -408,9 +408,7 @@ class TestFallbackCoverageAndErrorBranches:
         self, fallback_translator: FallbackPageTranslator, sample_source_pdf: bytes
     ) -> None:
         """Verify that smart quotes, em-dashes, ellipses, and Unicode characters are preserved without '?'."""
-        unicode_text = (
-            "“Philosophie des Lebens” — Geist als Widersacher… ä ö ü ß \u2010 hyphen"
-        )
+        unicode_text = "“Philosophie des Lebens” — Seele (ψυχή) ≠ Geist… ä ö ü ß \u2010 hyphen \u4e16"
         translated_pages = [
             TranslatedPage(
                 page_index=1,
@@ -433,4 +431,7 @@ class TestFallbackCoverageAndErrorBranches:
         assert "—" in p2_text
         assert "…" in p2_text
         assert "ä ö ü ß" in p2_text
+        assert "psyche" in p2_text
+        assert "!=" in p2_text
+        assert "[U+4E16]" in p2_text
         assert "?" not in p2_text
