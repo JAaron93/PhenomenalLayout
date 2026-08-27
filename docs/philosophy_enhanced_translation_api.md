@@ -1,7 +1,7 @@
 # Philosophy-Enhanced Translation API Documentation
 
 > [!NOTE]
-> For full-length books and treatises, PhenomenalLayout has migrated to **Google Cloud Document Translation Advanced (v3)** with **Dual-Tier Glossary Synchronization** and **Modal Volume Persistent Vocabulary Storage** (`UserVocabularyStore`). See [ADR 0001](adr/0001-migrate-to-google-cloud-document-translation.md) and the [.kiro/specs/gcp-migration/](../.kiro/specs/gcp-migration/) specification suite for the modern cloud-native architecture.
+> For full-length books and treatises, PhenomenalLayout has migrated to **Google Cloud Document Translation Advanced (v3)** with **Dual-Tier Glossary Synchronization**, **Modal Volume Persistent Vocabulary Storage** (`UserVocabularyStore`), and **Scholarly Resilience** (`FrakturClassifier`, `BatchJobRecoveryManager`, `FallbackPageTranslator`, `DualPaneViewerController`). See [ADR 0001](adr/0001-migrate-to-google-cloud-document-translation.md) and the [.kiro/specs/gcp-migration/](../.kiro/specs/gcp-migration/) specification suite for the modern cloud-native architecture.
 
 ## Overview
 
