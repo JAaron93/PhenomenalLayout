@@ -1089,11 +1089,10 @@ def _verify_resource_ownership(
 ) -> None:
     """Ensure authenticated caller owns the requested resource or possesses admin role.
 
-    Prevents anonymous or unauthenticated callers from bypassing ownership even when
-    ENABLE_AUTH is False or ANONYMOUS_USER is returned:
-    - An anonymous caller cannot act as an admin to access or mutate named user resources.
-    - An authenticated caller with UserRole.ADMIN can access any user's resources.
-    - An authenticated non-admin caller can only access their own resources (auth_uid == requested_user_id).
+    Prevents anonymous or unauthenticated callers from accessing or mutating any user state:
+    - Unauthenticated callers are rejected with 401 UNAUTHORIZED, eliminating shared anonymous state.
+    - Authenticated administrators (UserRole.ADMIN) have global resource access.
+    - Authenticated non-admin callers can only access resources matching their own user_id.
     """
     if not current_user:
         raise HTTPException(
@@ -1105,14 +1104,12 @@ def _verify_resource_ownership(
     role = current_user.get("role")
     auth_uid = current_user.get("user_id")
 
-    # If caller is unauthenticated or anonymous, they cannot access named user resources
+    # Reject unauthenticated/anonymous access to any user state
     if not is_authenticated:
-        if requested_user_id not in ("anonymous", "default_user", ""):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Authentication required to access resources for user '{requested_user_id}'",
-            )
-        return
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: Unauthenticated callers cannot access or modify user credentials, vocabulary, or jobs",
+        )
 
     # Authenticated admin has global resource access
     if role == UserRole.ADMIN:

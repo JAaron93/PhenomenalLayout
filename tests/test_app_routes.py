@@ -582,8 +582,8 @@ class TestOwnershipAndAuthorization:
         assert res.status_code == 403
         assert "Access denied" in res.json()["detail"]
 
-    def test_anonymous_caller_cannot_access_named_user_resources(self) -> None:
-        """Verify unauthenticated/anonymous caller cannot access or mutate named user resources."""
+    def test_anonymous_caller_cannot_access_any_user_resources(self) -> None:
+        """Verify unauthenticated/anonymous caller cannot access or mutate user resources, eliminating shared state."""
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
         from api.auth import ANONYMOUS_USER, get_current_user_dependency
@@ -592,7 +592,7 @@ class TestOwnershipAndAuthorization:
         app.dependency_overrides[get_current_user_dependency] = lambda: ANONYMOUS_USER
         client = TestClient(app)
 
-        # Attempt to set credentials for victim
+        # Attempt to set credentials for victim is rejected
         res = client.post(
             "/api/v1/byok/credentials",
             json={
@@ -605,14 +605,11 @@ class TestOwnershipAndAuthorization:
         assert res.status_code == 401
         assert "Authentication required" in res.json()["detail"]
 
-        # Attempt to access victim vocabulary
+        # Attempt to access victim vocabulary is rejected
         res_voc = client.get("/api/v1/vocabulary/victim")
         assert res_voc.status_code == 401
 
-        # Attempt to access anonymous vocabulary is permitted
-        with patch("api.routes.get_user_vocabulary_store") as mock_store_getter:
-            mock_store = MagicMock()
-            mock_store.get_preferences.return_value = {}
-            mock_store_getter.return_value = mock_store
-            res_anon = client.get("/api/v1/vocabulary/anonymous")
-            assert res_anon.status_code == 200
+        # Attempt to access anonymous vocabulary is also rejected to eliminate shared state
+        res_anon = client.get("/api/v1/vocabulary/anonymous")
+        assert res_anon.status_code == 401
+        assert "Authentication required" in res_anon.json()["detail"]
