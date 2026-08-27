@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import io
 import logging
+import textwrap
 import time
 import unicodedata
 from dataclasses import dataclass
@@ -663,18 +664,19 @@ class FallbackPageTranslator:
 
     @staticmethod
     def _wrap_text(text: str, max_chars: int) -> list[str]:
-        """Wrap lines respecting words and paragraph breaks."""
+        """Wrap lines respecting words, breaking long tokens, and preserving paragraphs."""
         wrapped: list[str] = []
         for raw_line in text.split("\n"):
-            words = raw_line.split(" ")
-            current: list[str] = []
-            for word in words:
-                current.append(word)
-                if len(" ".join(current)) > max_chars:
-                    wrapped.append(" ".join(current))
-                    current = []
-            if current:
-                wrapped.append(" ".join(current))
+            if not raw_line.strip():
+                wrapped.append("")
+                continue
+            lines = textwrap.wrap(
+                raw_line,
+                width=max_chars,
+                break_long_words=True,
+                break_on_hyphens=True,
+            )
+            wrapped.extend(lines if lines else [""])
         return wrapped or [""]
 
     @classmethod

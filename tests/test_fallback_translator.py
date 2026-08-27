@@ -482,3 +482,18 @@ class TestFallbackCoverageAndErrorBranches:
         assert (
             "PhenomenalLayout Scholarly Resilience Fallback Engine | Page 2" in p2_text
         )
+
+    def test_wrap_text_breaks_long_tokens_and_compounds_without_overflowing_columns(
+        self, fallback_translator: FallbackPageTranslator
+    ) -> None:
+        """Verify that German philosophical compounds and long tokens are cleanly broken without exceeding max_chars."""
+        compound = (
+            "Donaudampfschiffahrtselektrizitaetenhauptbetriebswerkbauunterbeamtengesellschaft "
+            "short word anotherverylongphilosophicalconceptwithoutsinglewhitespacecharacter"
+        )
+        max_chars = 42
+        lines = fallback_translator._wrap_text(compound, max_chars=max_chars)
+        assert len(lines) >= 3
+        for line in lines:
+            assert len(line) <= max_chars
+            assert "\n" not in line
