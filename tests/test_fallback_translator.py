@@ -438,16 +438,16 @@ class TestFallbackCoverageAndErrorBranches:
         assert "—" in p2_text
         assert "…" in p2_text
         assert "ä ö ü ß" in p2_text
-        assert "psyche" in p2_text
-        assert "!=" in p2_text
+        assert "ψυχή" in p2_text
+        assert "≠" in p2_text
         assert "\u00d7 2" in p2_text
         assert "± 5" in p2_text
-        assert "->" in p2_text
-        assert "[int]" in p2_text
-        assert "1/2" in p2_text
-        assert "bytie" in p2_text
-        assert "shlvm" in p2_text
-        assert "CJK UNIFIED IDEOGRAPH" in p2_text
+        assert "→" in p2_text
+        assert "∫" in p2_text
+        assert "½" in p2_text
+        assert "бытие" in p2_text
+        assert "שלום" in p2_text or "םולש" in p2_text
+        assert "世界" in p2_text
         assert "?" not in p2_text
 
     def test_extreme_overflow_450_lines_no_clipping_or_footer_overlap(
