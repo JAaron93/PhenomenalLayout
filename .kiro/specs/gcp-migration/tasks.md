@@ -369,7 +369,7 @@ The tasks are organized into five **Execution Tracks**:
   6. **Live Batch LRO Progress & Recovery**: Real-time progress bar with reconnect/resume capability.
   7. **Scholarly Delivery Actions**: 1-click **"Save to Google Drive"** (GIS OAuth), direct download, fallback plaintext translation trigger for failed pages, and **Side-by-Side Dual-Pane Reading Mode**.
 * **Acceptance Criteria (TDD)**:
-  * Test suite: `tests/test_app_routes.py` (17 tests passing) and `tests/test_ui_gradio.py` (4 tests passing).
+  * Test suite: `tests/test_app_routes.py` (23 tests passing) and `tests/test_ui_gradio.py` (8 tests passing).
 
 ---
 
