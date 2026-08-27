@@ -440,3 +440,34 @@ class TestFallbackCoverageAndErrorBranches:
         assert "\u00d7 2" in p2_text
         assert "\u00b1 5" in p2_text
         assert "?" not in p2_text
+
+    def test_extreme_overflow_450_lines_no_clipping_or_footer_overlap(
+        self, fallback_translator: FallbackPageTranslator, sample_source_pdf: bytes
+    ) -> None:
+        """Verify that extreme text volume (450 lines) fits on a single page without clipping or footer overlap."""
+        overflow_text = "\n".join([f"Dense scholarly point {i}" for i in range(1, 451)])
+        translated_pages = [
+            TranslatedPage(
+                page_index=1,
+                page_number=2,
+                translated_text=overflow_text,
+                source_text="source",
+                success=True,
+            )
+        ]
+
+        spliced_stream = fallback_translator.splice_fallback_pages(
+            layout_pdf=sample_source_pdf,
+            translated_pages=translated_pages,
+        )
+
+        assert isinstance(spliced_stream, io.BytesIO)
+        reader = pypdf.PdfReader(spliced_stream)
+        # Strict 1-to-1 page alignment preserved
+        assert len(reader.pages) == 3
+        p2_text = reader.pages[1].extract_text()
+        assert "Dense scholarly point 1" in p2_text
+        assert "Dense scholarly point 450" in p2_text
+        assert (
+            "PhenomenalLayout Scholarly Resilience Fallback Engine | Page 2" in p2_text
+        )

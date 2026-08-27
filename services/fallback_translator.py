@@ -510,8 +510,48 @@ class FallbackPageTranslator:
         footer_str = f"PhenomenalLayout Scholarly Resilience Fallback Engine | Page {page_number}"
 
         sanitized_text = cls._sanitize_for_winansi(text)
-        single_col_lines = cls._wrap_text(sanitized_text, max_chars=80)
-        line_count = len(single_col_lines)
+
+        # Margins and boundaries (header at 740, footer at 35)
+        left_margin = 40.0
+        usable_width = 532.0
+        body_top = 715.0
+        body_bottom = 55.0
+        available_height = body_top - body_bottom  # 660.0
+
+        raw_lines = sanitized_text.split("\n")
+        num_raw = len(raw_lines)
+
+        if num_raw <= 55:
+            num_cols = 1
+            max_chars = 80
+        elif num_raw <= 180:
+            num_cols = 2
+            max_chars = 42
+        elif num_raw <= 350:
+            num_cols = 3
+            max_chars = 28
+        else:
+            num_cols = 4
+            max_chars = 22
+
+        wrapped_lines = cls._wrap_text(sanitized_text, max_chars=max_chars)
+        total_wrapped = len(wrapped_lines)
+
+        if total_wrapped > 350:
+            num_cols = 4
+        elif total_wrapped > 180 and num_cols < 3:
+            num_cols = 3
+        elif total_wrapped > 55 and num_cols < 2:
+            num_cols = 2
+
+        gutter = 16.0
+        col_width = (usable_width - (num_cols - 1) * gutter) / num_cols
+        lines_per_col = (total_wrapped + num_cols - 1) // num_cols
+
+        # Bounding leading strictly to available_height / lines_per_col guarantees
+        # the lowest line is at y >= body_bottom (55.0 > 35.0), preventing footer overlap
+        leading = min(13.0, available_height / max(lines_per_col, 1))
+        font_size = min(10.0, max(2.5, leading * 0.8))
 
         ops: list[bytes] = []
 
@@ -524,79 +564,45 @@ class FallbackPageTranslator:
                 b"BT",
                 b"/F1 10 Tf",
                 b"14 TL",
-                b"50 740 Td",
+                b"40 740 Td",
                 b"(" + header_bytes + b") Tj",
                 b"ET",
             ]
         )
 
-        if line_count <= 45:
-            ops.extend([b"BT", b"/F1 10 Tf", b"13 TL", b"50 710 Td"])
-            for idx, line in enumerate(single_col_lines):
-                line_bytes = cls._escape_pdf_literal(line)
-                if idx == 0:
-                    ops.append(b"(" + line_bytes + b") Tj")
-                else:
-                    ops.append(b"(" + line_bytes + b") '")
-            ops.append(b"ET")
-        elif line_count <= 65:
-            ops.extend([b"BT", b"/F1 8 Tf", b"10 TL", b"50 715 Td"])
-            for idx, line in enumerate(single_col_lines):
-                line_bytes = cls._escape_pdf_literal(line)
-                if idx == 0:
-                    ops.append(b"(" + line_bytes + b") Tj")
-                else:
-                    ops.append(b"(" + line_bytes + b") '")
-            ops.append(b"ET")
-        else:
-            two_col_lines = cls._wrap_text(sanitized_text, max_chars=42)
-            lines_per_col = (len(two_col_lines) + 1) // 2
-            col1 = two_col_lines[:lines_per_col]
-            col2 = two_col_lines[lines_per_col:]
-
-            available_height = 660.0
-            leading = min(9.5, max(3.5, available_height / max(lines_per_col, 1)))
-            font_size = min(7.5, max(3.0, leading * 0.8))
-
+        for col_idx in range(num_cols):
+            start = col_idx * lines_per_col
+            end = (
+                (col_idx + 1) * lines_per_col
+                if col_idx < num_cols - 1
+                else total_wrapped
+            )
+            col_slice = wrapped_lines[start:end]
+            if not col_slice:
+                continue
+            col_x = left_margin + col_idx * (col_width + gutter)
             ops.extend(
                 [
                     b"BT",
                     f"/F1 {font_size:.1f} Tf".encode("ascii"),
-                    f"{leading:.1f} TL".encode("ascii"),
-                    b"50 715 Td",
+                    f"{leading:.2f} TL".encode("ascii"),
+                    f"{col_x:.1f} {body_top:.1f} Td".encode("ascii"),
                 ]
             )
-            for idx, line in enumerate(col1):
+            for line_idx, line in enumerate(col_slice):
                 line_bytes = cls._escape_pdf_literal(line)
-                if idx == 0:
+                if line_idx == 0:
                     ops.append(b"(" + line_bytes + b") Tj")
                 else:
                     ops.append(b"(" + line_bytes + b") '")
             ops.append(b"ET")
-
-            if col2:
-                ops.extend(
-                    [
-                        b"BT",
-                        f"/F1 {font_size:.1f} Tf".encode("ascii"),
-                        f"{leading:.1f} TL".encode("ascii"),
-                        b"315 715 Td",
-                    ]
-                )
-                for idx, line in enumerate(col2):
-                    line_bytes = cls._escape_pdf_literal(line)
-                    if idx == 0:
-                        ops.append(b"(" + line_bytes + b") Tj")
-                    else:
-                        ops.append(b"(" + line_bytes + b") '")
-                ops.append(b"ET")
 
         # Footer
         ops.extend(
             [
                 b"BT",
                 b"/F1 8 Tf",
-                b"50 35 Td",
+                b"40 35 Td",
                 b"(" + footer_bytes + b") Tj",
                 b"ET",
             ]
