@@ -176,6 +176,11 @@ class BatchJobRecoveryManager:
         if state is None or file_path is None:
             raise JobNotFoundError(f"No active job found for session '{session_id}'")
 
+        if user_id and state.user_id != user_id:
+            raise PermissionError(
+                f"Access denied: Job session '{session_id}' belongs to user '{state.user_id}', not '{user_id}'"
+            )
+
         # If an active progress monitor is supplied, refresh status against GCP
         if progress_monitor is not None:
             try:
@@ -218,7 +223,9 @@ class BatchJobRecoveryManager:
                 continue
             try:
                 data = json.loads(file_path.read_text(encoding="utf-8"))
-                jobs.append(ActiveJobState.from_dict(data))
+                state = ActiveJobState.from_dict(data)
+                if state.user_id == user_id:
+                    jobs.append(state)
             except Exception as exc:
                 logger.warning("Skipping corrupted job file '%s': %s", file_path, exc)
 
@@ -256,15 +263,15 @@ class BatchJobRecoveryManager:
         self._write_state_atomically(file_path, state)
         return state
 
-    def cleanup_job(self, session_id: str, user_id: str | None = None) -> bool:
-        """Remove a completed or cancelled job record from disk.
+    def delete_job(self, session_id: str, user_id: str | None = None) -> bool:
+        """Delete persisted job state file upon job cleanup.
 
         Args:
-            session_id: Session identifier to delete.
+            session_id: Target session identifier.
             user_id: Optional user identifier to narrow search.
 
         Returns:
-            True if job was found and removed, False otherwise.
+            True if the job file was removed, False otherwise.
         """
         file_path, _ = self._find_job_by_session(session_id, user_id=user_id)
         if file_path is None or not file_path.exists():
@@ -278,6 +285,18 @@ class BatchJobRecoveryManager:
             logger.warning("Error deleting job session file '%s': %s", file_path, exc)
             return False
 
+    def cleanup_job(self, session_id: str, user_id: str | None = None) -> bool:
+        """Remove a completed or cancelled job record from disk.
+
+        Args:
+            session_id: Session identifier to delete.
+            user_id: Optional user identifier to narrow search.
+
+        Returns:
+            True if job was found and removed, False otherwise.
+        """
+        return self.delete_job(session_id, user_id=user_id)
+
     # ------------------------------------------------------------------
     # Internal Helpers
     # ------------------------------------------------------------------
@@ -289,13 +308,18 @@ class BatchJobRecoveryManager:
     def _find_job_by_session(
         self, session_id: str, user_id: str | None = None
     ) -> tuple[Path | None, ActiveJobState | None]:
-        """Locate job file and state matching the given session_id."""
+        """Locate job file and state matching the given session_id and user_id."""
         pattern = f"{user_id}_*.json" if user_id else "*.json"
         for file_path in self._storage_dir.glob(pattern):
             try:
                 data = json.loads(file_path.read_text(encoding="utf-8"))
                 if data.get("session_id") == session_id:
-                    return file_path, ActiveJobState.from_dict(data)
+                    state = ActiveJobState.from_dict(data)
+                    # Enforce strict owner matching to prevent prefix collision
+                    # (e.g. user_id 'user' matching file 'user_sub_book.json')
+                    if user_id and state.user_id != user_id:
+                        continue
+                    return file_path, state
             except Exception:
                 continue
         return None, None

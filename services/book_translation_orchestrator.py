@@ -444,11 +444,16 @@ class BookTranslationOrchestrator:
 
     def resume_job(self, session_id: str, user_id: str | None = None) -> ActiveJobState:
         """Recall saved job state and re-attach to live monitoring."""
-        return self.recovery_manager.resume_active_job(
+        state = self.recovery_manager.resume_active_job(
             session_id=session_id,
             user_id=user_id,
             progress_monitor=self.progress_monitor,
         )
+        if user_id and state.user_id != user_id:
+            raise PermissionError(
+                f"Access denied: Job session '{session_id}' belongs to user '{state.user_id}', not '{user_id}'"
+            )
+        return state
 
     # ------------------------------------------------------------------
     # Task 5.1 Step 4: Handle Job Completion & Glossary Cleanup

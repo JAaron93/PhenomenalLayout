@@ -1500,6 +1500,32 @@ async def start_batch_translation_endpoint(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+def _verify_job_ownership(session_id: str, requested_user_id: str, orch: Any) -> None:
+    """Verify that a stored job session belongs to requested_user_id.
+
+    Prevents prefix-matching collision vulnerabilities where a caller with user_id 'user'
+    could match and manipulate a session belonging to 'user_victim'.
+    """
+    recovery_mgr = getattr(orch, "recovery_manager", None)
+    if recovery_mgr is not None:
+        finder = getattr(recovery_mgr, "_find_job_by_session", None)
+        if callable(finder):
+            try:
+                res = finder(session_id)
+                if isinstance(res, tuple) and len(res) >= 2:
+                    _path, state = res[0], res[1]
+                    if state is not None and getattr(state, "user_id", None):
+                        if state.user_id != requested_user_id:
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail=f"Access denied: Job session '{session_id}' belongs to another user",
+                            )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+
+
 @api_router.get("/book/status/{session_id}")
 async def get_book_status_endpoint(
     session_id: str,
@@ -1510,6 +1536,7 @@ async def get_book_status_endpoint(
     _verify_resource_ownership(user_id, current_user)
     try:
         orch = get_book_orchestrator()
+        _verify_job_ownership(session_id, user_id, orch)
         update = orch.poll_translation_progress(user_id=user_id, session_id=session_id)
         return {
             "operation_name": update.operation_name,
@@ -1523,6 +1550,8 @@ async def get_book_status_endpoint(
         }
     except HTTPException:
         raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Error polling progress for %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1538,6 +1567,7 @@ async def resume_book_job_endpoint(
     _verify_resource_ownership(user_id, current_user)
     try:
         orch = get_book_orchestrator()
+        _verify_job_ownership(session_id, user_id, orch)
         state = orch.resume_job(session_id=session_id, user_id=user_id)
         if not state:
             raise HTTPException(
@@ -1552,6 +1582,8 @@ async def resume_book_job_endpoint(
         return state.to_dict() if hasattr(state, "to_dict") else state.__dict__
     except HTTPException:
         raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Error resuming job %s for user %s: %s", session_id, user_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1588,10 +1620,13 @@ async def complete_job_endpoint(
     _verify_resource_ownership(user_id, current_user)
     try:
         orch = get_book_orchestrator()
+        _verify_job_ownership(session_id, user_id, orch)
         summary = orch.handle_job_completion(user_id=user_id, session_id=session_id)
         return summary.__dict__ if hasattr(summary, "__dict__") else {}
     except HTTPException:
         raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Error handling completion for %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1615,6 +1650,7 @@ async def export_to_drive_endpoint(
 
     try:
         orch = get_book_orchestrator()
+        _verify_job_ownership(session_id, user_id, orch)
         result = orch.export_to_google_drive(
             user_id=user_id,
             session_id=session_id,
@@ -1630,6 +1666,8 @@ async def export_to_drive_endpoint(
         }
     except HTTPException:
         raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Drive export failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1645,6 +1683,7 @@ async def download_translated_book_endpoint(
     _verify_resource_ownership(user_id, current_user)
     try:
         orch = get_book_orchestrator()
+        _verify_job_ownership(session_id, user_id, orch)
         if hasattr(orch, "download_translated_book"):
             res = orch.download_translated_book(user_id=user_id, session_id=session_id)
             if isinstance(res, tuple):
@@ -1672,6 +1711,8 @@ async def download_translated_book_endpoint(
         )
     except HTTPException:
         raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Download failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1696,6 +1737,7 @@ async def fallback_translate_endpoint(
             indices = [int(p.strip()) for p in failed_page_indices.split(",") if p.strip().isdigit()]
 
         orch = get_book_orchestrator()
+        _verify_job_ownership(session_id, user_id, orch)
         res = orch.trigger_fallback_page_translation(
             user_id=user_id,
             session_id=session_id,
@@ -1712,6 +1754,8 @@ async def fallback_translate_endpoint(
         }
     except HTTPException:
         raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Fallback translation failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1731,6 +1775,7 @@ async def dual_pane_endpoint(
     try:
         contents = await file.read()
         orch = get_book_orchestrator()
+        _verify_job_ownership(session_id, user_id, orch)
         pair = orch.get_bilingual_view(
             user_id=user_id,
             session_id=session_id,
@@ -1750,6 +1795,8 @@ async def dual_pane_endpoint(
         }
     except HTTPException:
         raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Dual-pane view error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

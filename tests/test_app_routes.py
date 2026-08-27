@@ -657,3 +657,47 @@ class TestOwnershipAndAuthorization:
                 res_victim = client.get("/api/v1/vocabulary/victim")
                 assert res_victim.status_code == 403
                 assert "Access denied" in res_victim.json()["detail"]
+
+    def test_prefix_user_cannot_access_or_manipulate_victim_job(self) -> None:
+        """Verify user 'usr' cannot recover or manipulate session of 'usr_victim' via prefix collision."""
+        from pathlib import Path
+
+        app = FastAPI()
+        app.include_router(api_router, prefix="/api/v1")
+        from api.auth import get_current_user_dependency
+        from services.batch_job_recovery import ActiveJobState
+
+        # Authenticated as user 'usr'
+        app.dependency_overrides[get_current_user_dependency] = lambda: {
+            "user_id": "usr",
+            "role": UserRole.READ_ONLY,
+            "authenticated": True,
+        }
+        client = TestClient(app)
+
+        # Mock orchestrator with recovery_manager returning victim's state
+        mock_orch = MagicMock()
+        mock_state = ActiveJobState(
+            session_id="sess-victim-101",
+            user_id="usr_victim",
+            book_id="victim_book",
+            lro_name="projects/1/locations/us-central1/operations/123",
+            gcs_output_uri="gs://victim-bucket/outputs/victim_book/",
+        )
+        mock_orch.recovery_manager._find_job_by_session.return_value = (Path("/tmp/usr_victim_book.json"), mock_state)
+
+        with patch("api.routes.get_book_orchestrator", return_value=mock_orch):
+            # Attempt to poll status of victim's job as user 'usr'
+            res_status = client.get("/api/v1/book/status/sess-victim-101?user_id=usr")
+            assert res_status.status_code == 403
+            assert "Access denied" in res_status.json()["detail"]
+
+            # Attempt to complete victim's job as user 'usr'
+            res_comp = client.post("/api/v1/book/complete/sess-victim-101?user_id=usr")
+            assert res_comp.status_code == 403
+            assert "Access denied" in res_comp.json()["detail"]
+
+            # Attempt to download victim's job as user 'usr'
+            res_dl = client.get("/api/v1/book/download/sess-victim-101?user_id=usr")
+            assert res_dl.status_code == 403
+            assert "Access denied" in res_dl.json()["detail"]
