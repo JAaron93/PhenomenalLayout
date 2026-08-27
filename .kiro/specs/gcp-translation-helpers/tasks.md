@@ -2,7 +2,7 @@
 
 ## 1. Plan Overview & Execution Strategy
 
-This implementation plan breaks down the requirements from [`requirements.md`](.kiro/specs/gcp-translation-helpers/requirements.md) into concrete, test-driven work packages. The primary mission is to eliminate code duplication across newly added GCP translation services and legacy components while optimizing critical algorithmic hot spots for time and space complexity.
+This implementation plan breaks down the requirements from [`requirements.md`](requirements.md) into concrete, test-driven work packages. The primary mission is to eliminate code duplication across newly added GCP translation services and legacy components while optimizing critical algorithmic hot spots for time and space complexity.
 
 The plan is organized into five **Execution Tracks**:
 * **Track 1: Foundation Utility Modules & Central Documentation** (Creation of `gcp_helpers.py`, `tsv_utils.py`, `pdf_stream.py`, and `docs/REUSABLE_HELPER_FUNCTIONS.md`)
