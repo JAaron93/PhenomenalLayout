@@ -72,9 +72,14 @@ We will adopt **Google Cloud Document Translation API (Cloud Translation - Advan
   - `services/user_vocabulary_store.py` (Persistent user terminology memory on Modal Volume SQLite in WAL mode)
   - `services/glossary_compiler.py` (RFC 4180 TSV compilation enforcing 3-tier precedence with quote escaping)
   - `services/glossary_sync_manager.py` (Tier 1 Base foundation sync + Tier 2 Book Session zero-downtime Blue-Green replacement)
-  - `services/session_glossary_lifecycle.py` (Session glossary tracking, quota auditing against 1,000 regional quota, and auto-cleanup)
-* **Track 3: Neologism Detection & Context Analysis**: Pending
-* **Track 4: Web UI, Dual-Pane Synchronized Viewer & Modal Labs BYOK Deployment**: Pending
+* **Track 3: Scholarly Resilience, Fraktur OCR & Failure Fallbacks**: **Completed (2026-08-27)**
+  - `services/fraktur_classifier.py` (Historical Fraktur font & OCR script classifier with calibrated confidence rating)
+  - `services/batch_job_recovery.py` (Atomic LRO session persistence and sub-second reconnection/recovery)
+  - `services/fallback_translator.py` (Fallback plaintext translation with dynamic 16-bit sequential CID allocation & format 4/12 cmap parsing)
+  - `services/dual_pane_viewer.py` (Synchronized bilingual page pair retrieval & bounding box extraction)
+  - `docs/FALLBACK_TRANSLATION_LIMITATIONS.md` (Architecture, font mechanics, and operational limitations specification)
+* **Track 4: Codebase Streamlining & Deprecation**: Pending
+* **Track 5: Book Orchestrator, Modal Deployment, UI & E2E Validation**: Pending
 
 ---
 

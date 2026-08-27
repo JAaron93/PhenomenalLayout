@@ -11,6 +11,10 @@ PhenomenalLayout's core architecture incorporates:
 - **German Philosophical Neologism Detector**: Morphological analysis and contextual compound decomposition with interactive review
 - **Zero-Credential Cost Estimator**: Unauthenticated offline PDF pricing calculation ($\pm \$5.00$ tolerance)
 - **1-Click Google Drive Export**: Streamed multipart export via client-side Google Identity Services (GIS) OAuth (`drive.file` scope)
+- **Fraktur OCR Script Assessment**: Historical ligature analysis and calibrated confidence scoring ($C \in [0.0, 1.0]$)
+- **Atomic LRO Session Resumption**: Sub-second (< 1.0s) job recovery across browser closes and serverless scale-downs
+- **Scholarly Fallback Plaintext Translation**: Dynamic sequential 16-bit CID allocation and format 4/12 TrueType `cmap` parsing guaranteeing 100% translation completeness
+- **Synchronized Dual-Pane Viewer**: Synchronized bilingual page retrieval with word-level bounding box coordinate extraction
 
 This project uses pinned dev tooling and automation to keep CI stable and reproducible.
 
@@ -36,14 +40,16 @@ python -m pip install -r requirements-dev.txt
 
 ### Manual Quality Checks
 
-Run the complete Track 1 and Track 2 GCP migration test suite (97 tests):
+Run the complete Track 1, Track 2, and Track 3 GCP migration test suite (159 tests):
 
 ```bash
 pytest -o addopts="" tests/test_gcp_settings.py tests/test_byok_credentials_manager.py \
   tests/test_gcp_batch_translation_service.py tests/test_lro_progress_monitor.py \
   tests/test_cost_estimator.py tests/test_google_drive_exporter.py \
   tests/test_user_vocabulary_store.py tests/test_glossary_compiler.py \
-  tests/test_glossary_sync_manager.py tests/test_session_glossary_lifecycle.py -v
+  tests/test_glossary_sync_manager.py tests/test_session_glossary_lifecycle.py \
+  tests/test_fraktur_classifier.py tests/test_batch_job_recovery.py \
+  tests/test_fallback_translator.py tests/test_dual_pane_viewer.py -v
 ```
 
 Lint and type-check:
