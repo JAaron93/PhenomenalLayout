@@ -114,22 +114,6 @@ class EnhancedDocumentProcessor:
         # PDFDocumentReconstructor retired and deleted under ADR 0001
         self.reconstructor = None
 
-    def _generate_text_preview(self, text: str, max_chars: int = 1000) -> str:
-        """Generate a text preview with ellipsis if needed.
-
-        Args:
-            text: The text to generate a preview for
-            max_chars: Maximum number of characters in the preview
-                (default: 1000)
-
-        Returns:
-            str: The text preview, truncated with ellipsis if longer than
-            max_chars
-        """
-        if len(text) > max_chars:
-            return text[:max_chars] + "..."
-        return text
-
     async def extract_content(self, file_path: str) -> dict[str, Any]:
         """Extract content from document with format-specific processing.
 
@@ -275,68 +259,4 @@ class EnhancedDocumentProcessor:
             "ADR 0001 / Track 4. Use Google Cloud Document Translation."
         )
 
-    # TXT output helpers removed (PDF-only)
 
-    def convert_format(self, input_path: str, target_format: str) -> str:
-        """Convert document format (PDF-only).
-
-        - If ``target_format`` is not PDF, raise ``ValueError``.
-        - If input is already a PDF and target is PDF, return the original path.
-        - Non-PDF inputs are rejected.
-        """
-        input_ext = Path(input_path).suffix.lower()
-        target_ext = f".{target_format.lower()}"
-
-        if target_ext != ".pdf":
-            raise ValueError("Only PDF output is supported in this project")
-
-        if input_ext == ".pdf":
-            return input_path
-
-        raise ValueError("Only PDF inputs are supported in this project")
-
-    # PDF->TXT conversion removed (PDF-only)
-
-    # DOCX/TXT conversion helpers removed (PDF-only)
-
-    async def generate_preview(
-        self, file_path: str, max_chars: int = 1000
-    ) -> str | None:
-        """Generate a preview of the document content.
-
-        Returns a short preview string when possible, None for expected
-        recoverable errors (e.g., missing file), and lets unexpected
-        exceptions bubble up after logging.
-        """
-        try:
-            content = await self.extract_content(file_path)
-
-            if content.get("type") == "pdf_advanced":
-                preview = content.get("preview")
-                if preview:
-                    return preview
-                # Fall through to try other content fields
-
-            preview_text = content.get(
-                "preview",
-                content.get("text_content", ""),
-            )
-            if isinstance(preview_text, str) and len(preview_text) > max_chars:
-                return preview_text[:max_chars] + "..."
-            return preview_text
-
-        except FileNotFoundError as err:
-            logger.error("Preview failed - file not found: %s", err)
-            return None
-        except ValueError as err:
-            # Content extraction/validation errors
-            logger.error("Preview failed - invalid input: %s", err)
-            return None
-        except (OSError, RuntimeError) as err:
-            # I/O or library-level issues (e.g., parser problems)
-            logger.error("Preview failed due to I/O or parser error: %s", err)
-            return None
-        except Exception:
-            # Log unexpected exceptions with traceback and re-raise
-            logger.exception("Unexpected error while generating preview")
-            raise
