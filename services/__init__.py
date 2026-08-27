@@ -185,6 +185,31 @@ except ImportError as e:
     logger.debug(f"Scholarly Resilience services not available: {e}")
     _service_availability["SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE"] = False
 
+# Track 5: Book Orchestrator, Modal Deployment, UI & E2E Validation
+try:
+    from .book_translation_orchestrator import (  # noqa: F401
+        BookJobHandle,
+        BookScanResult,
+        BookTranslationOrchestrator,
+        CompletionSummary,
+        FallbackResult,
+    )
+
+    _available_services.extend(
+        [
+            "BookTranslationOrchestrator",
+            "BookJobHandle",
+            "BookScanResult",
+            "CompletionSummary",
+            "FallbackResult",
+        ]
+    )
+    _service_availability["BOOK_ORCHESTRATOR_AVAILABLE"] = True
+    logger.debug("BookTranslationOrchestrator services imported successfully")
+except ImportError as e:
+    logger.debug(f"BookTranslationOrchestrator services not available: {e}")
+    _service_availability["BOOK_ORCHESTRATOR_AVAILABLE"] = False
+
 # Dynamically build __all__ list based on successfully imported services
 # Include service symbols, availability flags, and summary counters
 __all__: list[str] = [
@@ -196,6 +221,7 @@ __all__: list[str] = [
     "GCP_BATCH_SERVICES_AVAILABLE",
     "GLOSSARY_SYNC_SERVICES_AVAILABLE",
     "SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE",
+    "BOOK_ORCHESTRATOR_AVAILABLE",
     "services_count",
     "services_list",
     "AVAILABLE_SERVICES",
@@ -220,6 +246,9 @@ GLOSSARY_SYNC_SERVICES_AVAILABLE: bool = _service_availability[
 ]
 SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE: bool = _service_availability[
     "SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE"
+]
+BOOK_ORCHESTRATOR_AVAILABLE: bool = _service_availability[
+    "BOOK_ORCHESTRATOR_AVAILABLE"
 ]
 
 # Log summary of available services

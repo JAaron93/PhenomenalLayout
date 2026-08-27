@@ -2,6 +2,7 @@ import contextlib
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 import gradio as gr
 
@@ -199,26 +200,185 @@ def start_translation_with_progress(
         progress = gr.Progress(track_tqdm=False)
     with contextlib.suppress(Exception):
         progress(0.05, desc="Starting translation")
-        
+
     try:
-        status, upload_status, is_ready = start_translation_sync(
+        res = start_translation_sync(
             target_language,
             pages_to_translate,
             philosophy_mode,
         )
+        if isinstance(res, (list, tuple)) and len(res) >= 4:
+            with contextlib.suppress(Exception):
+                progress(0.2, desc="Submitted to backend")
+            return tuple(res[:4])
+        status, upload_status, is_ready = res
     except Exception as e:
         logging.error("Translation start failed: %s", e, exc_info=True)
         status, upload_status, is_ready = f"❌ Error: {e!s}", "", False
 
     with contextlib.suppress(Exception):
         progress(0.2, desc="Submitted to backend")
-        
+
     return (
         status,
         upload_status,
         gr.update(interactive=is_ready),
         gr.Timer(active=not is_ready),
     )
+
+
+def estimate_cost_ui(file_obj: Any) -> str:
+    """Compute and format an itemized GCP budget quote for the uploaded PDF."""
+    if file_obj is None:
+        return "Please upload a PDF file to calculate a budget quote."
+    path = getattr(file_obj, "name", str(file_obj))
+    try:
+        from services.cost_estimator import GCPCostEstimator
+        quote = GCPCostEstimator().estimate_book_cost(Path(path))
+        return (
+            f"### 📊 Itemized GCP Budget Quote\n\n"
+            f"- **Total Pages:** {quote.total_pages}\n"
+            f"- **File Size:** {quote.file_size_mb:.2f} MB\n"
+            f"- **Document Translation ($0.080/page):** ${quote.base_cost:.2f}\n"
+            f"- **7-Day Staging Lifecycle:** ${quote.staging_overhead_cost:.4f}\n"
+            f"- **1-Month GCS Retention:** ${quote.storage_cost_1mo:.4f}\n"
+            f"- **12-Month GCS Archive:** ${quote.storage_cost_12mo:.4f}\n"
+            f"- **Always Free Tier (5 GB):** {'Covered' if quote.free_tier_covered else 'Not covered'}\n\n"
+            f"**Total Estimated Cost:** ${quote.total_estimate:.2f} "
+            f"(Tolerance Range: ${quote.tolerance_range[0]:.2f} - ${quote.tolerance_range[1]:.2f})\n\n"
+            f"*(Calculated in {quote.estimation_time_sec * 1000:.1f} ms)*"
+        )
+    except Exception as exc:
+        return f"❌ Cost estimation failed: {exc}"
+
+
+def _authenticate_gradio_caller(
+    requested_user_id: str,
+    auth_token: str = "",
+    request: gr.Request | None = None,
+) -> None:
+    """Verify that the Gradio caller is authenticated and authorized to access requested_user_id.
+
+    - Shared anonymous namespaces ('anonymous', 'default_user', 'local_user') are rejected
+      to prevent cross-visitor state collision.
+    - When authentication is disabled (is_auth_enabled() is False), permits local dev workflows
+      with distinct user identifiers.
+    - When authentication is enabled:
+      - Rejects unauthenticated requests with PermissionError.
+      - Requires non-empty user_id matching requested_user_id for non-admin tokens.
+    """
+    shared_namespaces = ("anonymous", "default_user", "local_user")
+    if requested_user_id.lower() in shared_namespaces:
+        raise PermissionError(
+            f"Invalid user_id '{requested_user_id}': Shared anonymous namespaces are prohibited "
+            "to isolate user credentials, vocabulary, and jobs. Please provide a distinct user identifier."
+        )
+
+    from api.auth import UserRole, is_auth_enabled, verify_api_key, verify_jwt_token
+
+    if not is_auth_enabled():
+        return
+
+    token = auth_token.strip()
+    if not token and request is not None and hasattr(request, "headers") and request.headers:
+        token = request.headers.get("x-api-key") or ""
+        if not token:
+            auth_hdr = request.headers.get("authorization", "")
+            if auth_hdr.lower().startswith("bearer "):
+                token = auth_hdr[7:].strip()
+
+    if not token:
+        raise PermissionError(
+            "Authentication required: Please provide an API Key or Bearer Token to access or modify user credentials and vocabulary."
+        )
+
+    # 1. Check API Key
+    if verify_api_key(token):
+        return  # Admin API key has global access
+
+    # 2. Check JWT
+    try:
+        payload = verify_jwt_token(token)
+        role = payload.get("role")
+        auth_uid = payload.get("user_id")
+        if role == UserRole.ADMIN:
+            return
+        if not auth_uid or auth_uid != requested_user_id:
+            raise PermissionError(
+                f"Access denied: Caller identity '{auth_uid}' cannot access or modify resources for '{requested_user_id}'."
+            )
+    except Exception as exc:
+        if isinstance(exc, PermissionError):
+            raise
+        raise PermissionError(f"Invalid authentication token: {exc}") from exc
+
+
+def validate_byok_ui(
+    user_id: str,
+    project_id: str,
+    bucket_name: str,
+    sa_json: str,
+    auth_token: str = "",
+    request: gr.Request | None = None,
+) -> str:
+    """Validate user BYOK credentials via non-billable API calls after enforcing ownership."""
+    if not user_id.strip() or not project_id.strip() or not bucket_name.strip() or not sa_json.strip():
+        return "❌ Please enter User ID, Project ID, Bucket Name, and Service Account JSON."
+    try:
+        _authenticate_gradio_caller(user_id.strip(), auth_token=auth_token, request=request)
+        from services.byok_credentials_manager import BYOKCredentialsManager
+        mgr = BYOKCredentialsManager()
+        mgr.set_credentials(user_id.strip(), project_id.strip(), bucket_name.strip(), sa_json.strip())
+        val = mgr.validate_credentials(user_id.strip())
+        icon = "✅" if val.status == "VALID" else "❌"
+        return (
+            f"### {icon} Status: {val.status}\n\n"
+            f"- **Cloud Translation API:** {'✅ Passed' if val.translation_check_passed else '❌ Failed'}\n"
+            f"- **Cloud Storage Bucket:** {'✅ Passed' if val.storage_check_passed else '❌ Failed'}\n"
+            f"- **Details:** {val.error_details or 'All validation checks passed successfully.'}"
+        )
+    except PermissionError as exc:
+        return f"🔒 {exc}"
+    except Exception as exc:
+        return f"❌ Validation error: {exc}"
+
+
+def pre_scan_ui(
+    user_id: str,
+    file_obj: Any,
+    auth_token: str = "",
+    request: gr.Request | None = None,
+) -> tuple[str, str, str]:
+    """Pre-scan book PDF for neologisms, Fraktur confidence, and vocabulary recall after enforcing ownership."""
+    if not user_id.strip() or file_obj is None:
+        return "Please provide User ID and upload a PDF.", "", ""
+    path = getattr(file_obj, "name", str(file_obj))
+    try:
+        _authenticate_gradio_caller(user_id.strip(), auth_token=auth_token, request=request)
+        from services.book_translation_orchestrator import BookTranslationOrchestrator
+        orch = BookTranslationOrchestrator()
+        res = orch.pre_scan_book(user_id=user_id.strip(), source=Path(path))
+        badge = (
+            f"### 🔤 Script Assessment & OCR Rating\n\n"
+            f"- **Detected Script:** {res.script_analysis.script_type.value}\n"
+            f"- **OCR Confidence Rating:** {res.ocr_confidence.confidence_score * 100:.1f}%\n"
+            f"- **Fraktur Ratio:** {res.script_analysis.fraktur_ratio * 100:.1f}%\n"
+            f"- **Recommended Action:** {res.ocr_confidence.recommended_action}\n"
+            f"- **Total Book Pages:** {res.total_pages}\n"
+        )
+        neologisms = f"**Detected Neologisms ({len(res.detected_neologisms)}):**\n\n"
+        for neo in res.detected_neologisms[:15]:
+            term = getattr(neo, "term", str(neo))
+            neologisms += f"- {term}\n"
+        vocab = f"**Auto-Populated from User Terminology ({len(res.prefilled_terms)}):**\n\n"
+        for k, v in res.prefilled_terms.items():
+            pref = getattr(v, "preferred_translation", str(v))
+            vocab += f"- **{k}** ➔ *{pref}*\n"
+        return badge, neologisms, vocab
+    except PermissionError as exc:
+        return f"🔒 {exc}", "", ""
+    except Exception as exc:
+        return f"❌ Pre-scan failed: {exc}", "", ""
 
 
 def create_gradio_interface() -> gr.Blocks:
@@ -251,6 +411,55 @@ def create_gradio_interface() -> gr.Blocks:
     with gr.Blocks(
         title=APP_TITLE,
     ) as interface:
+        # -------------------------------------------------------------------
+        # Track 5: GCP Migration & Scholarly Studio (TASK-5.2)
+        # -------------------------------------------------------------------
+        with gr.Accordion("🏛️ GCP Book Translation, BYOK & Scholarly Studio", open=True):
+            gr.Markdown("Zero host storage full-length book translation via Google Cloud Document Translation & GCS.")
+
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### 💰 1. Zero-Auth GCP Cost & Storage Estimator")
+                    cost_input = gr.File(label="Upload Book PDF", file_types=[".pdf"])
+                    calc_quote_btn = gr.Button("Calculate Budget Quote", variant="secondary")
+                    cost_quote_display = gr.Markdown("Upload a PDF to view itemized translation and retention costs.")
+
+                    with gr.Accordion("📘 2. Interactive GCP Onboarding Walkthrough", open=False):
+                        gr.Markdown(
+                            "1. Create or select a GCP project (`projects.create`).\n"
+                            "2. Enable Cloud Translation API (`translate.googleapis.com`).\n"
+                            "3. Create a regional GCS bucket in `us-central1`.\n"
+                            "4. Create Service Account with Translation User and Storage Object Admin roles.\n"
+                            "5. Generate a JSON key and paste it below.\n\n"
+                            "```bash\n"
+                            "gcloud services enable translate.googleapis.com storage.googleapis.com\n"
+                            "gcloud iam service-accounts create book-translator\n"
+                            "```"
+                        )
+
+                    gr.Markdown("### 🔑 3. Bring Your Own Key (BYOK) Setup")
+                    byok_token = gr.Textbox(label="API Key or Bearer Token", type="password", placeholder="Enter API key or JWT token (or login via session)")
+                    byok_uid = gr.Textbox(label="User ID", value="scholar-01")
+                    byok_pid = gr.Textbox(label="GCP Project ID", placeholder="my-gcp-project")
+                    byok_bkt = gr.Textbox(label="GCS Bucket Name", placeholder="my-translation-bucket")
+                    byok_key = gr.Textbox(label="Service Account JSON", placeholder='{"type": "service_account", ...}', lines=2)
+                    validate_key_btn = gr.Button("Validate Credentials", variant="primary")
+                    byok_status_display = gr.Markdown("Awaiting credentials...")
+
+                with gr.Column():
+                    gr.Markdown("### 🔍 4. Pre-Scan & Fraktur Script Confidence")
+                    prescan_token = gr.Textbox(label="API Key or Bearer Token", type="password", placeholder="Enter API key or JWT token (or login via session)")
+                    prescan_uid = gr.Textbox(label="User ID", value="scholar-01")
+                    prescan_input = gr.File(label="Select Book PDF", file_types=[".pdf"])
+                    run_prescan_btn = gr.Button("Run Pre-Scan Assessment", variant="primary")
+                    script_badge_display = gr.Markdown("Awaiting pre-scan...")
+                    neo_display = gr.Markdown("Neologisms will be displayed here...")
+                    vocab_display = gr.Markdown("Saved user terminology will be displayed here...")
+
+            calc_quote_btn.click(fn=estimate_cost_ui, inputs=[cost_input], outputs=[cost_quote_display])
+            validate_key_btn.click(fn=validate_byok_ui, inputs=[byok_uid, byok_pid, byok_bkt, byok_key, byok_token], outputs=[byok_status_display])
+            run_prescan_btn.click(fn=pre_scan_ui, inputs=[prescan_uid, prescan_input, prescan_token], outputs=[script_badge_display, neo_display, vocab_display])
+
         with gr.Row():
             with gr.Column(scale=1):
                 # File Upload Section
@@ -356,9 +565,6 @@ def create_gradio_interface() -> gr.Blocks:
                         label="Status", interactive=False, scale=4
                     )
                     refresh_btn = gr.Button("🔄 Refresh", size="sm", scale=1)
-
-                # Progress section without standalone Progress bar
-                # progress_bar = gr.Progress()
 
                 # Timer for auto-refreshing progress while translation runs
                 progress_timer = gr.Timer(1.0, active=False)

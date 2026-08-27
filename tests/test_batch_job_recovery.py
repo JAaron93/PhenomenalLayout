@@ -240,3 +240,23 @@ class TestUpdateAndCleanup:
         # Listing jobs should skip corrupted file without crashing
         jobs = recovery_manager.list_active_jobs("user")
         assert len(jobs) == 0
+
+    def test_prefix_user_cannot_recover_or_list_sibling_user_jobs(
+        self, recovery_manager: BatchJobRecoveryManager
+    ) -> None:
+        """Verify user 'usr' cannot match or list jobs of 'usr_victim' through glob prefix collision."""
+        recovery_manager.save_active_job(
+            user_id="usr_victim",
+            session_id="sess-vic-1",
+            book_id="book_vic",
+            lro_name="op-vic",
+            gcs_output_uri="gs://b/vic/",
+        )
+
+        # list_active_jobs for 'usr' must not return jobs of 'usr_victim'
+        usr_jobs = recovery_manager.list_active_jobs("usr")
+        assert len(usr_jobs) == 0
+
+        # resume_active_job for 'usr' attempting to access victim session raises JobNotFoundError
+        with pytest.raises(JobNotFoundError):
+            recovery_manager.resume_active_job("sess-vic-1", user_id="usr")

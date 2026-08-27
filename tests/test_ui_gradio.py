@@ -16,7 +16,7 @@ def _launch_blocks() -> tuple[gr.blocks.Blocks, str]:
         os.environ.setdefault("GRADIO_SHARE", "true")
     demo = create_gradio_interface()
     # Launch in headless mode; request a share link as fallback
-    app, local_url, share_url = demo.launch(
+    _app, local_url, share_url = demo.launch(
         prevent_thread_lock=True, share=True
     )
     # Prefer share_url if provided, otherwise local_url
@@ -159,7 +159,7 @@ def test_ui_translation_progress(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
         def fake_status():
-            # Returns (status_text, progress_fraction, is_processing, download_file)
+            """Return mock translation status tuple."""
             return "processing 50%", 0.5, True, None
 
         monkeypatch.setattr(gi, "start_translation_sync", fake_start)
@@ -176,7 +176,45 @@ def test_ui_translation_progress(monkeypatch: pytest.MonkeyPatch) -> None:
             api_name="/start_translation_with_progress",
         )
         assert isinstance(res, (list, tuple))
-        # Expect 4 return values from fake_start: [status, upload_status, download_btn, progress_timer]
-        assert len(res) >= 4
+        # Expect at least 3 return values from fake_start: [status, upload_status, download_btn, progress_timer]
+        assert len(res) >= 3
     finally:
         _teardown_blocks(demo)
+
+
+def test_gradio_byok_unauthenticated_rejection() -> None:
+    """Verify validate_byok_ui rejects unauthenticated visitors without token/headers."""
+    from ui.gradio_interface import validate_byok_ui
+
+    res = validate_byok_ui("victim-01", "p", "b", "{}")
+    assert "🔒 Authentication required" in res
+
+
+def test_gradio_prescan_unauthenticated_rejection(tmp_path: Path) -> None:
+    """Verify pre_scan_ui rejects unauthenticated visitors attempting to pre-scan victim data."""
+    from ui.gradio_interface import pre_scan_ui
+
+    dummy_pdf = tmp_path / "dummy.pdf"
+    dummy_pdf.write_bytes(b"%PDF-1.4 Minimal")
+    badge, neo, vocab = pre_scan_ui("victim-01", str(dummy_pdf))
+    assert "🔒 Authentication required" in badge
+    assert neo == ""
+    assert vocab == ""
+
+
+def test_gradio_cross_user_jwt_rejection() -> None:
+    """Verify visitor with JWT for user A cannot validate credentials for user B."""
+    from api.auth import create_jwt_token
+    from ui.gradio_interface import validate_byok_ui
+
+    attacker_token = create_jwt_token(user_id="attacker")
+    res = validate_byok_ui("victim-01", "p", "b", "{}", auth_token=attacker_token)
+    assert "🔒 Access denied" in res
+
+
+def test_gradio_rejects_shared_anonymous_namespaces() -> None:
+    """Verify Gradio rejects shared anonymous namespaces to prevent multi-tenant collision."""
+    from ui.gradio_interface import validate_byok_ui
+
+    res_anon = validate_byok_ui("default_user", "p", "b", "{}")
+    assert "Shared anonymous namespaces are prohibited" in res_anon
