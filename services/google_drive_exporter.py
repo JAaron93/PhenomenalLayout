@@ -18,14 +18,11 @@ Design invariants
 
 from __future__ import annotations
 
-import io
 import logging
-import time
 from dataclasses import dataclass
 from typing import BinaryIO
 
 from google.oauth2.credentials import Credentials
-from googleapiclient import errors as drive_errors
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
@@ -238,7 +235,7 @@ class GoogleDriveExporter:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_authenticated_service(self, access_token: str) -> object:  # noqa: ANN001
+    def _get_authenticated_service(self, access_token: str) -> object:
         """Build and return a Drive v3 service resource.
 
         The service is constructed from a :class:`google.oauth2.credentials.Credentials`
@@ -339,65 +336,19 @@ class GoogleDriveExporter:
         return new_folder_id
 
     @staticmethod
-    def _call_with_backoff(request: object) -> dict[str, object]:  # noqa: ANN001
+    def _call_with_backoff(request: object) -> dict[str, object]:
         """Execute a Drive API *request* with exponential backoff.
 
-        Retries the request when a :class:`googleapiclient.errors.HttpError`
-        with a transient status code (429, 500, 503) is encountered, using
-        exponential backoff with a doubling delay starting at
-        :data:`_BACKOFF_BASE_SECONDS`.  Non-transient errors are re-raised
-        immediately.
-
-        Parameters
-        ----------
-        request:
-            A ``googleapiclient`` HTTP request object (has an ``.execute()``
-            method).
-
-        Returns
-        -------
-        dict[str, object]
-            The parsed JSON response body from the Drive API.
-
-        Raises
-        ------
-        googleapiclient.errors.HttpError
-            Re-raised after ``MAX_RETRIES`` transient failures, or
-            immediately for non-transient status codes.
+        Delegates to :func:`utils.gcp_helpers.retry_gcp_call`.
         """
-        delay: float = _BACKOFF_BASE_SECONDS
+        from utils.gcp_helpers import retry_gcp_call
 
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                return request.execute()  # type: ignore[union-attr]
-            except drive_errors.HttpError as exc:
-                status: int = exc.resp.status  # type: ignore[attr-defined]
+        def _do_execute() -> dict[str, object]:
+            return request.execute()  # type: ignore[union-attr]
 
-                if status not in _RETRYABLE_STATUS_CODES:
-                    logger.error(
-                        "Drive API returned non-retryable status %d; aborting.",
-                        status,
-                    )
-                    raise
-
-                if attempt == MAX_RETRIES:
-                    logger.error(
-                        "Drive API transient error (HTTP %d) after %d attempts; giving up.",
-                        status,
-                        MAX_RETRIES,
-                    )
-                    raise
-
-                logger.warning(
-                    "Drive API transient error (HTTP %d); retrying in %.1fs "
-                    "(attempt %d/%d).",
-                    status,
-                    delay,
-                    attempt,
-                    MAX_RETRIES,
-                )
-                time.sleep(delay)
-                delay *= 2.0
-
-        # Unreachable; satisfies type-checker.
-        raise RuntimeError("Exceeded maximum retries without returning.")  # pragma: no cover
+        return retry_gcp_call(
+            _do_execute,
+            max_retries=MAX_RETRIES - 1,
+            base_delay=_BACKOFF_BASE_SECONDS,
+            max_delay=_BACKOFF_BASE_SECONDS * (2 ** (MAX_RETRIES - 1)),
+        )

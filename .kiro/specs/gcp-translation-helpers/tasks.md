@@ -119,7 +119,7 @@ The plan is organized into five **Execution Tracks**:
   - `GCPBatchTranslationService` delegates `_parse_gcs_uri` to `utils.gcp_helpers.parse_gcs_uri`.
   - Replaces manual retry loop in `submit_batch_job` with `retry_gcp_call` or `@retry_gcp_operation`.
   - All existing tests in `tests/test_gcp_batch_translation_service.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 2.2: Refactor `services/glossary_sync_manager.py` to use `utils/gcp_helpers.py` [FR-01, FR-02]
 * **Dependencies**: Task 1.1.
@@ -129,7 +129,7 @@ The plan is organized into five **Execution Tracks**:
   - Delegates `_delete_gcs_blob` to `utils.gcp_helpers.delete_gcs_blob`.
   - Delegates `_format_glossary_name` to `utils.gcp_helpers.format_gcp_glossary_name`.
   - All existing tests in `tests/test_glossary_sync_manager.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 2.3: Refactor `services/session_glossary_lifecycle.py` [FR-01, FR-09]
 * **Dependencies**: Tasks 1.1, 1.4.
@@ -138,7 +138,7 @@ The plan is organized into five **Execution Tracks**:
   - Uses `parse_gcs_uri` and `delete_gcs_blob` in `cleanup_session_glossary`.
   - Replaces `meta_file.write_text(...)` in `_save_user_sessions` with `atomic_write_json`.
   - All existing tests in `tests/test_session_glossary_lifecycle.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 2.4: Refactor `services/byok_credentials_manager.py` and `services/google_drive_exporter.py` [FR-02]
 * **Dependencies**: Task 1.1.
@@ -147,7 +147,7 @@ The plan is organized into five **Execution Tracks**:
   - `BYOKCredentialsManager` delegates `_call_with_backoff` to `utils.gcp_helpers.retry_gcp_call`.
   - `GoogleDriveExporter` delegates `_call_with_backoff` to `utils.gcp_helpers.retry_gcp_call`.
   - Tests in `tests/test_byok_credentials_manager.py` and `tests/test_google_drive_exporter.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 2.5: Refactor `services/glossary_compiler.py` and `services/user_vocabulary_store.py` [FR-03]
 * **Dependencies**: Task 1.2.
@@ -156,7 +156,7 @@ The plan is organized into five **Execution Tracks**:
   - `GlossaryCompiler` delegates `_escape_rfc4180_field` and `format_rfc4180_tsv` to `utils.tsv_utils`.
   - `UserVocabularyStore` delegates `_escape_rfc4180_field` and `export_tsv` to `utils.tsv_utils`.
   - Tests in `tests/test_glossary_compiler.py` and `tests/test_user_vocabulary_store.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 ---
 

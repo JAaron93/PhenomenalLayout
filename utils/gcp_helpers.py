@@ -22,7 +22,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 # HTTP status codes considered transient across Google Cloud APIs
-_RETRYABLE_HTTP_STATUS_CODES: frozenset[int] = frozenset({429, 503})
+_RETRYABLE_HTTP_STATUS_CODES: frozenset[int] = frozenset({429, 500, 503})
 # gRPC status codes: RESOURCE_EXHAUSTED=8, UNAVAILABLE=14
 _RETRYABLE_GRPC_CODES: frozenset[int] = frozenset({8, 14})
 
@@ -54,7 +54,7 @@ def parse_gcs_uri(gcs_uri: str) -> tuple[str, str]:
     parts = path.split("/", 1)
     if len(parts) < 2 or not parts[0] or not parts[1]:
         raise ValueError(
-            f"Invalid GCS URI '{gcs_uri}': could not extract blob path"
+            f"Malformed GCS URI '{gcs_uri}': could not extract blob path"
         )
 
     return parts[0], parts[1]
@@ -144,11 +144,18 @@ def is_transient_gcp_error(exc: Exception) -> bool:
         if http_status in _RETRYABLE_HTTP_STATUS_CODES:
             return True
 
+    # Check googleapiclient.errors.HttpError resp.status
+    resp = getattr(exc, "resp", None)
+    if resp is not None:
+        resp_status = getattr(resp, "status", None)
+        if resp_status in _RETRYABLE_HTTP_STATUS_CODES:
+            return True
+
     # Fallback string representation checks
     exc_str = str(exc)
     return any(
         code_str in exc_str
-        for code_str in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")
+        for code_str in ("429", "500", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")
     )
 
 
