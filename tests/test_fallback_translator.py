@@ -12,6 +12,7 @@ BDD Scenario: FR-13.1
 from __future__ import annotations
 
 import io
+import struct
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -414,7 +415,7 @@ class TestFallbackCoverageAndErrorBranches:
         """Verify that smart quotes, em-dashes, ellipses, umlauts, math symbols, Greek, Cyrillic, Hebrew, and CJK are preserved cleanly."""
         unicode_text = (
             "“Philosophie des Lebens” — Seele (ψυχή) ≠ Geist… ä ö ü ß \u2010 hyphen "
-            "\u00d7 2 ± 5; A → B; ∫ f(x) dx; ½ cup; бытие; שלום; 世界"
+            "\u00d7 2 ± 5; A → B; ∫ f(x) dx; ½ cup; бытие; שלום; 世界 \U0001d504"
         )
         translated_pages = [
             TranslatedPage(
@@ -448,7 +449,29 @@ class TestFallbackCoverageAndErrorBranches:
         assert "бытие" in p2_text
         assert "שלום" in p2_text or "םולש" in p2_text
         assert "世界" in p2_text
+        assert "\U0001d504" in p2_text
         assert "?" not in p2_text
+
+    def test_parse_ttf_metrics_and_format12_cmap(self) -> None:
+        """Verify format 12 32-bit cmap parsing for supplementary Unicode characters."""
+        assert FallbackPageTranslator._parse_ttf_metrics_and_cmap(b"") == (2048, {}, {})
+
+        # Construct minimal TTF with format 12 cmap
+        table_record = b"cmap" + struct.pack(">III", 0, 28, 40)
+        ttf_hdr = struct.pack(">IHHHH", 0x00010000, 1, 16, 1, 0) + table_record
+        padding = b"\x00" * (28 - len(ttf_hdr))
+        cmap_hdr = struct.pack(">HH", 0, 1) + struct.pack(">HHI", 3, 10, 12)
+        fmt12 = struct.pack(">HHIII", 12, 0, 28, 0, 1) + struct.pack(
+            ">III", 0x1D504, 0x1D505, 100
+        )
+        synthetic_ttf = ttf_hdr + padding + cmap_hdr + fmt12
+
+        units, _widths, cmap = FallbackPageTranslator._parse_ttf_metrics_and_cmap(
+            synthetic_ttf
+        )
+        assert units == 2048
+        assert cmap[0x1D504] == 100
+        assert cmap[0x1D505] == 101
 
     def test_extreme_overflow_450_lines_no_clipping_or_footer_overlap(
         self, fallback_translator: FallbackPageTranslator, sample_source_pdf: bytes

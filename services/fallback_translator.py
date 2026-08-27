@@ -442,6 +442,7 @@ class FallbackPageTranslator:
                     ">HH", ttf_data[cmap_offset : cmap_offset + 4]
                 )
                 format4_offset = None
+                format12_offset = None
                 for i in range(num_subtables):
                     sub_pos = cmap_offset + 4 + i * 8
                     if sub_pos + 8 > len(ttf_data):
@@ -456,7 +457,24 @@ class FallbackPageTranslator:
                         ]
                         if sub_fmt == 4:
                             format4_offset = fmt_pos
+                        elif sub_fmt == 12:
+                            format12_offset = fmt_pos
+
+                # Parse format 12 for full 32-bit Unicode (including supplementary planes > 0xFFFF)
+                if format12_offset and format12_offset + 16 <= len(ttf_data):
+                    _fmt, _res, _len, _lang, n_groups = struct.unpack(
+                        ">HHIII", ttf_data[format12_offset : format12_offset + 16]
+                    )
+                    g_pos = format12_offset + 16
+                    for _ in range(n_groups):
+                        if g_pos + 12 > len(ttf_data):
                             break
+                        start_c, end_c, start_g = struct.unpack(
+                            ">III", ttf_data[g_pos : g_pos + 12]
+                        )
+                        g_pos += 12
+                        for c in range(start_c, end_c + 1):
+                            char_to_gid[c] = start_g + (c - start_c)
 
                 if format4_offset and format4_offset + 8 <= len(ttf_data):
                     _fmt, _length, _lang, seg_count_x2 = struct.unpack(
@@ -492,58 +510,79 @@ class FallbackPageTranslator:
                         for c in range(start, end + 1):
                             if c == 0xFFFF:
                                 break
-                            if range_offset == 0:
-                                gid = (c + delta) & 0xFFFF
-                            else:
-                                glyph_pos = (
-                                    id_range_pos
-                                    + seg * 2
-                                    + range_offset
-                                    + (c - start) * 2
-                                )
-                                if glyph_pos + 2 <= len(ttf_data):
-                                    gid = struct.unpack(
-                                        ">H", ttf_data[glyph_pos : glyph_pos + 2]
-                                    )[0]
-                                    if gid != 0:
-                                        gid = (gid + delta) & 0xFFFF
+                            if c not in char_to_gid:
+                                if range_offset == 0:
+                                    gid = (c + delta) & 0xFFFF
                                 else:
-                                    gid = 0
-                            char_to_gid[c] = gid
+                                    glyph_pos = (
+                                        id_range_pos
+                                        + seg * 2
+                                        + range_offset
+                                        + (c - start) * 2
+                                    )
+                                    if glyph_pos + 2 <= len(ttf_data):
+                                        gid = struct.unpack(
+                                            ">H", ttf_data[glyph_pos : glyph_pos + 2]
+                                        )[0]
+                                        if gid != 0:
+                                            gid = (gid + delta) & 0xFFFF
+                                    else:
+                                        gid = 0
+                                char_to_gid[c] = gid
 
         return units_per_em, gid_widths, char_to_gid
 
     @classmethod
-    def _create_unicode_font(cls) -> DictionaryObject:
+    def _create_unicode_font(
+        cls, unique_chars: list[str]
+    ) -> tuple[DictionaryObject, dict[str, int]]:
         """Create a composite Type 0 font with embedded TrueType program and ToUnicode CMap.
 
-        Provides 100% faithful rendering and text extraction across all Unicode character
-        sets (Greek, Cyrillic, Hebrew, Arabic, CJK, German Fraktur ligatures, mathematical
-        symbols) without transliteration, substitution, or question-mark replacement.
+        Allocates dynamic sequential 16-bit CIDs (1 to N) for each unique character in the
+        page, guaranteeing that supplementary Unicode characters (> U+FFFF) receive a single
+        CID rather than being split into surrogate pairs. Maps each dynamic CID to its
+        actual TrueType glyph ID and advance width.
         """
         font_bytes = cls._get_fallback_font_bytes()
         _units_per_em, gid_widths, char_to_gid = cls._parse_ttf_metrics_and_cmap(
             font_bytes
         )
 
+        char_to_cid = {c: i + 1 for i, c in enumerate(unique_chars)}
+        cid_to_char = {i + 1: c for i, c in enumerate(unique_chars)}
+
+        # Build ToUnicode bfchar entries
+        bfchar_entries: list[str] = []
+        for cid, ch in cid_to_char.items():
+            code = ord(ch)
+            if code <= 0xFFFF:
+                bfchar_entries.append(f"<{cid:04X}> <{code:04X}>")
+            else:
+                surr_hex = ch.encode("utf-16be").hex().upper()
+                bfchar_entries.append(f"<{cid:04X}> <{surr_hex}>")
+
+        cmap_chunks: list[str] = []
+        for i in range(0, len(bfchar_entries), 100):
+            chunk = bfchar_entries[i : i + 100]
+            cmap_chunks.append(
+                f"{len(chunk)} beginbfchar\n" + "\n".join(chunk) + "\nendbfchar"
+            )
+
         cmap_stream = (
-            b"/CIDInit /ProcSet findresource begin\n"
-            b"12 dict begin\n"
-            b"begincmap\n"
-            b"/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n"
-            b"/CMapName /Custom-ToUnicode def\n"
-            b"/CMapType 2 def\n"
-            b"1 begincodespacerange\n"
-            b"<0000> <FFFF>\n"
-            b"endcodespacerange\n"
-            b"1 beginbfrange\n"
-            b"<0000> <FFFF> <0000>\n"
-            b"endbfrange\n"
-            b"endcmap\n"
-            b"CMapName currentdict /CMap defineresource pop\n"
-            b"end\n"
-            b"end"
-        )
+            "/CIDInit /ProcSet findresource begin\n"
+            "12 dict begin\n"
+            "begincmap\n"
+            "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n"
+            "/CMapName /Custom-ToUnicode def\n"
+            "/CMapType 2 def\n"
+            "1 begincodespacerange\n"
+            "<0000> <FFFF>\n"
+            "endcodespacerange\n" + "\n".join(cmap_chunks) + "\nendcmap\n"
+            "CMapName currentdict /CMap defineresource pop\n"
+            "end\n"
+            "end"
+        ).encode("ascii")
+
         tounicode_obj = DecodedStreamObject()
         tounicode_obj.set_data(cmap_stream)
 
@@ -573,18 +612,16 @@ class FallbackPageTranslator:
             font_stream[NameObject("/Length1")] = NumberObject(len(font_bytes))
             font_descriptor[NameObject("/FontFile2")] = font_stream
 
+        cid_to_gid_buf = bytearray((len(unique_chars) + 1) * 2)
         w_array = ArrayObject()
-        if char_to_gid:
-            max_cid = max(char_to_gid.keys(), default=0)
-            cid_to_gid_buf = bytearray((max_cid + 1) * 2)
-            for cid, gid in char_to_gid.items():
-                struct.pack_into(">H", cid_to_gid_buf, cid * 2, gid)
-                w = gid_widths.get(gid, 600)
-                w_array.extend([NumberObject(cid), ArrayObject([NumberObject(w)])])
-            cid_to_gid_obj: DecodedStreamObject | NameObject = DecodedStreamObject()
-            cid_to_gid_obj.set_data(bytes(cid_to_gid_buf))
-        else:
-            cid_to_gid_obj = NameObject("/Identity")
+        for cid, ch in cid_to_char.items():
+            gid = char_to_gid.get(ord(ch), 0)
+            struct.pack_into(">H", cid_to_gid_buf, cid * 2, gid)
+            w = gid_widths.get(gid, 600)
+            w_array.extend([NumberObject(cid), ArrayObject([NumberObject(w)])])
+
+        cid_to_gid_stream = DecodedStreamObject()
+        cid_to_gid_stream.set_data(bytes(cid_to_gid_buf))
 
         cid_font = DictionaryObject(
             {
@@ -600,13 +637,12 @@ class FallbackPageTranslator:
                 ),
                 NameObject("/FontDescriptor"): font_descriptor,
                 NameObject("/DW"): NumberObject(600),
-                NameObject("/CIDToGIDMap"): cid_to_gid_obj,
+                NameObject("/W"): w_array,
+                NameObject("/CIDToGIDMap"): cid_to_gid_stream,
             }
         )
-        if w_array:
-            cid_font[NameObject("/W")] = w_array
 
-        return DictionaryObject(
+        font_dict = DictionaryObject(
             {
                 NameObject("/Type"): NameObject("/Font"),
                 NameObject("/Subtype"): NameObject("/Type0"),
@@ -616,6 +652,7 @@ class FallbackPageTranslator:
                 NameObject("/ToUnicode"): tounicode_obj,
             }
         )
+        return font_dict, char_to_cid
 
     @staticmethod
     def _is_rtl_char(ch: str) -> bool:
@@ -715,14 +752,20 @@ class FallbackPageTranslator:
         writer = pypdf.PdfWriter()
         page = writer.add_blank_page(width=page_width, height=page_height)
 
+        header_str = f"[Fallback Plaintext Translation - Page {page_number}]"
+        footer_str = f"PhenomenalLayout Scholarly Resilience Fallback Engine | Page {page_number}"
+
+        unique_chars = list(dict.fromkeys(header_str + footer_str + text))
+        font_dict, char_to_cid = cls._create_unicode_font(unique_chars)
+
+        def encode_cids(s: str) -> str:
+            return "".join(f"{char_to_cid[c]:04X}" for c in s)
+
         if "/Resources" not in page:
             page[NameObject("/Resources")] = DictionaryObject()
         page["/Resources"][NameObject("/Font")] = DictionaryObject(
-            {NameObject("/F1"): cls._create_unicode_font()}
+            {NameObject("/F1"): font_dict}
         )
-
-        header_str = f"[Fallback Plaintext Translation - Page {page_number}]"
-        footer_str = f"PhenomenalLayout Scholarly Resilience Fallback Engine | Page {page_number}"
 
         header_y = page_height - 45.0
         body_top = page_height - 75.0
@@ -736,8 +779,8 @@ class FallbackPageTranslator:
         ops: list[bytes] = []
 
         # Header
-        header_hex = header_str.encode("utf-16be").hex()
-        footer_hex = footer_str.encode("utf-16be").hex()
+        header_cids = encode_cids(header_str)
+        footer_cids = encode_cids(footer_str)
 
         ops.extend(
             [
@@ -745,7 +788,7 @@ class FallbackPageTranslator:
                 b"/F1 10 Tf",
                 b"14 TL",
                 f"{left_margin:.1f} {header_y:.1f} Td".encode("ascii"),
-                f"<{header_hex}> Tj".encode("ascii"),
+                f"<{header_cids}> Tj".encode("ascii"),
                 b"ET",
             ]
         )
@@ -765,26 +808,26 @@ class FallbackPageTranslator:
                 line_y = body_top - line_idx * leading
                 runs = cls._split_bidi_runs(line)
                 if len(runs) <= 1:
-                    line_hex = line.encode("utf-16be").hex()
+                    line_cids = encode_cids(line)
                     ops.extend(
                         [
                             b"BT",
                             f"/F1 {font_size:.1f} Tf".encode("ascii"),
                             f"{col_x:.1f} {line_y:.1f} Td".encode("ascii"),
-                            f"<{line_hex}> Tj".encode("ascii"),
+                            f"<{line_cids}> Tj".encode("ascii"),
                             b"ET",
                         ]
                     )
                 else:
                     curr_x = col_x
                     for run_text, _ in runs:
-                        run_hex = run_text.encode("utf-16be").hex()
+                        run_cids = encode_cids(run_text)
                         ops.extend(
                             [
                                 b"BT",
                                 f"/F1 {font_size:.1f} Tf".encode("ascii"),
                                 f"{curr_x:.1f} {line_y:.1f} Td".encode("ascii"),
-                                f"<{run_hex}> Tj".encode("ascii"),
+                                f"<{run_cids}> Tj".encode("ascii"),
                                 b"ET",
                             ]
                         )
@@ -796,7 +839,7 @@ class FallbackPageTranslator:
                 b"BT",
                 b"/F1 8 Tf",
                 f"{left_margin:.1f} {footer_y:.1f} Td".encode("ascii"),
-                f"<{footer_hex}> Tj".encode("ascii"),
+                f"<{footer_cids}> Tj".encode("ascii"),
                 b"ET",
             ]
         )
