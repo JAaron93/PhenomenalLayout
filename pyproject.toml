@@ -134,12 +134,10 @@ exclude = [
   "scripts/",
 ]
 
-# Development dependencies are now managed via pip-tools
-# See dev-requirements.in for high-level dev dependencies
-# See dev-requirements.txt for pinned dev dependencies
+# Development dependencies are maintained in requirements-dev.txt
+# See requirements.txt for runtime dependencies
 [project.optional-dependencies]
 dev = [
-    # Maintained in dev-requirements.in -> dev-requirements.txt
-    # Install with: pip-sync dev-requirements.txt
+    # Install with: pip install -r requirements.txt -r requirements-dev.txt
     "pip-tools>=7.5,<8.0",  # For dependency management
 ]

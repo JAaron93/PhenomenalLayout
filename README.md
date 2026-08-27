@@ -397,24 +397,23 @@ We manage pinned dependencies with pip-tools for reproducible builds.
 
 Core files
 - requirements.in → High-level runtime deps
-- requirements.txt → Pinned runtime deps (auto-generated)
-- dev-requirements.in → High-level dev deps (includes requirements.in)
-- dev-requirements.txt → Pinned dev deps (auto-generated)
+- requirements.txt → Pinned runtime deps (auto-generated from requirements.in)
+- requirements-dev.txt → Pinned dev and CI test/lint dependencies
 
 Common workflows
 ```bash
-# Dev setup (installs dev deps)
+# Dev setup (installs runtime + dev deps)
 ./scripts/sync-deps.sh
 
 # Prod-only setup (runtime deps)
 ./scripts/sync-deps.sh prod
 
-# Update all pins from *.in
+# Update runtime pins from requirements.in
 ./scripts/update-deps.sh
 ```
 
 Important
-- Don't edit requirements.txt or dev-requirements.txt directly. Edit the *.in files and run ./scripts/update-deps.sh
+- Don't edit requirements.txt directly. Edit requirements.in and run ./scripts/update-deps.sh
 - pdf2image is pinned to >=1.17.0 for compatibility with Debian Bookworm + poppler-utils in the Modal image
 
 ### Optional Security Scanning

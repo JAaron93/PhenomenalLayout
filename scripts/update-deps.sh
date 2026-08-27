@@ -25,25 +25,13 @@ echo "🔄 Updating runtime dependencies..."
 pip-compile requirements.in --upgrade --strip-extras
 
 echo ""
-echo "� Updating production (hashed) dependencies..."
-pip-compile requirements.in --upgrade --strip-extras \
-  --generate-hashes --allow-unsafe \
-  --output-file=requirements-prod.txt
-
-echo ""
-echo "�🔄 Updating development dependencies..."
-pip-compile dev-requirements.in --upgrade --strip-extras
-
-echo ""
 echo "📋 Summary of changes:"
 echo "  - requirements.txt: Updated from requirements.in"
-echo "  - dev-requirements.txt: Updated from dev-requirements.in"
 echo ""
 echo "🎯 Next steps:"
-echo "  1. Review the updated .txt files"
-echo "  2. Run: pip-sync dev-requirements.txt (for development)"
-echo "  3. Run: pip-sync requirements-prod.txt (for production parity)"
-echo "  4. Test that everything works: python -c 'import app; print(\"✅ OK\")'"
+echo "  1. Review the updated requirements.txt"
+echo "  2. Run: pip-sync requirements.txt requirements-dev.txt (for development)"
+echo "  3. Test that everything works: python -c 'import app; print(\"✅ OK\")'"
 
 echo ""
 echo "✅ Dependency update complete!"
