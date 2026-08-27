@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import io
 import logging
+import struct
 import textwrap
 import time
 from dataclasses import dataclass
@@ -360,12 +361,12 @@ class FallbackPageTranslator:
     def _get_fallback_font_bytes(cls) -> bytes:
         """Load TrueType font bytes for embedding into PDF fallback pages."""
         candidate_paths = [
-            Path(__file__).resolve().parent.parent / "config" / "fonts" / "Vera.ttf",
-            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
-            Path("/usr/share/fonts/truetype/freefont/FreeSans.ttf"),
-            Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
             Path("/Library/Fonts/Arial Unicode.ttf"),
+            Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            Path("/usr/share/fonts/truetype/freefont/FreeSans.ttf"),
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
+            Path(__file__).resolve().parent.parent / "config" / "fonts" / "Vera.ttf",
         ]
         for p in candidate_paths:
             if p.exists():
@@ -384,6 +385,134 @@ class FallbackPageTranslator:
 
         return b""
 
+    @staticmethod
+    def _parse_ttf_metrics_and_cmap(
+        ttf_data: bytes,
+    ) -> tuple[int, dict[int, int], dict[int, int]]:
+        """Parse TrueType font binary tables to extract unitsPerEm, glyph widths, and Unicode cmap.
+
+        Enables building an exact /CIDToGIDMap stream and /W glyph widths array, ensuring
+        PDF viewers map every Unicode character code directly to its TrueType glyph ID
+        rather than incorrectly assuming an identity CID-to-GID mapping.
+        """
+        if len(ttf_data) < 12:
+            return 2048, {}, {}
+
+        num_tables = struct.unpack(">H", ttf_data[4:6])[0]
+        tables: dict[str, tuple[int, int]] = {}
+        pos = 12
+        for _ in range(num_tables):
+            if pos + 16 > len(ttf_data):
+                break
+            tag, _check_sum, offset, length = struct.unpack(
+                ">4sIII", ttf_data[pos : pos + 16]
+            )
+            tables[tag.decode("ascii", errors="ignore")] = (offset, length)
+            pos += 16
+
+        units_per_em = 2048
+        if "head" in tables:
+            head_offset, _ = tables["head"]
+            if head_offset + 20 <= len(ttf_data):
+                units_per_em = struct.unpack(
+                    ">H", ttf_data[head_offset + 18 : head_offset + 20]
+                )[0]
+
+        gid_widths: dict[int, int] = {}
+        if "hhea" in tables and "hmtx" in tables:
+            hhea_offset, _ = tables["hhea"]
+            hmtx_offset, _ = tables["hmtx"]
+            if hhea_offset + 36 <= len(ttf_data):
+                num_h_metrics = struct.unpack(
+                    ">H", ttf_data[hhea_offset + 34 : hhea_offset + 36]
+                )[0]
+                for gid in range(num_h_metrics):
+                    metric_pos = hmtx_offset + gid * 4
+                    if metric_pos + 2 <= len(ttf_data):
+                        adv_w = struct.unpack(
+                            ">H", ttf_data[metric_pos : metric_pos + 2]
+                        )[0]
+                        gid_widths[gid] = round(adv_w * 1000.0 / max(units_per_em, 1))
+
+        char_to_gid: dict[int, int] = {}
+        if "cmap" in tables:
+            cmap_offset, _ = tables["cmap"]
+            if cmap_offset + 4 <= len(ttf_data):
+                _version, num_subtables = struct.unpack(
+                    ">HH", ttf_data[cmap_offset : cmap_offset + 4]
+                )
+                format4_offset = None
+                for i in range(num_subtables):
+                    sub_pos = cmap_offset + 4 + i * 8
+                    if sub_pos + 8 > len(ttf_data):
+                        break
+                    _plat_id, _enc_id, sub_offset = struct.unpack(
+                        ">HHI", ttf_data[sub_pos : sub_pos + 8]
+                    )
+                    fmt_pos = cmap_offset + sub_offset
+                    if fmt_pos + 2 <= len(ttf_data):
+                        sub_fmt = struct.unpack(">H", ttf_data[fmt_pos : fmt_pos + 2])[
+                            0
+                        ]
+                        if sub_fmt == 4:
+                            format4_offset = fmt_pos
+                            break
+
+                if format4_offset and format4_offset + 8 <= len(ttf_data):
+                    _fmt, _length, _lang, seg_count_x2 = struct.unpack(
+                        ">HHHH", ttf_data[format4_offset : format4_offset + 8]
+                    )
+                    seg_count = seg_count_x2 // 2
+                    end_code_pos = format4_offset + 14
+                    end_codes = struct.unpack(
+                        f">{seg_count}H",
+                        ttf_data[end_code_pos : end_code_pos + seg_count * 2],
+                    )
+                    start_code_pos = end_code_pos + seg_count * 2 + 2
+                    start_codes = struct.unpack(
+                        f">{seg_count}H",
+                        ttf_data[start_code_pos : start_code_pos + seg_count * 2],
+                    )
+                    id_delta_pos = start_code_pos + seg_count * 2
+                    id_deltas = struct.unpack(
+                        f">{seg_count}h",
+                        ttf_data[id_delta_pos : id_delta_pos + seg_count * 2],
+                    )
+                    id_range_pos = id_delta_pos + seg_count * 2
+                    id_range_offsets = struct.unpack(
+                        f">{seg_count}H",
+                        ttf_data[id_range_pos : id_range_pos + seg_count * 2],
+                    )
+
+                    for seg in range(seg_count):
+                        start = start_codes[seg]
+                        end = end_codes[seg]
+                        delta = id_deltas[seg]
+                        range_offset = id_range_offsets[seg]
+                        for c in range(start, end + 1):
+                            if c == 0xFFFF:
+                                break
+                            if range_offset == 0:
+                                gid = (c + delta) & 0xFFFF
+                            else:
+                                glyph_pos = (
+                                    id_range_pos
+                                    + seg * 2
+                                    + range_offset
+                                    + (c - start) * 2
+                                )
+                                if glyph_pos + 2 <= len(ttf_data):
+                                    gid = struct.unpack(
+                                        ">H", ttf_data[glyph_pos : glyph_pos + 2]
+                                    )[0]
+                                    if gid != 0:
+                                        gid = (gid + delta) & 0xFFFF
+                                else:
+                                    gid = 0
+                            char_to_gid[c] = gid
+
+        return units_per_em, gid_widths, char_to_gid
+
     @classmethod
     def _create_unicode_font(cls) -> DictionaryObject:
         """Create a composite Type 0 font with embedded TrueType program and ToUnicode CMap.
@@ -393,6 +522,9 @@ class FallbackPageTranslator:
         symbols) without transliteration, substitution, or question-mark replacement.
         """
         font_bytes = cls._get_fallback_font_bytes()
+        _units_per_em, gid_widths, char_to_gid = cls._parse_ttf_metrics_and_cmap(
+            font_bytes
+        )
 
         cmap_stream = (
             b"/CIDInit /ProcSet findresource begin\n"
@@ -441,6 +573,19 @@ class FallbackPageTranslator:
             font_stream[NameObject("/Length1")] = NumberObject(len(font_bytes))
             font_descriptor[NameObject("/FontFile2")] = font_stream
 
+        w_array = ArrayObject()
+        if char_to_gid:
+            max_cid = max(char_to_gid.keys(), default=0)
+            cid_to_gid_buf = bytearray((max_cid + 1) * 2)
+            for cid, gid in char_to_gid.items():
+                struct.pack_into(">H", cid_to_gid_buf, cid * 2, gid)
+                w = gid_widths.get(gid, 600)
+                w_array.extend([NumberObject(cid), ArrayObject([NumberObject(w)])])
+            cid_to_gid_obj: DecodedStreamObject | NameObject = DecodedStreamObject()
+            cid_to_gid_obj.set_data(bytes(cid_to_gid_buf))
+        else:
+            cid_to_gid_obj = NameObject("/Identity")
+
         cid_font = DictionaryObject(
             {
                 NameObject("/Type"): NameObject("/Font"),
@@ -455,9 +600,11 @@ class FallbackPageTranslator:
                 ),
                 NameObject("/FontDescriptor"): font_descriptor,
                 NameObject("/DW"): NumberObject(600),
-                NameObject("/CIDToGIDMap"): NameObject("/Identity"),
+                NameObject("/CIDToGIDMap"): cid_to_gid_obj,
             }
         )
+        if w_array:
+            cid_font[NameObject("/W")] = w_array
 
         return DictionaryObject(
             {
