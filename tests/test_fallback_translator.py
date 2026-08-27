@@ -411,8 +411,11 @@ class TestFallbackCoverageAndErrorBranches:
     def test_unicode_punctuation_and_exotic_characters_preserved(
         self, fallback_translator: FallbackPageTranslator, sample_source_pdf: bytes
     ) -> None:
-        """Verify that smart quotes, em-dashes, ellipses, umlauts, math symbols, and Greek are preserved cleanly."""
-        unicode_text = "“Philosophie des Lebens” — Seele (ψυχή) ≠ Geist… ä ö ü ß \u2010 hyphen \u00d7 2 \u00b1 5"
+        """Verify that smart quotes, em-dashes, ellipses, umlauts, math symbols, Greek, Cyrillic, Hebrew, and CJK are preserved cleanly."""
+        unicode_text = (
+            "“Philosophie des Lebens” — Seele (ψυχή) ≠ Geist… ä ö ü ß \u2010 hyphen "
+            "\u00d7 2 ± 5; A → B; ∫ f(x) dx; ½ cup; бытие; שלום; 世界"
+        )
         translated_pages = [
             TranslatedPage(
                 page_index=1,
@@ -438,13 +441,19 @@ class TestFallbackCoverageAndErrorBranches:
         assert "psyche" in p2_text
         assert "!=" in p2_text
         assert "\u00d7 2" in p2_text
-        assert "\u00b1 5" in p2_text
+        assert "± 5" in p2_text
+        assert "->" in p2_text
+        assert "[int]" in p2_text
+        assert "1/2" in p2_text
+        assert "bytie" in p2_text
+        assert "shlvm" in p2_text
+        assert "CJK UNIFIED IDEOGRAPH" in p2_text
         assert "?" not in p2_text
 
     def test_extreme_overflow_450_lines_no_clipping_or_footer_overlap(
         self, fallback_translator: FallbackPageTranslator, sample_source_pdf: bytes
     ) -> None:
-        """Verify that extreme text volume (450 lines) fits on a single page without clipping or footer overlap."""
+        """Verify that extreme text volume (450 lines) fits on a single page with dynamic height without clipping or footer overlap."""
         overflow_text = "\n".join([f"Dense scholarly point {i}" for i in range(1, 451)])
         translated_pages = [
             TranslatedPage(
@@ -465,6 +474,8 @@ class TestFallbackCoverageAndErrorBranches:
         reader = pypdf.PdfReader(spliced_stream)
         # Strict 1-to-1 page alignment preserved
         assert len(reader.pages) == 3
+        # Page height dynamically expands to prevent vertical overlap or clipping
+        assert reader.pages[1].mediabox.height > 792.0
         p2_text = reader.pages[1].extract_text()
         assert "Dense scholarly point 1" in p2_text
         assert "Dense scholarly point 450" in p2_text

@@ -45,18 +45,75 @@ _MAX_LINES_PER_PAGE: int = 40
 _MAX_LINE_CHARS: int = 80
 
 # Transliteration mappings for Type 1 Helvetica with WinAnsiEncoding
-_SAFE_TRANSLITERATIONS: dict[str, str] = {
-    "\u2010": "-",  # hyphen
-    "\u2011": "-",  # non-breaking hyphen
-    "\u2012": "-",  # figure dash
-    "\u2015": "—",  # horizontal bar
-    "\u202f": " ",  # narrow no-break space
-    "\ufeff": "",  # zero-width no-break space
-    "≠": "!=",
-    "≤": "<=",
-    "≥": ">=",
-    "≈": "~",
-    "∞": "inf",
+_SCHOLARLY_TRANSLITERATIONS: dict[str, str] = {
+    # Dashes & whitespace
+    "\u2010": "-",
+    "\u2011": "-",
+    "\u2012": "-",
+    "\u2015": "—",
+    "\u202f": " ",
+    "\ufeff": "",
+    # Arrows
+    "\u2192": "->",
+    "\u2190": "<-",
+    "\u2194": "<->",
+    "\u21d2": "=>",
+    "\u21d0": "<=",
+    "\u21d4": "<=>",
+    "\u2191": "^",
+    "\u2193": "v",
+    "\u21a6": "|->",
+    # Integrals & Math operators
+    "\u222b": "[int]",
+    "\u222c": "[iint]",
+    "\u222d": "[iiint]",
+    "\u222e": "[oint]",
+    "\u2211": "[sum]",
+    "\u220f": "[prod]",
+    "\u221a": "sqrt",
+    "\u221b": "cbrt",
+    "\u2202": "d",
+    "\u2207": "grad",
+    "\u2206": "Delta",
+    "\u2032": "'",
+    "\u2033": "''",
+    # Fractions
+    "\u00bd": "1/2",
+    "\u2153": "1/3",
+    "\u2154": "2/3",
+    "\u00bc": "1/4",
+    "\u00be": "3/4",
+    "\u215b": "1/8",
+    "\u215c": "3/8",
+    "\u215d": "5/8",
+    "\u215e": "7/8",
+    # Logic & Set Theory
+    "\u2260": "!=",
+    "\u2264": "<=",
+    "\u2265": ">=",
+    "\u2248": "~",
+    "\u2261": "==",
+    "\u2262": "!==",
+    "\u221d": "prop",
+    "\u2208": "in",
+    "\u2209": "notin",
+    "\u2282": "subset",
+    "\u2286": "subseteq",
+    "\u222a": "union",
+    "\u2229": "intersect",
+    "\u2205": "empty",
+    "\u2227": "and",
+    "\u2228": "or",
+    "\u00ac": "not",
+    "\u2200": "forall",
+    "\u2203": "exists",
+    "\u2234": "therefore",
+    "\u2235": "because",
+    "\u221e": "inf",
+    "\u27e8": "<",
+    "\u27e9": ">",
+    "\u27e6": "[[",
+    "\u27e7": "]]",
 }
 
 _GREEK_MAP: dict[str, str] = {
@@ -116,6 +173,136 @@ _GREEK_MAP: dict[str, str] = {
     "\u03a7": "Ch",
     "\u03a8": "Ps",
     "\u03a9": "O",
+}
+
+_CYRILLIC_MAP: dict[str, str] = {
+    "\u0430": "a",
+    "\u0431": "b",
+    "\u0432": "v",
+    "\u0433": "g",
+    "\u0434": "d",
+    "\u0435": "e",
+    "\u0451": "yo",
+    "\u0436": "zh",
+    "\u0437": "z",
+    "\u0438": "i",
+    "\u0439": "y",
+    "\u043a": "k",
+    "\u043b": "l",
+    "\u043c": "m",
+    "\u043d": "n",
+    "\u043e": "o",
+    "\u043f": "p",
+    "\u0440": "r",
+    "\u0441": "s",
+    "\u0442": "t",
+    "\u0443": "u",
+    "\u0444": "f",
+    "\u0445": "kh",
+    "\u0446": "ts",
+    "\u0447": "ch",
+    "\u0448": "sh",
+    "\u0449": "shch",
+    "\u044a": "",
+    "\u044b": "y",
+    "\u044c": "",
+    "\u044d": "e",
+    "\u044e": "yu",
+    "\u044f": "ya",
+    "\u0410": "A",
+    "\u0411": "B",
+    "\u0412": "V",
+    "\u0413": "G",
+    "\u0414": "D",
+    "\u0415": "E",
+    "\u0401": "Yo",
+    "\u0416": "Zh",
+    "\u0417": "Z",
+    "\u0418": "I",
+    "\u0419": "Y",
+    "\u041a": "K",
+    "\u041b": "L",
+    "\u041c": "M",
+    "\u041d": "N",
+    "\u041e": "O",
+    "\u041f": "P",
+    "\u0420": "R",
+    "\u0421": "S",
+    "\u0422": "T",
+    "\u0423": "U",
+    "\u0424": "F",
+    "\u0425": "Kh",
+    "\u0426": "Ts",
+    "\u0427": "Ch",
+    "\u0428": "Sh",
+    "\u0429": "Shch",
+    "\u042a": "",
+    "\u042b": "Y",
+    "\u042c": "",
+    "\u042d": "E",
+    "\u042e": "Yu",
+    "\u042f": "Ya",
+}
+
+_HEBREW_MAP: dict[str, str] = {
+    "\u05d0": "'",
+    "\u05d1": "b",
+    "\u05d2": "g",
+    "\u05d3": "d",
+    "\u05d4": "h",
+    "\u05d5": "v",
+    "\u05d6": "z",
+    "\u05d7": "ch",
+    "\u05d8": "t",
+    "\u05d9": "y",
+    "\u05da": "k",
+    "\u05db": "k",
+    "\u05dc": "l",
+    "\u05dd": "m",
+    "\u05de": "m",
+    "\u05df": "n",
+    "\u05e0": "n",
+    "\u05e1": "s",
+    "\u05e2": "'",
+    "\u05e3": "p",
+    "\u05e4": "p",
+    "\u05e5": "ts",
+    "\u05e6": "ts",
+    "\u05e7": "q",
+    "\u05e8": "r",
+    "\u05e9": "sh",
+    "\u05ea": "t",
+}
+
+_ARABIC_MAP: dict[str, str] = {
+    "\u0627": "a",
+    "\u0628": "b",
+    "\u062a": "t",
+    "\u062b": "th",
+    "\u062c": "j",
+    "\u062d": "h",
+    "\u062e": "kh",
+    "\u062f": "d",
+    "\u0630": "dh",
+    "\u0631": "r",
+    "\u0632": "z",
+    "\u0633": "s",
+    "\u0634": "sh",
+    "\u0635": "s",
+    "\u0636": "d",
+    "\u0637": "t",
+    "\u0638": "z",
+    "\u0639": "'",
+    "\u063a": "gh",
+    "\u0641": "f",
+    "\u0642": "q",
+    "\u0643": "k",
+    "\u0644": "l",
+    "\u0645": "m",
+    "\u0646": "n",
+    "\u0647": "h",
+    "\u0648": "w",
+    "\u064a": "y",
 }
 
 
@@ -429,10 +616,11 @@ class FallbackPageTranslator:
         """Sanitize text to guarantee renderability in Type 1 Helvetica with WinAnsiEncoding.
 
         Preserves German umlauts, smart punctuation, dashes, quotes, and mathematical
-        symbols (x, +-). Transliterates Greek philosophical terms and mathematical operators
-        without generating unrendered glyphs or '?' corruption.
+        symbols (multiplication \u00d7, \u00b1). Transliterates Greek, Cyrillic, Hebrew, Arabic, fractions,
+        integrals, and logic symbols cleanly. Preserves all other Unicode characters
+        using descriptive names so zero text disappears.
         """
-        for orig, repl in _SAFE_TRANSLITERATIONS.items():
+        for orig, repl in _SCHOLARLY_TRANSLITERATIONS.items():
             text = text.replace(orig, repl)
 
         out_chars: list[str] = []
@@ -443,6 +631,12 @@ class FallbackPageTranslator:
             except UnicodeEncodeError:
                 if char in _GREEK_MAP:
                     out_chars.append(_GREEK_MAP[char])
+                elif char in _CYRILLIC_MAP:
+                    out_chars.append(_CYRILLIC_MAP[char])
+                elif char in _HEBREW_MAP:
+                    out_chars.append(_HEBREW_MAP[char])
+                elif char in _ARABIC_MAP:
+                    out_chars.append(_ARABIC_MAP[char])
                 else:
                     decomposed = unicodedata.normalize("NFKD", char)
                     ascii_chars = "".join(
@@ -450,9 +644,14 @@ class FallbackPageTranslator:
                     )
                     try:
                         ascii_chars.encode("cp1252")
-                        out_chars.append(ascii_chars if ascii_chars else " ")
+                        if ascii_chars:
+                            out_chars.append(ascii_chars)
+                            continue
                     except UnicodeEncodeError:
-                        out_chars.append(" ")
+                        pass
+                    # If still unencodable (e.g. CJK ideograph, rare symbol), preserve its name
+                    char_name = unicodedata.name(char, f"U+{ord(char):04X}")
+                    out_chars.append(f"[{char_name}]")
 
         return "".join(out_chars)
 
@@ -488,9 +687,45 @@ class FallbackPageTranslator:
 
         Uses standard Type 1 Helvetica with WinAnsiEncoding to guarantee that every
         glyph is universally and cleanly rendered by all standard PDF viewers.
+        Dynamically expands page height when needed to guarantee that leading is
+        always strictly greater than font size (leading >= 11.0, font_size = 8.5),
+        preventing vertical line overlap, footer overlap, or text clipping.
         """
+        sanitized_text = cls._sanitize_for_winansi(text)
+
+        raw_lines = sanitized_text.split("\n")
+        num_raw = len(raw_lines)
+
+        if num_raw <= 50:
+            num_cols = 1
+            max_chars = 80
+            leading = 13.5
+            font_size = 10.0
+        else:
+            num_cols = 2
+            max_chars = 42
+            leading = 11.0
+            font_size = 8.5
+
+        wrapped_lines = cls._wrap_text(sanitized_text, max_chars=max_chars)
+        total_wrapped = len(wrapped_lines)
+
+        lines_per_col = (
+            (total_wrapped + num_cols - 1) // num_cols
+            if num_cols > 1
+            else total_wrapped
+        )
+
+        # Calculate dynamic page height to guarantee lines NEVER overlap vertically or clip:
+        # header at top (80pt) + content height (lines_per_col * leading) + footer margin (60pt)
+        header_margin = 80.0
+        footer_margin = 60.0
+        content_height = max(lines_per_col, 1) * leading
+        page_height = max(792.0, header_margin + content_height + footer_margin)
+        page_width = 612.0
+
         writer = pypdf.PdfWriter()
-        page = writer.add_blank_page(width=612, height=792)
+        page = writer.add_blank_page(width=page_width, height=page_height)
 
         font_dict = DictionaryObject(
             {
@@ -509,49 +744,14 @@ class FallbackPageTranslator:
         header_str = f"[Fallback Plaintext Translation - Page {page_number}]"
         footer_str = f"PhenomenalLayout Scholarly Resilience Fallback Engine | Page {page_number}"
 
-        sanitized_text = cls._sanitize_for_winansi(text)
+        header_y = page_height - 45.0
+        body_top = page_height - 75.0
+        footer_y = 35.0
 
-        # Margins and boundaries (header at 740, footer at 35)
         left_margin = 40.0
         usable_width = 532.0
-        body_top = 715.0
-        body_bottom = 55.0
-        available_height = body_top - body_bottom  # 660.0
-
-        raw_lines = sanitized_text.split("\n")
-        num_raw = len(raw_lines)
-
-        if num_raw <= 55:
-            num_cols = 1
-            max_chars = 80
-        elif num_raw <= 180:
-            num_cols = 2
-            max_chars = 42
-        elif num_raw <= 350:
-            num_cols = 3
-            max_chars = 28
-        else:
-            num_cols = 4
-            max_chars = 22
-
-        wrapped_lines = cls._wrap_text(sanitized_text, max_chars=max_chars)
-        total_wrapped = len(wrapped_lines)
-
-        if total_wrapped > 350:
-            num_cols = 4
-        elif total_wrapped > 180 and num_cols < 3:
-            num_cols = 3
-        elif total_wrapped > 55 and num_cols < 2:
-            num_cols = 2
-
-        gutter = 16.0
+        gutter = 24.0
         col_width = (usable_width - (num_cols - 1) * gutter) / num_cols
-        lines_per_col = (total_wrapped + num_cols - 1) // num_cols
-
-        # Bounding leading strictly to available_height / lines_per_col guarantees
-        # the lowest line is at y >= body_bottom (55.0 > 35.0), preventing footer overlap
-        leading = min(13.0, available_height / max(lines_per_col, 1))
-        font_size = min(10.0, max(2.5, leading * 0.8))
 
         ops: list[bytes] = []
 
@@ -564,7 +764,7 @@ class FallbackPageTranslator:
                 b"BT",
                 b"/F1 10 Tf",
                 b"14 TL",
-                b"40 740 Td",
+                f"{left_margin:.1f} {header_y:.1f} Td".encode("ascii"),
                 b"(" + header_bytes + b") Tj",
                 b"ET",
             ]
@@ -585,7 +785,7 @@ class FallbackPageTranslator:
                 [
                     b"BT",
                     f"/F1 {font_size:.1f} Tf".encode("ascii"),
-                    f"{leading:.2f} TL".encode("ascii"),
+                    f"{leading:.1f} TL".encode("ascii"),
                     f"{col_x:.1f} {body_top:.1f} Td".encode("ascii"),
                 ]
             )
@@ -602,7 +802,7 @@ class FallbackPageTranslator:
             [
                 b"BT",
                 b"/F1 8 Tf",
-                b"40 35 Td",
+                f"{left_margin:.1f} {footer_y:.1f} Td".encode("ascii"),
                 b"(" + footer_bytes + b") Tj",
                 b"ET",
             ]
