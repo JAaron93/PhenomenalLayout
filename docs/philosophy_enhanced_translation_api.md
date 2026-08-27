@@ -1,5 +1,8 @@
 # Philosophy-Enhanced Translation API Documentation
 
+> [!NOTE]
+> For full-length books and treatises, PhenomenalLayout has migrated to **Google Cloud Document Translation Advanced (v3)** with **Dual-Tier Glossary Synchronization** and **Modal Volume Persistent Vocabulary Storage** (`UserVocabularyStore`). See [ADR 0001](adr/0001-migrate-to-google-cloud-document-translation.md) and the [.kiro/specs/gcp-migration/](../.kiro/specs/gcp-migration/) specification suite for the modern cloud-native architecture.
+
 ## Overview
 
 The Philosophy-Enhanced Translation API provides comprehensive neologism detection and user choice management capabilities integrated with the existing translation infrastructure. This system is specifically designed for translating philosophical texts while preserving the integrity of philosophical neologisms according to user preferences.
