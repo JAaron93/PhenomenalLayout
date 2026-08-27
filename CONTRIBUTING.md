@@ -35,7 +35,7 @@ Prerequisite: Python 3.11 or 3.12 (match CI). Verify with: `python3 --version`
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 ### Manual Quality Checks
