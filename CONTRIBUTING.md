@@ -40,7 +40,7 @@ python -m pip install -r requirements-dev.txt
 
 ### Manual Quality Checks
 
-Run the complete Track 1, Track 2, and Track 3 GCP migration test suite (159 tests):
+Run the complete multi-track GCP migration test suite (209 tests across Tracks 1–4):
 
 ```bash
 pytest -o addopts="" tests/test_gcp_settings.py tests/test_byok_credentials_manager.py \
@@ -49,7 +49,10 @@ pytest -o addopts="" tests/test_gcp_settings.py tests/test_byok_credentials_mana
   tests/test_user_vocabulary_store.py tests/test_glossary_compiler.py \
   tests/test_glossary_sync_manager.py tests/test_session_glossary_lifecycle.py \
   tests/test_fraktur_classifier.py tests/test_batch_job_recovery.py \
-  tests/test_fallback_translator.py tests/test_dual_pane_viewer.py -v
+  tests/test_fallback_translator.py tests/test_dual_pane_viewer.py \
+  tests/test_dynamic_programming.py tests/test_enum_hash.py \
+  tests/test_memory_api_security.py tests/test_memory_api_integration.py \
+  tests/test_memory_gc_endpoint.py tests/test_problem_case_fixed.py -v
 ```
 
 Lint and type-check:
@@ -92,10 +95,10 @@ When contributing to PhenomenalLayout, focus on:
 - **Quality threshold testing**: Maintain $\ge 90\%$ test coverage on all newly added services and bug fixes.
 
 ### Documentation Requirements
-- **Algorithm explanations**: Document the mathematical basis for text fitting strategies
-- **Quality scoring**: Explain how layout preservation quality is calculated
-- **Integration patterns**: Describe how PhenomenalLayout orchestrates external services
-- **Performance characteristics**: Include benchmark data for large document processing
+- **Integration patterns**: Describe how PhenomenalLayout orchestrates Google Cloud Translation and GCS
+- **Terminology & Glossary structures**: Document RFC 4180 TSV formatting and glossary quota handling
+- **Scholarly resilience behavior**: Document Fraktur detection confidence scales and fallback TrueType font mappings
+- **Performance characteristics**: Include throughput and ETA benchmarks for large document processing
 
 ## CI notes
 

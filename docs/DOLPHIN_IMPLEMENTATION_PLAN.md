@@ -1,4 +1,9 @@
-# Dolphin OCR Complete Replacement Plan
+# Dolphin OCR Complete Replacement Plan (Historical / Superseded)
+
+> [!WARNING]
+> **HISTORICAL ARCHIVE**: This document details the legacy migration from PyMuPDF to Dolphin OCR. Under [ADR 0001](adr/0001-migrate-to-google-cloud-document-translation.md) and Track 4 (`TASK-4.1`), dedicated GPU Dolphin OCR microservices (`services/dolphin_client.py`, `services/dolphin_modal_service.py`) and ReportLab canvas drawing have been permanently retired and deleted.
+> 
+> The production pipeline now relies on **Google Cloud Document Translation Advanced (v3)** with **Dual-Tier Regional Glossaries** and the **German Philosophical Neologism Engine**. Refer to `.kiro/specs/gcp-migration/` for current architecture.
 
 ## Overview
 

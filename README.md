@@ -1,19 +1,19 @@
 # PhenomenalLayout
 
-Advanced layout preservation engine for document translation. PhenomenalLayout orchestrates Lingo.dev's translation services with ByteDance's Dolphin OCR to achieve pixel-perfect formatting integrity during document translation.
+Domain-specific **German Philosophical Book Translation & Neologism Orchestration Engine**. PhenomenalLayout pairs **Google Cloud Document Translation API (Cloud Translation - Advanced v3)** with a specialized **German Philosophical Neologism Detection Engine** to translate full-length books (50–1,000+ pages) from German to English with pixel-perfect preservation of typography, multi-column tables, diagrams, and footnotes under a Bring Your Own Key (BYOK) serverless model on Modal Labs.
 
 ## 🎯 Core Innovation
 
-**PhenomenalLayout is the intelligent orchestration layer** that bridges high-quality translation services with advanced OCR capabilities, solving the fundamental challenge of preserving document layout when translated text differs in length from the original.
+**PhenomenalLayout is the intelligent orchestration layer** that bridges Google Cloud's Document Translation Advanced API with a specialized German philosophical terminology and compound decomposition engine, solving the fundamental challenge of translating complex philosophical texts while maintaining terminology consistency and visual layout integrity.
 
 ### What Makes PhenomenalLayout Unique
 
-- **Layout Preservation Algorithms**: Proprietary text fitting strategies that automatically adjust font scaling, implement intelligent text wrapping, and optimize bounding box expansion
-- **Translation-Layout Integration**: Seamless coordination between Lingo.dev's translation quality and Dolphin OCR's layout analysis
-- **Pixel-Perfect Reconstruction**: Advanced PDF reconstruction using image-text overlay techniques for superior formatting preservation
-- **Intelligent Text Adaptation**: Sophisticated algorithms that handle the variable character counts between languages while maintaining visual integrity
-
-While Lingo.dev provides world-class translation and Dolphin OCR delivers exceptional document analysis, **PhenomenalLayout is the sophisticated engine that ensures translated documents maintain their original visual impact and professional appearance**.
+- **Native Cloud Document Translation**: Leverages Google Cloud Document Translation Advanced (v3) to deliver complete, layout-preserved PDFs with native typography, table formatting, and vector diagrams.
+- **Dual-Tier Glossary Synchronization**: Synchronizes persistent foundation dictionaries (`klages_terminology.json`) with dynamic session user choices in GCP regional glossaries (`us-central1`).
+- **German Philosophical Neologism Detector**: Morphological analysis and compound decomposition tailored for 19th- and 20th-century German philosophical texts.
+- **Bring Your Own Key (BYOK) Billing Isolation**: All translation compute and storage are billed directly to the user's GCP project with zero translation host costs.
+- **Zero Host PDF Storage Invariant**: Full-length book PDFs stream directly between user GCS buckets and personal Google Drive; zero book PDFs are stored on host disk.
+- **Scholarly Resilience**: Fraktur OCR script assessment, atomic LRO session resumption, dynamic sequential 16-bit CID fallback page translation, and synchronized dual-pane reading.
 
 ## 🚀 Features
 
@@ -203,17 +203,17 @@ quality_score = (
 - **Error handling** with graceful fallbacks
 - **Rate limiting** respect for API constraints
 
-#### Dolphin OCR Integration  
-- **Precise text extraction** with bounding box data
-- **Font and styling detection** for accurate reproduction
-- **Layout analysis** providing spatial relationships
-- **Confidence scoring** for quality assessment
+#### Google Cloud Document Translation Advanced (v3) Integration
+- **Direct GCS Asynchronous Batch Translation**: Zero host disk caching via `batchTranslateDocument`
+- **Native Layout & Typography Preservation**: Preserves multi-column tables, figures, footnotes, and typography natively
+- **Dual-Tier Regional Glossaries**: Synchronizes base philosophical terminology (`klages_terminology.json`) with dynamic session user choices in `us-central1`
+- **7-Day Staging Lifecycle**: Automatic object expiration preventing unbounded user storage costs
 
 #### PhenomenalLayout's Unique Contribution
-- **Bridges the gap** between translation quality and layout preservation
-- **Intelligent decision-making** for optimal text fitting strategies
-- **Quality optimization** balancing readability with visual fidelity
-- **Scalable processing** for enterprise-level document volumes
+- **Bridges the gap** between cloud translation scale and nuanced philosophical vocabulary
+- **Interactive Neologism Resolution**: Empowers scholars to define or preserve coined compounds
+- **Scholarly Verification**: Synchronized dual-pane bilingual verification and 1-click Google Drive export
+- **Production Resilience**: Atomic LRO reconnection across container scale-downs and 100% translation completeness via fallback page synthesis
 
 ## 🛠️ Installation
 
@@ -362,78 +362,34 @@ Example command:
 GRADIO_SCHEMA_PATCH=true GRADIO_SHARE=true pytest -q -m "not slow" tests/test_ui_gradio.py
 ```
 
-## ☁️ Dolphin OCR Service (Modal)
+## ☁️ Cloud Architecture & Serverless Deployment (Modal Labs)
 
-The project ships with a GPU-accelerated Dolphin OCR service deployed on Modal. The service runs a FastAPI ASGI app and exposes three routes:
+> [!NOTE]
+> Under [ADR 0001](docs/adr/0001-migrate-to-google-cloud-document-translation.md) and Track 4 (`TASK-4.1`), dedicated GPU OCR worker instances (`services/dolphin_modal_service.py`, `services/dolphin_client.py`) and custom ReportLab canvas reconstruction were retired and permanently removed. Document OCR, font matching, and geometric layout preservation are now outsourced directly to **Google Cloud Document Translation Advanced (v3)**.
 
-- GET / → Landing JSON with usage and limits
-- GET /health → Simple health check: {"status":"ok","service":"dolphin-ocr"}
-- POST / → OCR endpoint; accepts multipart form-data with field name pdf_file (max 50MB)
+PhenomenalLayout runs serverless on **Modal Labs** under a **Bring Your Own Key (BYOK)** billing isolation architecture:
 
-Quickstart (replace <endpoint> with your Modal URL)
+- **Serverless ASGI Web App**: Deployed via `@modal.asgi_app()` with automatic scale-to-zero when idle (`scaledown_window=300`), operating comfortably within Modal's free compute tier.
+- **Zero Host PDF Storage Invariant**: The host maintains zero translation API or cloud storage costs. Source PDFs and translated outputs reside strictly in the user's GCS bucket or personal Google Drive.
+- **Persistent Vocabulary Storage**: User neologism choices and translation directives are persisted per `user_id` on the Modal Volume (`modal.Volume.from_name("phenomenal-user-data")` mounted at `/data`).
+
+### Deploying to Modal Labs
+
 ```bash
-# Health
-curl -s https://<endpoint>/health
+# Deploy the ASGI web application to Modal
+modal deploy modal_app.py
 
-# Landing
-curl -s https://<endpoint>/
-
-# OCR
-curl -X POST \
-  -F "pdf_file=@/absolute/path/to/your.pdf" \
-  https://<endpoint>/
+# Local development / hot-reload
+modal serve modal_app.py
 ```
 
-Deploy / update
-```bash
-# Deploy the service (recommended)
-modal deploy services/dolphin_modal_service.py
+### BYOK Onboarding & Credentials Setup
 
-# Optional: prefetch model assets into the persistent volume
-modal run services/dolphin_modal_service.py::setup_dolphin_service
+Users configure their personal Google Cloud credentials via an interactive 6-step guided walkthrough modal:
 
-# Local hot-reload (runs until stopped)
-modal serve services/dolphin_modal_service.py
-```
-
-### Configuration & Ownership
-
-- **Official Deployment**: Managed by the `modal-labs` organization. This is the default production-ready endpoint.
-- **Personal Deployments**: Users can deploy their own instances (e.g., for billing or development) and override the default via environment variables.
-- **Endpoint Priority**:
-    1. `DOLPHIN_MODAL_ENDPOINT` (Environment Variable)
-    2. `DOLPHIN_ENDPOINT` (Environment Variable - legacy/general)
-    3. `DEFAULT_MODAL_ENDPOINT` (Hardcoded Fallback: `modal-labs`)
-
-### Verification Steps
-
-To verify the availability and correctness of a Dolphin OCR endpoint:
-
-1. **Health Check**:
-   ```bash
-   curl -I https://<endpoint>/health
-   ```
-   *Expected: HTTP 200 OK with `{"status":"ok","service":"dolphin-ocr"}`*
-
-2. **Functionality Test**:
-   Use the provided test script to verify end-to-end processing:
-   ```bash
-   # Set your endpoint
-   export DOLPHIN_MODAL_ENDPOINT="https://your-org--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
-   # Run the test
-   python -m scripts.test_modal_deployment
-   ```
-
-### Maintenance & Availability
-
-- **Production Service**: The `modal-labs` organizational deployment is maintained for general project use.
-- **SLA/Rate Limits**: Organizations should check their specific Modal plan for concurrency and rate limits. The client defaults to high timeouts (300s) to accommodate large document processing.
-
-### GPU Configuration
-- GPU: Configured for T4 by default in code; adjust @app.cls/@app.function if needed
-- Model cache: Stored in Modal Volume "dolphin-ocr-models" mounted at /models
-- Size limit: 50MB for uploaded PDFs; oversized files return a JSON error
-- Implementation: Uses modal.asgi_app(FastAPI) so multiple routes are supported
+1. **Non-Billable Validation**: Credentials are validated via free API calls (`projects.locations.glossaries.list` + bucket permission checks) before any batch job is submitted.
+2. **Lifecycle Policy Enforcement**: Staging prefixes (`inputs/`) enforce an unconditional 7-day auto-delete lifecycle policy on the user's bucket to prevent unbounded storage costs.
+3. **Session Memory Isolation**: User Service Account keys are held strictly in ephemeral session memory and never written to disk or logs.
 
 ## 📦 Dependency management (pip-tools)
 
@@ -492,16 +448,18 @@ Configure environment variables for Google Cloud Document Translation v3 and reg
 - `PDF_DPI` (int): Resolution for PDF rendering; affects pdf2image conversion. Default: 300 DPI.
 - `PRESERVE_IMAGES` (bool): Preserve embedded images. Default: true.
 - `MEMORY_THRESHOLD_MB` (int): Memory threshold used by some validators. Default: 500.
-- `DOLPHIN_ENDPOINT` (str): HTTP endpoint for Dolphin OCR service (Modal/Spaces).
-- `HF_TOKEN` (str, optional): Hugging Face token for authenticated model pulls.
 - `MAX_CONCURRENT_REQUESTS` (int): Concurrency for translation.
 - `MAX_REQUESTS_PER_SECOND` (float): Token-bucket rate for translation requests.
 - `TRANSLATION_BATCH_SIZE` (int): Text batch size for translation.
 
-### Translation API Configuration
-**Required:**
-- `LINGO_API_KEY`: Your Lingo.dev API key (required for translation functionality)
-- `DOLPHIN_ENDPOINT`: HTTP endpoint for the Dolphin OCR service (Modal/Spaces), e.g., `https://your-modal-domain.example/api/dolphin`
+### Translation & GCP API Configuration
+**Primary Cloud Translation (BYOK):**
+- Provided interactively per user session or via `GOOGLE_APPLICATION_CREDENTIALS`
+- `GCP_PROJECT_ID`: User's Google Cloud project ID
+- `GCS_BUCKET_NAME`: User's Cloud Storage bucket for staging and outputs
+
+**Secondary / Direct Translation API:**
+- `LINGO_API_KEY`: Lingo.dev API key (optional rapid preview or fallback)
 
 ### 🚀 Parallel Translation Settings
 Configure these environment variables to optimize performance for your use case:
@@ -719,113 +677,30 @@ The system provides detailed processing metrics:
 - Memory usage monitoring
 - Translation progress and success rates
 
-## 🔄 Migration to Dolphin OCR (PDF-only)
+## 🔄 Architectural Evolution: From Heuristic Overlays to Google Cloud Document Translation
 
-The legacy PyMuPDF/fitz-based engine has been removed and replaced with Dolphin OCR + pdf2image.
+PhenomenalLayout has evolved through three major architectural eras:
 
-### Breaking changes
-- Old PyMuPDF/fitz engine removed (no `fitz` imports; APIs relying on it are gone)
-- DOCX/TXT processing dropped; project is PDF-only
-- Some config flags changed/removed (see below)
-- API/CLI behavior now returns 400 for invalid/encrypted PDFs with codes `DOLPHIN_005`/`DOLPHIN_014`
+1. **Era 1 (Legacy PyMuPDF)**: Primitive text-extraction and heuristic overlay positioning (retired).
+2. **Era 2 (Dolphin OCR & ReportLab)**: Dedicated GPU OCR containers on Modal and ReportLab canvas box-fitting (retired under ADR 0001 / Track 4).
+3. **Era 3 (Google Cloud Document Translation Advanced v3)**: Native document-scale translation preserving multi-column typography, tables, and figures with zero host PDF storage and regional dual-tier glossary synchronization.
 
-### Required upgrade steps
-1) Install dependencies (PDF-only stack with minimum versions):
-   ```bash
-   pip install -r requirements.txt
-   # Ensure Poppler is installed and on PATH for pdf2image (see notes below)
-   ```
-2) Replace legacy config keys:
-   - Remove: `USE_PYMUPDF`, `PDF_TEXT_EXTRACTION_MODE`, `DOCX_ENABLED`, `TXT_ENABLED`
-   - Use: `PDF_DPI`, `DOLPHIN_ENDPOINT`, translation concurrency/rate envs (see above)
-3) Update imports and processors:
-   - Replace any custom `fitz` usage with `services.enhanced_document_processor.EnhancedDocumentProcessor`
-   - For OCR text, rely on Dolphin OCR via the processor; do not call PyMuPDF
-4) Validate PDFs server-side (FastAPI):
-   - Use `utils.pdf_validator.validate_pdf(file_path)` pre-upload, or rely on `/api/upload` which already enforces it
+### Modern Architecture Invariants (Track 4 Streamlining)
+- **Direct-to-GCS Processing**: Large book PDFs stream directly into user GCS staging buckets (`inputs/`) with an unconditional 7-day auto-delete policy.
+- **Native Layout Preservation**: Google Cloud Document Translation handles font scaling, column wrapping, diagram overlays, and vector graphics natively.
+- **Runtime Dependency Pruning**: Heavy dependencies like `reportlab` have been eliminated from runtime production requirements (retained solely in `requirements-dev.txt` for mock test fixtures).
+- **Scholarly Fallback & Unicode Fidelity**: Fallback page synthesis uses `pypdf` composite Type 0 fonts (`/CIDFontType2`) with format 4/12 TrueType `cmap` parsing and dynamic sequential 16-bit CID allocation, completely replacing legacy ReportLab canvas painting.
 
-### Data migration / reprocessing
-- Layout backups produced by the old engine are not used; regenerated PDFs will include layout overlays rebuilt via the reconstructor
-- If you stored legacy metadata, re-extract using `EnhancedDocumentProcessor.extract_content(file_path)` to populate new metrics (page count, element counts)
+### Deprecated Components & Replacements
 
-### Compatibility notes
-- Supported Python: 3.8–3.12 (3.11/3.12 recommended). Python 3.13 support pending due to Pillow 10 wheels.
-- Required: `pypdf` for PDF parsing, page counting, and document metadata extraction (Info and XMP, when present)
-- Plugins depending on `fitz` must be removed or rewritten
-- Rollback: check out a pre-migration tag that still uses PyMuPDF/fitz; note that tests and routes will differ
-
-### Examples and automation
-- See `tests/test_integration_document_processing.py` for end-to-end usage of the new processor
-- See `tests/test_ui_gradio.py` for UI interaction patterns and server validation behavior
-- A simple reprocessing script example:
-  ```bash
-  python - <<'PY'
-  from services.enhanced_document_processor import EnhancedDocumentProcessor
-  import sys
-  p = EnhancedDocumentProcessor(dpi=300)
-  for path in sys.argv[1:]:
-      content = p.extract_content(path)
-      print(path, content.get('metadata'))
-  PY
-  ```
-
-### Summary
-- ✅ Replaces basic text extraction with advanced layout analysis
-- ✅ Implements image-text overlay for formatting preservation
-- ✅ Adds comprehensive metadata extraction
-- ✅ Standardizes validation with clear error codes (400s for client errors)
-
-## 🚨 Important Notes
-
-### PDF Processing
-- High-quality OCR via Dolphin OCR with pdf2image-backed rendering
-- System dependency: Poppler must be installed and discoverable in PATH for `pdf2image`.
-  - macOS (Homebrew): `brew install poppler`
-  - Ubuntu/Debian: `sudo apt-get update && sudo apt-get install -y poppler-utils`
-- Processing time may be longer due to high-resolution rendering
-- Layout backups are automatically created for complex documents
-
-### Fonts
-- For consistent rendering across environments, install common fonts (e.g., DejaVu, Noto).
-- macOS: Common fonts are preinstalled; optionally install additional fonts via Homebrew casks.
-  For example:
-  - `brew tap homebrew/cask-fonts`
-  - `brew search font-noto` (then `brew install --cask <chosen-fonts>`)
-- Ubuntu/Debian: `sudo apt-get install -y fonts-dejavu fonts-liberation fonts-noto`
-- Ensure ReportLab can locate fonts or embed fallbacks (e.g., register fonts explicitly when needed; see ReportLab font docs).
-
-Optional code snippet to illustrate explicit font registration in ReportLab:
-Note: The snippet uses placeholders (e.g., /path/to/DejaVuSans.ttf). Adjust the font path to your environment.
-
-```python
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import Paragraph
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import inch
-
-# Create a canvas (adjust output path as needed)
-canvas_obj = canvas.Canvas("example.pdf")
-
-pdfmetrics.registerFont(TTFont("DejaVuSans", "/path/to/DejaVuSans.ttf"))
-# Optional: canvas_obj.setFont affects direct canvas text (e.g., drawString),
-# but Paragraph rendering uses the fontName in its ParagraphStyle.
-canvas_obj.setFont("DejaVuSans", 12)
-canvas_obj.drawString(1*inch, 10.5*inch, "Direct canvas text with DejaVuSans")
-style = ParagraphStyle("Body", fontName="DejaVuSans", fontSize=12)
-# Draw a simple paragraph using the defined style on an existing canvas
-para = Paragraph("Sample body text rendered with DejaVuSans.", style)
-avail_width, avail_height = 500, 800  # adjust to your layout
-para.wrapOn(canvas_obj, avail_width, avail_height)
-para.drawOn(canvas_obj, x=1*inch, y=10*inch)  # adjust position as needed (72pt = 1 inch)
-
-# Finalize the page and write the PDF to disk
-canvas_obj.showPage()
-canvas_obj.save()
-```
-
-ReportLab font guide: https://www.reportlab.com/docs/reportlab-userguide.pdf (search for "TrueType fonts").
+| Legacy Component | Deprecation Status | Modern Replacement |
+| :--- | :--- | :--- |
+| `services/pdf_document_reconstructor.py` | Permanently deleted | Google Cloud Document Translation Advanced (v3) |
+| `services/dolphin_client.py` | Permanently deleted | Google Cloud Document Translation Advanced (v3) |
+| `services/dolphin_modal_service.py` | Permanently deleted | Serverless ASGI app on Modal (`modal_app.py`) + GCP Translation |
+| `core/dynamic_layout_engine.py` | Deprecated (ADR 0001) | Cloud Translation handles typography scaling natively |
+| `services/enhanced_document_processor.py` | Deprecated (ADR 0001) | `services/gcp_batch_translation_service.py` |
+| `reportlab` (runtime) | Removed from `requirements.txt` | Cloud Translation + `pypdf` TrueType fallback renderer |
 
 ### 🚀 Parallel Translation
 - **API Key Required**: Valid Lingo.dev API key is mandatory for translation functionality
