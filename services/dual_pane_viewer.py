@@ -149,10 +149,10 @@ class DualPaneViewerController:
                 if render_images:
                     resolution = dpi or self._default_dpi
                     de_img_b64 = self._render_page_image(
-                        german_source, page_number, resolution
+                        de_stream, page_number, resolution
                     )
                     en_img_b64 = self._render_page_image(
-                        english_source, page_number, resolution
+                        en_stream, page_number, resolution
                     )
                     has_images = de_img_b64 is not None and en_img_b64 is not None
 
@@ -319,9 +319,15 @@ class DualPaneViewerController:
             from utils.pdf_stream import open_pdf_stream
 
             with open_pdf_stream(source, "Raster") as (stream, _):
+                if hasattr(stream, "seek"):
+                    with contextlib.suppress(Exception):
+                        stream.seek(0)
                 data_bytes = stream.read() if hasattr(stream, "read") else b""
                 if not data_bytes and hasattr(stream, "getvalue"):
                     data_bytes = stream.getvalue()  # type: ignore
+                if hasattr(stream, "seek"):
+                    with contextlib.suppress(Exception):
+                        stream.seek(0)
 
             images = pdf2image.convert_from_bytes(
                 data_bytes,

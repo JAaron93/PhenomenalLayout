@@ -454,3 +454,38 @@ class TestDualPaneViewerCoverageBranches:
         assert len(coords.german_matches) > 0
         assert len(coords.english_matches) > 0
 
+    def test_non_seekable_stream_with_image_rendering(
+        self,
+        viewer: DualPaneViewerController,
+        german_pdf_bytes: bytes,
+        english_pdf_bytes: bytes,
+    ) -> None:
+        """Verify non-seekable streams are not drained before raster image rendering."""
+        class NonSeekableStream(io.BytesIO):
+            def seek(self, _offset: int, _whence: int = 0) -> int:
+                raise OSError("Stream not seekable")
+
+        de_stream = NonSeekableStream(german_pdf_bytes)
+        en_stream = NonSeekableStream(english_pdf_bytes)
+
+        mock_img = MagicMock()
+        mock_img.save.side_effect = (
+            lambda buf, _format=None, **_kwargs: buf.write(b"fake-png-bytes")
+        )
+
+        with patch("pdf2image.convert_from_bytes", return_value=[mock_img]) as mock_convert:
+            pair = viewer.get_bilingual_page_pair(
+                german_source=de_stream,
+                english_source=en_stream,
+                page_number=1,
+                render_images=True,
+            )
+            assert pair.has_images is True
+            assert pair.german_page_image_base64 is not None
+            assert pair.english_page_image_base64 is not None
+            # Both calls must receive non-empty byte payloads
+            assert len(mock_convert.call_args_list) == 2
+            assert len(mock_convert.call_args_list[0][0][0]) > 0
+            assert len(mock_convert.call_args_list[1][0][0]) > 0
+
+
