@@ -57,7 +57,8 @@ _STANDARD_LINKING_RE: re.Pattern[str] = re.compile(
     r"^\w{4,}(?:s|en|er)\w{4,}$", re.IGNORECASE
 )
 _COMMON_DERIVATIONAL_SUFFIXES_RE: re.Pattern[str] = re.compile(
-    r"^\w{3,}(?:lich|isch|haft|ig|bar|los)$", re.IGNORECASE
+    r"^\w{3,}(?:lich|isch|haft|ig|bar|los)(?:e|er|en|es|em|st|ste|stem|sten|ster|stes)?$",
+    re.IGNORECASE,
 )
 
 
