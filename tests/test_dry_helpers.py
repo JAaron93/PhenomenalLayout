@@ -413,6 +413,13 @@ class TestGermanCompoundWord:
         assert not is_german_compound_word("Dasein")
         assert not is_german_compound_word("Existenz")
 
+        # Ordinary derived words and adjectives (Greptile review P1 fix)
+        assert not is_german_compound_word("menschlich")
+        assert not is_german_compound_word("wesentlich")
+        assert not is_german_compound_word("eigentlich")
+        assert not is_german_compound_word("natürlich")
+        assert not is_german_compound_word("körperlich")
+
         # Short words & particles
         assert not is_german_compound_word("das")
         assert not is_german_compound_word("und")

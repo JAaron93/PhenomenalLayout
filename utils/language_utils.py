@@ -40,21 +40,24 @@ _SINGLE_ROOT_NOUNS: frozenset[str] = frozenset({
     "phanomenologie",
     "intentionalität",
     "intentionalitat",
+    "menschlich",
+    "wesentlich",
+    "eigentlich",
+    "natürlich",
+    "körperlich",
+    "sprachlich",
+    "zeitlich",
+    "alltäglich",
 })
 
 _PHILOSOPHICAL_PREFIX_RE: re.Pattern[str] = re.compile(
     r"^(?:welt|lebens|seins|geist|seele)\w{4,}$", re.IGNORECASE
 )
 _STANDARD_LINKING_RE: re.Pattern[str] = re.compile(
-    r"^\w{3,}(?:s|n|es|en|er|e|ns|ts)\w{3,}$", re.IGNORECASE
+    r"^\w{4,}(?:s|en|er)\w{4,}$", re.IGNORECASE
 )
-_COMPOUND_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\w+(?:s|n|es|en|er|e|ns|ts)\w+", re.IGNORECASE),
-    re.compile(
-        r"\w+(?:bewusstsein|wirklichkeit|erkenntnis|wahrnehmung|philosophie|theorie|anschauung|thematik)",
-        re.IGNORECASE,
-    ),
-    re.compile(r"(?:welt|lebens|seins|geist|seele)\w+", re.IGNORECASE),
+_COMMON_DERIVATIONAL_SUFFIXES_RE: re.Pattern[str] = re.compile(
+    r"^\w{3,}(?:lich|isch|haft|ig|bar|los)$", re.IGNORECASE
 )
 
 
@@ -71,7 +74,7 @@ def is_german_compound_word(word: str) -> bool:
     Returns:
         bool: True if the word exhibits German compound structure, False otherwise.
     """
-    if not isinstance(word, str) or len(word) < 7:
+    if not isinstance(word, str) or len(word) < 8:
         return False
 
     word_lower = word.lower()
@@ -85,23 +88,23 @@ def is_german_compound_word(word: str) -> bool:
     if capital_count >= 2:
         return True
 
-    # Check for philosophical compounds (suffix ending with prefix >= 3 chars)
+    # Check for philosophical compounds (suffix ending with prefix >= 4 chars)
     for ending in _PHILOSOPHICAL_ENDINGS:
         if word_lower.endswith(ending) and len(word_lower) > len(ending):
             prefix = word_lower[: -len(ending)]
-            if len(prefix) >= 3:
+            if len(prefix) >= 4:
                 return True
 
     # Check philosophical prefix compounds (e.g. Lebenswelt, Seinsstruktur)
     if _PHILOSOPHICAL_PREFIX_RE.match(word_lower):
         return True
 
-    # Check standard linking elements (e.g. Wirklichkeits-, Bewusstseins-)
-    if _STANDARD_LINKING_RE.match(word_lower):
-        return True
+    # Reject standard adjectival/adverbial derivational suffixes (e.g. menschlich, wesentlich)
+    if _COMMON_DERIVATIONAL_SUFFIXES_RE.match(word_lower):
+        return False
 
-    # Fallback to compiled compound patterns
-    return any(pattern.search(word_lower) for pattern in _COMPOUND_PATTERNS)
+    # Check standard linking elements (e.g. Handlungsstruktur, Wissensbereich)
+    return bool(_STANDARD_LINKING_RE.match(word_lower))
 
 
 DEFAULT_SUPPORTED_LANGUAGES = (
