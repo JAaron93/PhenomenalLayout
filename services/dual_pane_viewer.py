@@ -110,81 +110,64 @@ class DualPaneViewerController:
                 f"Page number {page_number} is out of bounds (must be >= 1)"
             )
 
-        de_stream, de_close = self._open_source(german_source, "German")
-        en_stream, en_close = self._open_source(english_source, "English")
+        from utils.pdf_stream import open_pdf_stream
 
         try:
-            if hasattr(de_stream, "seek"):
-                with contextlib.suppress(Exception):
-                    de_stream.seek(0)
-            if hasattr(en_stream, "seek"):
-                with contextlib.suppress(Exception):
-                    en_stream.seek(0)
+            with (
+                open_pdf_stream(german_source, "German") as (de_stream, _),
+                open_pdf_stream(english_source, "English") as (en_stream, _),
+            ):
+                try:
+                    reader_de = pypdf.PdfReader(de_stream)
+                    total_de = len(reader_de.pages)
+                except Exception as exc:
+                    raise ValueError(f"Failed to parse German PDF: {exc}") from exc
 
-            try:
-                reader_de = pypdf.PdfReader(de_stream)
-                total_de = len(reader_de.pages)
-            except Exception as exc:
-                raise ValueError(f"Failed to parse German PDF: {exc}") from exc
+                try:
+                    reader_en = pypdf.PdfReader(en_stream)
+                    total_en = len(reader_en.pages)
+                except Exception as exc:
+                    raise ValueError(f"Failed to parse English PDF: {exc}") from exc
 
-            try:
-                reader_en = pypdf.PdfReader(en_stream)
-                total_en = len(reader_en.pages)
-            except Exception as exc:
-                raise ValueError(f"Failed to parse English PDF: {exc}") from exc
+                if page_number > total_de:
+                    raise ValueError(
+                        f"Page number {page_number} exceeds total pages in German PDF ({total_de})"
+                    )
+                if page_number > total_en:
+                    raise ValueError(
+                        f"Page number {page_number} exceeds total pages in English PDF ({total_en})"
+                    )
 
-            if hasattr(de_stream, "seek"):
-                with contextlib.suppress(Exception):
-                    de_stream.seek(0)
-            if hasattr(en_stream, "seek"):
-                with contextlib.suppress(Exception):
-                    en_stream.seek(0)
+                page_idx = page_number - 1
+                german_text = reader_de.pages[page_idx].extract_text() or ""
+                english_text = reader_en.pages[page_idx].extract_text() or ""
 
-            if page_number > total_de:
-                raise ValueError(
-                    f"Page number {page_number} exceeds total pages in German PDF ({total_de})"
+                de_img_b64: str | None = None
+                en_img_b64: str | None = None
+                has_images = False
+
+                if render_images:
+                    resolution = dpi or self._default_dpi
+                    de_img_b64 = self._render_page_image(
+                        de_stream, page_number, resolution
+                    )
+                    en_img_b64 = self._render_page_image(
+                        en_stream, page_number, resolution
+                    )
+                    has_images = de_img_b64 is not None and en_img_b64 is not None
+
+                return BilingualPagePair(
+                    page_number=page_number,
+                    total_pages_german=total_de,
+                    total_pages_english=total_en,
+                    german_text=german_text.strip(),
+                    english_text=english_text.strip(),
+                    german_page_image_base64=de_img_b64,
+                    english_page_image_base64=en_img_b64,
+                    has_images=has_images,
                 )
-            if page_number > total_en:
-                raise ValueError(
-                    f"Page number {page_number} exceeds total pages in English PDF ({total_en})"
-                )
-
-            page_idx = page_number - 1
-            german_text = reader_de.pages[page_idx].extract_text() or ""
-            english_text = reader_en.pages[page_idx].extract_text() or ""
-
-            de_img_b64: str | None = None
-            en_img_b64: str | None = None
-            has_images = False
-
-            if render_images:
-                resolution = dpi or self._default_dpi
-                de_img_b64 = self._render_page_image(
-                    german_source, page_number, resolution
-                )
-                en_img_b64 = self._render_page_image(
-                    english_source, page_number, resolution
-                )
-                has_images = de_img_b64 is not None and en_img_b64 is not None
-
-            return BilingualPagePair(
-                page_number=page_number,
-                total_pages_german=total_de,
-                total_pages_english=total_en,
-                german_text=german_text.strip(),
-                english_text=english_text.strip(),
-                german_page_image_base64=de_img_b64,
-                english_page_image_base64=en_img_b64,
-                has_images=has_images,
-            )
-
-        finally:
-            if de_close:
-                with contextlib.suppress(Exception):
-                    de_stream.close()
-            if en_close:
-                with contextlib.suppress(Exception):
-                    en_stream.close()
+        except FileNotFoundError as exc:
+            raise ValueError(str(exc)) from exc
 
     def search_term_across_panes(
         self,
@@ -248,82 +231,80 @@ class DualPaneViewerController:
         if not term.strip():
             return matches
 
-        stream, should_close = self._open_source(source, doc_label)
+        from utils.pdf_stream import open_pdf_stream
+
         try:
-            reader = pypdf.PdfReader(stream)
-            total_pages = len(reader.pages)
-            if not (1 <= page_number <= total_pages):
+            with open_pdf_stream(source, doc_label) as (stream, _):
+                reader = pypdf.PdfReader(stream)
+                total_pages = len(reader.pages)
+                if not (1 <= page_number <= total_pages):
+                    return matches
+
+                page = reader.pages[page_number - 1]
+                page_height = float(page.mediabox.height)
+
+                extracted_fragments: list[dict[str, Any]] = []
+
+                def visitor_body(
+                    text: str, _cm: Any, tm: Any, _font_dict: Any, font_size: float
+                ) -> None:
+                    if text and text.strip():
+                        x = float(tm[4]) if tm is not None and len(tm) > 4 else 50.0
+                        y = float(tm[5]) if tm is not None and len(tm) > 5 else 700.0
+                        extracted_fragments.append(
+                            {
+                                "text": text,
+                                "x": x,
+                                "y": y,
+                                "font_size": float(font_size) if font_size else 12.0,
+                            }
+                        )
+
+                with contextlib.suppress(Exception):
+                    page.extract_text(visitor_text=visitor_body)
+
+                flags = 0 if case_sensitive else re.IGNORECASE
+                pattern = re.compile(re.escape(term), flags)
+
+                # Check fragments first
+                for frag in extracted_fragments:
+                    if pattern.search(frag["text"]):
+                        char_width = frag["font_size"] * 0.5
+                        width = len(term) * char_width
+                        matches.append(
+                            TextBoundingBox(
+                                text=term,
+                                x=frag["x"],
+                                y=frag["y"],
+                                width=width,
+                                height=frag["font_size"] * 1.2,
+                                page_number=page_number,
+                            )
+                        )
+
+                # If fragment visitor yielded no matches, search whole page text as fallback
+                if not matches:
+                    full_text = page.extract_text() or ""
+                    for _match in pattern.finditer(full_text):
+                        # Default estimated coordinate centered on page
+                        matches.append(
+                            TextBoundingBox(
+                                text=term,
+                                x=50.0,
+                                y=page_height * 0.5,
+                                width=100.0,
+                                height=14.0,
+                                page_number=page_number,
+                            )
+                        )
+
                 return matches
-
-            page = reader.pages[page_number - 1]
-            page_height = float(page.mediabox.height)
-
-            extracted_fragments: list[dict[str, Any]] = []
-
-            def visitor_body(
-                text: str, _cm: Any, tm: Any, _font_dict: Any, font_size: float
-            ) -> None:
-                if text and text.strip():
-                    x = float(tm[4]) if tm is not None and len(tm) > 4 else 50.0
-                    y = float(tm[5]) if tm is not None and len(tm) > 5 else 700.0
-                    extracted_fragments.append(
-                        {
-                            "text": text,
-                            "x": x,
-                            "y": y,
-                            "font_size": float(font_size) if font_size else 12.0,
-                        }
-                    )
-
-            with contextlib.suppress(Exception):
-                page.extract_text(visitor_text=visitor_body)
-
-            flags = 0 if case_sensitive else re.IGNORECASE
-            pattern = re.compile(re.escape(term), flags)
-
-            # Check fragments first
-            for frag in extracted_fragments:
-                if pattern.search(frag["text"]):
-                    char_width = frag["font_size"] * 0.5
-                    width = len(term) * char_width
-                    matches.append(
-                        TextBoundingBox(
-                            text=term,
-                            x=frag["x"],
-                            y=frag["y"],
-                            width=width,
-                            height=frag["font_size"] * 1.2,
-                            page_number=page_number,
-                        )
-                    )
-
-            # If fragment visitor yielded no matches, search whole page text as fallback
-            if not matches:
-                full_text = page.extract_text() or ""
-                for _match in pattern.finditer(full_text):
-                    # Default estimated coordinate centered on page
-                    matches.append(
-                        TextBoundingBox(
-                            text=term,
-                            x=50.0,
-                            y=page_height * 0.5,
-                            width=100.0,
-                            height=14.0,
-                            page_number=page_number,
-                        )
-                    )
-
-            return matches
 
         except Exception as exc:
             logger.warning(
                 "Error searching term on %s page %d: %s", doc_label, page_number, exc
             )
             return matches
-        finally:
-            if should_close:
-                with contextlib.suppress(Exception):
-                    stream.close()
 
     def _render_page_image(
         self,
@@ -335,8 +316,9 @@ class DualPaneViewerController:
         try:
             import pdf2image
 
-            stream, should_close = self._open_source(source, "Raster")
-            try:
+            from utils.pdf_stream import open_pdf_stream
+
+            with open_pdf_stream(source, "Raster") as (stream, _):
                 if hasattr(stream, "seek"):
                     with contextlib.suppress(Exception):
                         stream.seek(0)
@@ -346,10 +328,6 @@ class DualPaneViewerController:
                 if hasattr(stream, "seek"):
                     with contextlib.suppress(Exception):
                         stream.seek(0)
-            finally:
-                if should_close:
-                    with contextlib.suppress(Exception):
-                        stream.close()
 
             images = pdf2image.convert_from_bytes(
                 data_bytes,
@@ -380,7 +358,11 @@ class DualPaneViewerController:
         source: Path | str | bytes | BinaryIO,
         label: str = "PDF",
     ) -> tuple[BinaryIO, bool]:
-        """Normalize input into an open binary stream with closure flag."""
+        """Normalize input into an open binary stream with closure flag.
+
+        Deprecated backward-compatibility shim. Callers should migrate to
+        :func:`utils.pdf_stream.open_pdf_stream` context manager.
+        """
         if isinstance(source, (str, Path)):
             p = Path(source)
             if not p.exists():

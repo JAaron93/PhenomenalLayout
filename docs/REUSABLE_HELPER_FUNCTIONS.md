@@ -85,12 +85,13 @@ This reference document catalogs all centralized, reusable helper functions acro
 ### 3.1 `open_pdf_stream`
 * **Location**: [`utils/pdf_stream.py`](../utils/pdf_stream.py)
 * **Signature**: `@contextmanager open_pdf_stream(source: Path | str | bytes | BinaryIO, label: str = "PDF") -> Iterator[tuple[BinaryIO, float]]`
-* **Purpose**: Universal input normalizer and file descriptor manager. Converts file paths, raw byte payloads, or open binary streams into a readable binary stream and accurate file size in MB.
+* **Purpose**: Universal input normalizer and file descriptor manager. Converts file paths, raw byte payloads, seekable binary streams, or non-seekable streams into a readable binary stream and accurate file size in MB.
 * **Guarantees**:
   - **Deterministic Cleanup**: Files opened internally are deterministically closed on context exit, preventing file descriptor leaks in serverless runtimes (AGENTS.md §2.10).
   - **Automatic Rewind**: Existing seekable streams are rewound to position 0 and left open for external caller reuse.
+  - **Non-Seekable Stream Resilience**: Gracefully catches `(AttributeError, OSError)` on non-seekable streams (e.g. HTTP responses, GCS `BlobReader`), buffering the payload to `io.BytesIO` and setting `should_close = True` for automatic cleanup.
   - **Zero Buffering for Paths**: Measures disk size via `os.path.getsize(path)` without reading entire files into memory.
-* **Complexity**: Time: $O(1)$, Space: $O(1)$ memory.
+* **Complexity**: Time: $O(1)$, Space: $O(1)$ memory for file paths and seekable streams; $O(M)$ buffer for non-seekable streams.
 * **Canonical Usage**:
   ```python
   from utils.pdf_stream import open_pdf_stream
@@ -99,6 +100,15 @@ This reference document catalogs all centralized, reusable helper functions acro
       reader = pypdf.PdfReader(stream)
       page_count = len(reader.pages)
   ```
+
+### 3.2 Service Stream Normalization & Backward Compatibility Shims
+All domain services consuming PDF documents have been normalized to route through `open_pdf_stream`:
+* `services/cost_estimator.py`: `GCPCostEstimator.estimate_book_cost`
+* `services/fraktur_classifier.py`: `FrakturClassifier.classify_script`
+* `services/fallback_translator.py`: `FallbackPageTranslator.extract_failed_pages_text`, `synthesize_repaired_document`
+* `services/dual_pane_viewer.py`: `DualPaneViewerController.get_bilingual_page_pair`, `_find_term_boxes_on_page`, `_render_page_image`
+
+Each service retains `_open_source` as a deprecated delegating shim to preserve backward-compatibility with legacy unit tests and third-party callers.
 
 ---
 
@@ -144,3 +154,25 @@ This reference document catalogs all centralized, reusable helper functions acro
 * **Optimization**: Decorated with `@functools.lru_cache(maxsize=4)`.
 * **Purpose**: Prevents repeatedly unpacking 65 KB TrueType binary tables (`head`, `hhea`, `hmtx`, `cmap` format 4 & 12) for each failed layout page.
 * **Complexity**: First call: $O(\text{TTF\_size})$. Subsequent calls: $O(1)$ memory lookup, amortizing table parsing across all pages.
+
+---
+
+## 8. Fraktur Typography & Script Analysis Optimization (`services/fraktur_classifier.py`)
+
+### 8.1 `_FRAKTUR_FONT_RE` & Allocation-Free Ligature Counting
+* **Location**: [`services/fraktur_classifier.py`](../services/fraktur_classifier.py)
+* **Optimizations**:
+  1. **Pre-compiled Regex**:
+     ```python
+     _FRAKTUR_FONT_RE = re.compile(r"(?i)(" + "|".join(_FRAKTUR_FONT_KEYWORDS) + ")")
+     ```
+     Eliminates nested iteration and string lowercasing loops over page font descriptors.
+  2. **Allocation-Free Ligature Counts**: Replaced `len(pattern.findall(text))` with direct string `.count()` calls:
+     - `text.count("ſ")`
+     - `text.count("ſch")`
+     - `text.count("ſt") + text.count("ﬅ")`
+     - `text.count("tz")`
+     - `text.count("ck")`
+     - `text.count("ch")`
+     - `text.count("ﬆ")`
+* **Complexity**: Reduced per-page ligature extraction from $O(\text{patterns} \times \text{matches})$ heap allocations to $O(1)$ allocations and $O(\text{text\_length})$ runtime.

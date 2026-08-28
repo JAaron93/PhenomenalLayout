@@ -407,3 +407,85 @@ class TestDualPaneViewerCoverageBranches:
         missing = tmp_path / "missing.pdf"
         with pytest.raises(ValueError, match="file not found"):
             viewer._open_source(missing)
+
+    def test_get_bilingual_page_pair_with_file_paths(
+        self,
+        viewer: DualPaneViewerController,
+        german_pdf_bytes: bytes,
+        english_pdf_bytes: bytes,
+        tmp_path: Path,
+    ) -> None:
+        de_path = tmp_path / "german.pdf"
+        en_path = tmp_path / "english.pdf"
+        de_path.write_bytes(german_pdf_bytes)
+        en_path.write_bytes(english_pdf_bytes)
+
+        pair = viewer.get_bilingual_page_pair(
+            german_source=de_path,
+            english_source=en_path,
+            page_number=1,
+            render_images=False,
+        )
+        assert pair.total_pages_german == 2
+        assert pair.total_pages_english == 2
+        assert "Schauung" in pair.german_text
+        assert "Intuitive Vision" in pair.english_text
+
+    def test_search_term_across_panes_with_file_paths(
+        self,
+        viewer: DualPaneViewerController,
+        german_pdf_bytes: bytes,
+        english_pdf_bytes: bytes,
+        tmp_path: Path,
+    ) -> None:
+        de_path = tmp_path / "german.pdf"
+        en_path = tmp_path / "english.pdf"
+        de_path.write_bytes(german_pdf_bytes)
+        en_path.write_bytes(english_pdf_bytes)
+
+        coords = viewer.search_term_across_panes(
+            german_source=de_path,
+            english_source=en_path,
+            german_term="Schauung",
+            english_term="Intuitive Vision",
+            page_number=1,
+        )
+        assert coords.page_number == 1
+        assert len(coords.german_matches) > 0
+        assert len(coords.english_matches) > 0
+
+    def test_non_seekable_stream_with_image_rendering(
+        self,
+        viewer: DualPaneViewerController,
+        german_pdf_bytes: bytes,
+        english_pdf_bytes: bytes,
+    ) -> None:
+        """Verify non-seekable streams are not drained before raster image rendering."""
+        class NonSeekableStream(io.BytesIO):
+            def seek(self, _offset: int, _whence: int = 0) -> int:
+                raise OSError("Stream not seekable")
+
+        de_stream = NonSeekableStream(german_pdf_bytes)
+        en_stream = NonSeekableStream(english_pdf_bytes)
+
+        mock_img = MagicMock()
+        mock_img.save.side_effect = (
+            lambda buf, _format=None, **_kwargs: buf.write(b"fake-png-bytes")
+        )
+
+        with patch("pdf2image.convert_from_bytes", return_value=[mock_img]) as mock_convert:
+            pair = viewer.get_bilingual_page_pair(
+                german_source=de_stream,
+                english_source=en_stream,
+                page_number=1,
+                render_images=True,
+            )
+            assert pair.has_images is True
+            assert pair.german_page_image_base64 is not None
+            assert pair.english_page_image_base64 is not None
+            # Both calls must receive non-empty byte payloads
+            assert len(mock_convert.call_args_list) == 2
+            assert len(mock_convert.call_args_list[0][0][0]) > 0
+            assert len(mock_convert.call_args_list[1][0][0]) > 0
+
+

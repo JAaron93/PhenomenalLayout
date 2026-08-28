@@ -78,6 +78,8 @@ _FRAKTUR_FONT_KEYWORDS: tuple[str, ...] = (
     "gebrochene",
 )
 
+_FRAKTUR_FONT_RE = re.compile(r"(?i)(" + "|".join(_FRAKTUR_FONT_KEYWORDS) + ")")
+
 _LONG_S_PATTERN = re.compile(r"ſ")
 _FRAKTUR_LIGATURE_PATTERNS: dict[str, re.Pattern[str]] = {
     "long_s": _LONG_S_PATTERN,
@@ -132,132 +134,148 @@ class FrakturClassifier:
         Raises:
             ValueError: If the PDF stream cannot be parsed.
         """
-        stream, should_close = self._open_source(source)
         try:
-            reader = pypdf.PdfReader(stream)
-            total_pages = len(reader.pages)
-            if total_pages == 0:
-                raise ValueError("Failed to parse PDF: empty document with 0 pages")
+            from utils.pdf_stream import open_pdf_stream
 
-            pages_to_scan = (
-                total_pages
-                if max_pages is None
-                else min(total_pages, max(1, max_pages))
-            )
+            with open_pdf_stream(source) as (stream, _):
+                reader = pypdf.PdfReader(stream)
+                total_pages = len(reader.pages)
+                if total_pages == 0:
+                    raise ValueError("Failed to parse PDF: empty document with 0 pages")
 
-            total_chars = 0
-            total_s_count = 0
-            ligature_counts: dict[str, int] = dict.fromkeys(
-                _FRAKTUR_LIGATURE_PATTERNS, 0
-            )
-            font_descriptors: set[str] = set()
-
-            fraktur_pages_count = 0
-            antiqua_pages_count = 0
-
-            for page_idx in range(pages_to_scan):
-                page = reader.pages[page_idx]
-
-                # Extract fonts
-                page_fonts: set[str] = set()
-                self._extract_page_fonts(page, page_fonts)
-                font_descriptors.update(page_fonts)
-
-                page_has_fraktur_font = any(
-                    any(kw in font.lower() for kw in _FRAKTUR_FONT_KEYWORDS)
-                    for font in page_fonts
+                pages_to_scan = (
+                    total_pages
+                    if max_pages is None
+                    else min(total_pages, max(1, max_pages))
                 )
 
-                # Extract and analyze text
-                text = page.extract_text() or ""
-                page_chars = len(text)
-                total_chars += page_chars
-                s_count = text.lower().count("s") + text.count("ſ")
-                total_s_count += s_count
+                total_chars = 0
+                total_s_count = 0
+                ligature_counts: dict[str, int] = {
+                    "long_s": 0,
+                    "long_s_ch": 0,
+                    "long_s_t": 0,
+                    "tz": 0,
+                    "ck": 0,
+                    "ch": 0,
+                    "st_ligature": 0,
+                }
+                font_descriptors: set[str] = set()
 
-                page_ligatures: dict[str, int] = {}
-                for name, pattern in _FRAKTUR_LIGATURE_PATTERNS.items():
-                    cnt = len(pattern.findall(text))
-                    ligature_counts[name] += cnt
-                    page_ligatures[name] = cnt
+                fraktur_pages_count = 0
+                antiqua_pages_count = 0
 
-                page_long_s = page_ligatures.get("long_s", 0)
-                page_long_s_ratio = page_long_s / s_count if s_count > 0 else 0.0
+                for page_idx in range(pages_to_scan):
+                    page = reader.pages[page_idx]
 
-                if (
-                    page_has_fraktur_font
-                    or page_long_s_ratio >= 0.15
-                    or page_long_s >= 2
+                    # Extract fonts
+                    page_fonts: set[str] = set()
+                    self._extract_page_fonts(page, page_fonts)
+                    font_descriptors.update(page_fonts)
+
+                    page_has_fraktur_font = any(
+                        _FRAKTUR_FONT_RE.search(font) for font in page_fonts
+                    )
+
+                    # Extract and analyze text
+                    text = page.extract_text() or ""
+                    page_chars = len(text)
+                    total_chars += page_chars
+                    s_count = text.lower().count("s") + text.count("ſ")
+                    total_s_count += s_count
+
+                    # Allocation-free O(1) ligature counts using string.count()
+                    cnt_long_s = text.count("ſ")
+                    cnt_long_s_ch = text.count("ſch")
+                    cnt_long_s_t = text.count("ſt") + text.count("ﬅ")
+                    cnt_tz = text.count("tz")
+                    cnt_ck = text.count("ck")
+                    cnt_ch = text.count("ch")
+                    cnt_st_lig = text.count("ﬆ")
+
+                    ligature_counts["long_s"] += cnt_long_s
+                    ligature_counts["long_s_ch"] += cnt_long_s_ch
+                    ligature_counts["long_s_t"] += cnt_long_s_t
+                    ligature_counts["tz"] += cnt_tz
+                    ligature_counts["ck"] += cnt_ck
+                    ligature_counts["ch"] += cnt_ch
+                    ligature_counts["st_ligature"] += cnt_st_lig
+
+                    page_long_s_ratio = cnt_long_s / s_count if s_count > 0 else 0.0
+
+                    if (
+                        page_has_fraktur_font
+                        or page_long_s_ratio >= 0.15
+                        or cnt_long_s >= 2
+                    ):
+                        fraktur_pages_count += 1
+                    elif page_chars > 0:
+                        antiqua_pages_count += 1
+
+                long_s_count = ligature_counts["long_s"]
+                fraktur_font_detected = any(
+                    _FRAKTUR_FONT_RE.search(font) for font in font_descriptors
+                )
+
+                # Fraktur ratio based on historical ligature prevalence and long-s proportion
+                long_s_ratio = long_s_count / total_s_count if total_s_count > 0 else 0.0
+
+                fraktur_features_count = (
+                    long_s_count
+                    + ligature_counts.get("long_s_ch", 0)
+                    + ligature_counts.get("long_s_t", 0)
+                )
+
+                if total_chars > 0:
+                    char_feature_ratio = (fraktur_features_count * 10) / total_chars
+                else:
+                    char_feature_ratio = 0.0
+
+                combined_fraktur_ratio = max(long_s_ratio, min(1.0, char_feature_ratio))
+                if fraktur_font_detected:
+                    combined_fraktur_ratio = max(combined_fraktur_ratio, 0.40)
+
+                # Script family classification
+                if fraktur_pages_count > 0 and antiqua_pages_count > 0:
+                    script_type = ScriptType.HYBRID
+                    ocr_confidence_score = round(
+                        max(0.75, min(0.89, 0.85 - combined_fraktur_ratio * 0.1)), 2
+                    )
+                    recommended_action = "Preview 2 sample pages before full batch"
+                elif (
+                    fraktur_pages_count > 0
+                    or combined_fraktur_ratio >= 0.25
+                    or fraktur_font_detected
                 ):
-                    fraktur_pages_count += 1
-                elif page_chars > 0:
-                    antiqua_pages_count += 1
+                    script_type = ScriptType.FRAKTUR
+                    # BDD FR-11.1 calibration: Historical Fraktur scan confidence ~0.88
+                    ocr_confidence_score = round(
+                        max(0.70, min(0.92, 0.88 - (combined_fraktur_ratio - 0.3) * 0.1)), 2
+                    )
+                    recommended_action = "Preview 2 sample pages before full batch"
+                else:
+                    script_type = ScriptType.ANTIQUA
+                    ocr_confidence_score = 0.98 if total_chars > 0 else 0.95
+                    recommended_action = "Direct batch translation"
 
-            long_s_count = ligature_counts.get("long_s", 0)
-            fraktur_font_detected = any(
-                any(kw in font.lower() for kw in _FRAKTUR_FONT_KEYWORDS)
-                for font in font_descriptors
-            )
-
-            # Fraktur ratio based on historical ligature prevalence and long-s proportion
-            long_s_ratio = long_s_count / total_s_count if total_s_count > 0 else 0.0
-
-            fraktur_features_count = (
-                long_s_count
-                + ligature_counts.get("long_s_ch", 0)
-                + ligature_counts.get("long_s_t", 0)
-            )
-
-            if total_chars > 0:
-                char_feature_ratio = (fraktur_features_count * 10) / total_chars
-            else:
-                char_feature_ratio = 0.0
-
-            combined_fraktur_ratio = max(long_s_ratio, min(1.0, char_feature_ratio))
-            if fraktur_font_detected:
-                combined_fraktur_ratio = max(combined_fraktur_ratio, 0.40)
-
-            # Script family classification
-            if fraktur_pages_count > 0 and antiqua_pages_count > 0:
-                script_type = ScriptType.HYBRID
-                ocr_confidence_score = round(
-                    max(0.75, min(0.89, 0.85 - combined_fraktur_ratio * 0.1)), 2
+                return ScriptAnalysisResult(
+                    script_type=script_type,
+                    ocr_confidence_score=ocr_confidence_score,
+                    ligature_counts=ligature_counts,
+                    font_descriptors=sorted(font_descriptors),
+                    recommended_action=recommended_action,
+                    total_pages_analyzed=pages_to_scan,
+                    fraktur_ratio=round(combined_fraktur_ratio, 4),
                 )
-                recommended_action = "Preview 2 sample pages before full batch"
-            elif (
-                fraktur_pages_count > 0
-                or combined_fraktur_ratio >= 0.25
-                or fraktur_font_detected
-            ):
-                script_type = ScriptType.FRAKTUR
-                # BDD FR-11.1 calibration: Historical Fraktur scan confidence ~0.88
-                ocr_confidence_score = round(
-                    max(0.70, min(0.92, 0.88 - (combined_fraktur_ratio - 0.3) * 0.1)), 2
-                )
-                recommended_action = "Preview 2 sample pages before full batch"
-            else:
-                script_type = ScriptType.ANTIQUA
-                ocr_confidence_score = 0.98 if total_chars > 0 else 0.95
-                recommended_action = "Direct batch translation"
 
-            return ScriptAnalysisResult(
-                script_type=script_type,
-                ocr_confidence_score=ocr_confidence_score,
-                ligature_counts=ligature_counts,
-                font_descriptors=sorted(font_descriptors),
-                recommended_action=recommended_action,
-                total_pages_analyzed=pages_to_scan,
-                fraktur_ratio=round(combined_fraktur_ratio, 4),
-            )
-
+        except FileNotFoundError as exc:
+            raise ValueError(f"File not found: {source}") from exc
+        except TypeError as exc:
+            raise TypeError(f"Unsupported source type: {type(source)}") from exc
         except Exception as exc:
             if isinstance(exc, ValueError) and "Failed to parse PDF" in str(exc):
                 raise
             raise ValueError(f"Failed to parse PDF: {exc}") from exc
-        finally:
-            if should_close:
-                with contextlib.suppress(Exception):
-                    stream.close()
 
     def get_ocr_confidence_rating(
         self,
@@ -291,7 +309,11 @@ class FrakturClassifier:
     def _open_source(
         source: Path | str | bytes | BinaryIO,
     ) -> tuple[BinaryIO, bool]:
-        """Normalize input into an open binary stream with closure flag."""
+        """Normalize input into an open binary stream with closure flag.
+
+        Deprecated backward-compatibility shim. Callers should migrate to
+        :func:`utils.pdf_stream.open_pdf_stream` context manager.
+        """
         if isinstance(source, (str, Path)):
             p = Path(source)
             if not p.exists():

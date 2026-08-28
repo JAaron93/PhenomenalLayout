@@ -169,7 +169,7 @@ The plan is organized into five **Execution Tracks**:
   - `GCPCostEstimator.estimate_book_cost` uses `open_pdf_stream(source)`.
   - Preserves `_open_source` as a delegating backward-compatibility shim.
   - Tests in `tests/test_cost_estimator.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 3.2: Refactor and Optimize `services/fraktur_classifier.py` [FR-04, FR-06]
 * **Dependencies**: Task 1.3.
@@ -179,7 +179,7 @@ The plan is organized into five **Execution Tracks**:
   - Replaces nested keyword loops with `_FRAKTUR_FONT_RE = re.compile(r"(?i)(" + "|".join(_FRAKTUR_FONT_KEYWORDS) + ")")`.
   - Ligature counting replaces `len(pattern.findall(text))` with string `.count("ſ")`, `.count("ﬆ")`, etc., reducing allocations to $O(1)$.
   - Tests in `tests/test_fraktur_classifier.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 3.3: Refactor and Memoize `services/fallback_translator.py` [FR-04, FR-05]
 * **Dependencies**: Task 1.3.
@@ -189,7 +189,7 @@ The plan is organized into five **Execution Tracks**:
   - `_parse_ttf_metrics_and_cmap` is decorated with `@functools.lru_cache(maxsize=4)`.
   - Successive fallback pages reuse pre-parsed glyph metrics and cmap dictionaries in $O(1)$ time.
   - Tests in `tests/test_fallback_translator.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 3.4: Refactor `services/dual_pane_viewer.py` to use `utils/pdf_stream.py` [FR-04]
 * **Dependencies**: Task 1.3.
@@ -198,7 +198,7 @@ The plan is organized into five **Execution Tracks**:
   - `DualPaneViewerController` uses `open_pdf_stream` in `_find_term_boxes_on_page` and `_render_page_image`.
   - Preserves `_open_source` as a delegating backward-compatibility shim.
   - Tests in `tests/test_dual_pane_viewer.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 ---
 

@@ -65,6 +65,7 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 
 ### 2.10 Zero Resource Leakage & Descriptor Safety
 * **Deterministic File Handle Cleanup**: Any service accepting `Path | bytes | BinaryIO` for offline processing (e.g. `GCPCostEstimator`) MUST deterministically close internally opened file descriptors using `try...finally` blocks or context managers, preventing file descriptor exhaustion in serverless environments.
+* **Non-Seekable Stream Multi-Pass Isolation**: When performing multi-pass operations (e.g., text extraction followed by raster image generation in `DualPaneViewerController`), services MUST NOT pass an original non-seekable source into multiple independent stream consumers. Instead, pass the already-normalized seekable `BinaryIO` yielded by the outer `open_pdf_stream` context manager and ensure stream position rewinding (`seek(0)`) before and after sub-operations.
 * **Package Export Symmetry**: All optional or conditional services recorded in internal availability registries MUST explicitly define and export their corresponding boolean availability flag (e.g., `GCP_BATCH_SERVICES_AVAILABLE`) in the top-level package `__all__`.
 
 ### 2.11 Zero-Downtime Blue-Green Glossary & Quota Bounding Invariants

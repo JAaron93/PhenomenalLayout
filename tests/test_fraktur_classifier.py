@@ -227,3 +227,36 @@ class TestEdgeCasesAndDescriptorSafety:
         # Passing file path should open and close without leaking file descriptors
         result = classifier.classify_script(file_path)
         assert result.total_pages_analyzed == 2
+
+
+class TestFrakturOptimizations:
+    """Test suite for Track 3 Fraktur classifier optimizations [FR-06]."""
+
+    def test_fraktur_font_regex_compilation(self) -> None:
+        from services.fraktur_classifier import _FRAKTUR_FONT_RE
+
+        assert _FRAKTUR_FONT_RE.search("Walbaum-Fraktur") is not None
+        assert _FRAKTUR_FONT_RE.search("schwabacher-bold") is not None
+        assert _FRAKTUR_FONT_RE.search("Gotisch") is not None
+        assert _FRAKTUR_FONT_RE.search("GothicText") is not None
+        assert _FRAKTUR_FONT_RE.search("Blackletter-Normal") is not None
+        assert _FRAKTUR_FONT_RE.search("FetteFraktur") is not None
+        assert _FRAKTUR_FONT_RE.search("Helvetica") is None
+        assert _FRAKTUR_FONT_RE.search("TimesNewRoman") is None
+
+    def test_ligature_counting_fast_path(
+        self, classifier: FrakturClassifier, sample_pdf_bytes: bytes
+    ) -> None:
+        text_sample = "Weſen des Geiſtes mit ſch, tz, ck, ſt und ﬆ und ﬅ"
+        with patch("pypdf.PageObject.extract_text", return_value=text_sample):
+            res = classifier.classify_script(sample_pdf_bytes, max_pages=1)
+
+        counts = res.ligature_counts
+        assert counts["long_s"] == 4
+        assert counts["long_s_ch"] == 1
+        assert counts["long_s_t"] == 3  # Geiſtes (ſt), ſt, and ﬅ
+        assert counts["tz"] == 1
+        assert counts["ck"] == 1
+        assert counts["ch"] == 1
+        assert counts["st_ligature"] == 1  # ﬆ
+
