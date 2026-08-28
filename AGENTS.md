@@ -98,6 +98,11 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
   6. **Crash-Safe File Persistence**: Use `utils.file_handler.atomic_write_json`, `atomic_write_text`, or `atomic_write_bytes` to stage writes via `.tmp` and `os.replace`.
 * **Backward-Compatibility Shims**: When deprecating inlined service helpers, retain delegating shims where required to preserve existing public method interfaces.
 
+### 2.14 German Morphological Compound & Derivational Suffix Invariants
+* **Strict Derivational Adjective Exclusion**: When identifying German compound nouns (`is_german_compound_word`), detection algorithms MUST explicitly reject single derived words ending in adjectival/adverbial derivational suffixes (`-lich`, `-isch`, `-haft`, `-ig`, `-bar`, `-los`) and their inflectional/superlative paradigms (`-e`, `-er`, `-en`, `-es`, `-em`, `-st`, `-ste`, `-stem`, `-sten`, `-ster`, `-stes`).
+* **No False Linking Morpheme Matching**: Derivational suffixes (e.g., `menschlich`, `körperlicher`, `wesentliche`, `natürlichen`) MUST NOT be classified as compound nouns by generic linking regexes (`Fugenelemente` such as `s`, `en`, `er`). Suffix-based filtering MUST precede linking element heuristics.
+* **Pre-compiled Module-Level Expressions**: All linguistic regex patterns (`_PHILOSOPHICAL_PREFIX_RE`, `_STANDARD_LINKING_RE`, `_COMMON_DERIVATIONAL_SUFFIXES_RE`) MUST be compiled at the module level to eliminate per-call regex compilation overhead on high-throughput candidate streams.
+
 ---
 
 ## 3. Modal Labs Serverless Deployment Architecture
@@ -154,3 +159,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 * **Safe Dynamic Reloading**: In tests that dynamically reload environment-dependent submodules via `importlib.reload(mod)`, always synchronize `sys.modules[mod.__name__] = mod` prior to calling `importlib.reload` to prevent Python 3.13 `sys.modules` identity desynchronization.
 * **Usefixtures for Side-Effect Fixtures**: Test functions that require an environment setup fixture solely for setup/teardown side effects MUST use `@pytest.mark.usefixtures("<fixture_name>")` instead of unpacking unused arguments, preventing `ARG001`, `RUF059`, and `N806` linter violations.
 * **Dead Documentation Pruning**: When completing dead code cleanups, all intermediate audit reports (`unused_code_report.md`, `reports/dead_code_*.md`) that have been addressed MUST be pruned to prevent documentation drift.
+
+### 6.3 Parallel Test Suite Execution & Inner-Loop Hygiene
+* **Multi-Core Test Parallelization**: When running the full repository test suite (700+ tests), agents MUST leverage multi-core parallelism using `pytest -n auto` (or `-n <CPU_COUNT>`) via `pytest-xdist` to avoid multi-minute serial test timeouts and latency.
+* **Inner-Loop Targeted Runs**: During rapid TDD red-green cycles, run targeted test files with `--no-cov` to verify individual behaviors quickly (< 1s) before triggering full multi-module coverage runs (`--cov=services --cov=utils --cov=models`).
