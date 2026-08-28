@@ -107,13 +107,15 @@ flowchart TD
    - 1-click export to user's Google Drive via client-side Google Identity Services (GIS) OAuth (`drive.file` scope)
    - Direct multipart streaming upload via `MediaIoBaseUpload` with zero temporary host files
 
-6. **Neologism Detection Engine** (`services/neologism_detector.py`)
-   - Morphological compound analysis and decomposition
+6. **Neologism Detection Engine** (`services/neologism_detector.py`, `utils/language_utils.py`)
+   - Canonical `is_german_compound_word` with precompiled regexes and inflected derivational suffix filtering (`utils/language_utils.py`)
+   - Unified morphological compound analysis and decomposition across `ConfidenceScorer`, `MorphologicalAnalyzer`, and `NeologismDetector`
    - Philosophical context analyzer & confidence scoring
    - Built-in domain dictionaries (`config/klages_terminology.json`)
 
-7. **User Choice & Disambiguation Manager** (`core/dynamic_choice_engine.py`, `services/user_choice_manager.py`)
+7. **User Choice & Disambiguation Manager** (`models/user_choice_models.py`, `services/user_choice_manager.py`)
    - Interactive review for coined philosophical terms
+   - High-performance term-bucketed conflict detection (`detect_choice_conflicts`) reducing comparison complexity from $O(N^2)$ to $O(N + \sum K_i^2)$ (< 50ms benchmark for $N=1,000$ choices)
    - User override and custom translation management
 
 8. **Web & API Interface** (`app.py`, `api/routes.py`)

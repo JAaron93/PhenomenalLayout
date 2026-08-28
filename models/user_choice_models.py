@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -651,21 +652,29 @@ def find_best_matching_choice(
 def detect_choice_conflicts(
     choices: list[UserChoice], similarity_threshold: float = 0.8
 ) -> list[ChoiceConflict]:
-    """Detect conflicts between user choices."""
-    conflicts = []
+    """Detect conflicts between user choices using term-bucketed grouping.
 
-    for i, choice_a in enumerate(choices):
-        for choice_b in choices[i + 1 :]:
-            # Check if choices are for the same term
-            if choice_a.neologism_term.lower() != choice_b.neologism_term.lower():
-                continue
+    Groups choices by normalized term in O(N) time before computing pairwise
+    similarity strictly within matching buckets, reducing time complexity from
+    O(N^2) to O(N + sum(K_i^2)).
+    """
+    if len(choices) < 2:
+        return []
 
-            # Check if contexts are similar enough to be conflicting
-            similarity = choice_a.context.calculate_similarity(choice_b.context)
+    buckets: dict[str, list[UserChoice]] = defaultdict(list)
+    for choice in choices:
+        buckets[choice.neologism_term.lower()].append(choice)
 
-            if similarity >= similarity_threshold:
-                # Check if actual choices differ
-                if (
+    conflicts: list[ChoiceConflict] = []
+    for term_choices in buckets.values():
+        if len(term_choices) < 2:
+            continue
+
+        for i, choice_a in enumerate(term_choices):
+            for choice_b in term_choices[i + 1 :]:
+                similarity = choice_a.context.calculate_similarity(choice_b.context)
+
+                if similarity >= similarity_threshold and (
                     choice_a.choice_type != choice_b.choice_type
                     or choice_a.translation_result != choice_b.translation_result
                 ):

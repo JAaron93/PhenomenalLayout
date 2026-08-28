@@ -12,6 +12,7 @@ except Exception:  # pragma: no cover - optional for tests without spaCy
     from typing import Any as Language  # type: ignore
 
 from models.neologism_models import MorphologicalAnalysis
+from utils.language_utils import is_german_compound_word
 
 logger = logging.getLogger(__name__)
 
@@ -78,20 +79,11 @@ class MorphologicalAnalyzer:
         return max(1, count)
 
     def _is_compound_word(self, term: str) -> bool:
-        """Check if a term is likely a compound word."""
-        if len(term) < 6:  # Very short words are unlikely to be compounds
-            return False
-        # Check for known compound patterns
-        patterns = self.german_morphological_patterns["compound_patterns"]
-        for pattern in patterns:
-            if re.search(pattern, term, re.IGNORECASE):
-                return True
-        # Check for common compound structures
-        linking_elements = self.german_morphological_patterns["compound_linking"]
-        for linking in linking_elements:
-            if linking in term[1:-1]:  # Check middle of word
-                return True
-        return False
+        """Check if a term is likely a compound word.
+
+        Delegates to canonical helper `utils.language_utils.is_german_compound_word`.
+        """
+        return is_german_compound_word(term)
 
     def _split_compound(self, term: str) -> list[str]:
         """Split a compound word into its components.

@@ -32,6 +32,7 @@ from models.neologism_models import (
     MorphologicalAnalysis,
     PhilosophicalContext,
 )
+from utils.language_utils import is_german_compound_word
 
 logger = logging.getLogger(__name__)
 
@@ -283,30 +284,11 @@ class ConfidenceScorer:
         return max(0.0, min(1.0, score))
 
     def _is_compound_word(self, word: str) -> bool:
-        """Check if word appears to be a German compound."""
-        if len(word) < 8:
-            return False
+        """Check if word appears to be a German compound.
 
-        # Check for multiple capital letters (German noun compounds)
-        capital_count = sum(1 for c in word if c.isupper())
-        if capital_count >= 2:
-            return True
-
-        # Check for common compound patterns
-        compound_patterns = [
-            # Standard compound linking
-            r"\w+(?:s|n|es|en|er|e|ns|ts)\w+",
-            # Philosophical compounds
-            r"\w+(?:bewusstsein|wirklichkeit|erkenntnis|wahrnehmung)",
-            # Philosophical prefix compounds
-            r"(?:welt|lebens|seins|geist|seele)\w+",
-        ]
-
-        for pattern in compound_patterns:
-            if re.search(pattern, word.lower()):
-                return True
-
-        return False
+        Delegates to canonical helper `utils.language_utils.is_german_compound_word`.
+        """
+        return is_german_compound_word(word)
 
     def _calculate_pattern_score(
         self, term: str, morphological: MorphologicalAnalysis

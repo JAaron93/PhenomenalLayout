@@ -210,7 +210,7 @@ The plan is organized into five **Execution Tracks**:
 * **Acceptance Criteria**:
   - `is_german_compound_word(word: str) -> bool` identifies valid philosophical compounds (`Wirklichkeitsbewusstsein`, `Lebensweltthematik`, `Bewusstseinsphilosophie`) and rejects non-compounds (`Bewusstsein`, `das`, `und`).
   - Uses module-level compiled regex objects and fast set lookups.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 4.2: Delegate Compound Word Checks Across Services [FR-07]
 * **Dependencies**: Task 4.1.
@@ -220,7 +220,7 @@ The plan is organized into five **Execution Tracks**:
   - `MorphologicalAnalyzer._is_compound_word` delegates to `is_german_compound_word`.
   - `NeologismDetector._is_compound_word` delegates to `is_german_compound_word`.
   - Tests in `tests/test_confidence_scorer.py`, `tests/test_neologism_detector.py`, and `tests/test_translation.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 4.3: Optimize `detect_choice_conflicts` in `models/user_choice_models.py` [FR-08]
 * **Dependencies**: None.
@@ -230,7 +230,7 @@ The plan is organized into five **Execution Tracks**:
   - Zero comparisons are performed between choices with differing terms.
   - Returns identical conflict objects and classifications as previous implementation.
   - Tests in `tests/test_user_choice_models.py` and `tests/test_user_choice_manager.py` pass.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 ---
 
@@ -248,18 +248,18 @@ The plan is organized into five **Execution Tracks**:
   - Tests for `atomic_write_json` and `atomic_write_text`.
   - Tests for `is_german_compound_word`.
   - Tests for optimized `detect_choice_conflicts` ensuring identical behavior to the prior all-pairs scan.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 5.2: Execute Full Regression Test Suite & Measure Coverage [NFR-04, NFR-05]
 * **Dependencies**: Task 5.1.
 * **Goal**: Run complete test suite across all services to guarantee zero regressions and coverage $\ge 85\%$.
 * **Acceptance Criteria**:
   - `.venv/bin/pytest tests/ --cov=services --cov=utils --cov=models --cov-fail-under=85` passes with exit code 0.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]
 
 #### Task 5.3: Run Linter & Static Checks (`ruff check`) [NFR-05]
 * **Dependencies**: Task 5.2.
 * **Goal**: Verify code clean of warnings and formatting issues.
 * **Acceptance Criteria**:
   - `.venv/bin/ruff check services/ utils/ models/ tests/` outputs clean with zero errors.
-* **Status**: [STATUS: PENDING]
+* **Status**: [STATUS: COMPLETE]

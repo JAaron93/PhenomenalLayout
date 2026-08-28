@@ -1,9 +1,112 @@
-"""Utility functions for language detection and text extraction."""
+"""Utility functions for language detection, text extraction, and linguistic compound analysis."""
+
+from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "DEFAULT_SUPPORTED_LANGUAGES",
+    "extract_text_sample_for_language_detection",
+    "get_german_morphological_patterns",
+    "is_german_compound_word",
+]
+
+_PHILOSOPHICAL_ENDINGS: tuple[str, ...] = (
+    "bewusstsein",
+    "wirklichkeit",
+    "erkenntnis",
+    "wahrnehmung",
+    "philosophie",
+    "theorie",
+    "anschauung",
+    "thematik",
+)
+
+_SINGLE_ROOT_NOUNS: frozenset[str] = frozenset({
+    "bewusstsein",
+    "wirklichkeit",
+    "erkenntnis",
+    "wahrnehmung",
+    "philosophie",
+    "wissenschaft",
+    "gesellschaft",
+    "dasein",
+    "existenz",
+    "phänomenologie",
+    "phanomenologie",
+    "intentionalität",
+    "intentionalitat",
+    "menschlich",
+    "wesentlich",
+    "eigentlich",
+    "natürlich",
+    "körperlich",
+    "sprachlich",
+    "zeitlich",
+    "alltäglich",
+})
+
+_PHILOSOPHICAL_PREFIX_RE: re.Pattern[str] = re.compile(
+    r"^(?:welt|lebens|seins|geist|seele)\w{4,}$", re.IGNORECASE
+)
+_STANDARD_LINKING_RE: re.Pattern[str] = re.compile(
+    r"^\w{4,}(?:s|en|er)\w{4,}$", re.IGNORECASE
+)
+_COMMON_DERIVATIONAL_SUFFIXES_RE: re.Pattern[str] = re.compile(
+    r"^\w{3,}(?:lich|isch|haft|ig|bar|los)(?:e|er|en|es|em|st|ste|stem|sten|ster|stes)?$",
+    re.IGNORECASE,
+)
+
+
+def is_german_compound_word(word: str) -> bool:
+    """Identify if a word is likely a German philosophical compound noun.
+
+    Employs module-level precompiled regular expressions, minimum-length
+    filters, uppercase checks, and set lookups to detect compound structures
+    with zero per-call regex compilation overhead (O(len(word)) time, O(1) space).
+
+    Args:
+        word: Token string to analyze.
+
+    Returns:
+        bool: True if the word exhibits German compound structure, False otherwise.
+    """
+    if not isinstance(word, str) or len(word) < 8:
+        return False
+
+    word_lower = word.lower()
+
+    # Exclude common single root words that might otherwise match suffixes
+    if word_lower in _SINGLE_ROOT_NOUNS:
+        return False
+
+    # Check for multiple capital letters (German noun compounds / CamelCase)
+    capital_count = sum(1 for c in word if c.isupper())
+    if capital_count >= 2:
+        return True
+
+    # Check for philosophical compounds (suffix ending with prefix >= 4 chars)
+    for ending in _PHILOSOPHICAL_ENDINGS:
+        if word_lower.endswith(ending) and len(word_lower) > len(ending):
+            prefix = word_lower[: -len(ending)]
+            if len(prefix) >= 4:
+                return True
+
+    # Check philosophical prefix compounds (e.g. Lebenswelt, Seinsstruktur)
+    if _PHILOSOPHICAL_PREFIX_RE.match(word_lower):
+        return True
+
+    # Reject standard adjectival/adverbial derivational suffixes (e.g. menschlich, wesentlich)
+    if _COMMON_DERIVATIONAL_SUFFIXES_RE.match(word_lower):
+        return False
+
+    # Check standard linking elements (e.g. Handlungsstruktur, Wissensbereich)
+    return bool(_STANDARD_LINKING_RE.match(word_lower))
+
 
 DEFAULT_SUPPORTED_LANGUAGES = (
     "English",

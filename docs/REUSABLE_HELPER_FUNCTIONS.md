@@ -130,8 +130,33 @@ Each service retains `_open_source` as a deprecated delegating shim to preserve 
 ### 5.1 `is_german_compound_word`
 * **Location**: [`utils/language_utils.py`](../utils/language_utils.py)
 * **Signature**: `is_german_compound_word(word: str) -> bool`
-* **Purpose**: Consolidated German philosophical compound word identifier. Employs pre-compiled module-level regular expressions, minimum-length guards, uppercase noun checks, and set lookups for philosophical endings (`bewusstsein`, `wirklichkeit`, `erkenntnis`, `wahrnehmung`).
-* **Complexity**: Time: $O(\text{len}(word))$, Space: $O(1)$. Replaces in-loop `re.compile()` calls across confidence scorers and morphological analyzers.
+* **Purpose**: Consolidated German philosophical compound word identifier. Replaces duplicated, bespoke compound checks across `ConfidenceScorer`, `MorphologicalAnalyzer`, and `NeologismDetector`.
+* **Guarantees & Algorithmic Filters**:
+  - **Zero Per-Call Regex Recompilation**: Uses module-level precompiled regexes (`_PHILOSOPHICAL_PREFIX_RE`, `_STANDARD_LINKING_RE`, `_COMMON_DERIVATIONAL_SUFFIXES_RE`).
+  - **Fast-Path Length & Uppercase Guards**: Rejects strings with length $< 8$, non-string inputs, or single root nouns (`_SINGLE_ROOT_NOUNS`). Accepts multi-capital camelCase German compound nouns.
+  - **Philosophical Prefix & Suffix Detection**: Accurately recognizes terms with philosophical endings (`bewusstsein`, `wirklichkeit`, `erkenntnis`, `wahrnehmung`, `philosophie`, `theorie`, `anschauung`, `thematik`) and prefixes (`welt`, `lebens`, `seins`, `geist`, `seele`).
+  - **Inflected Derivational Adjective Rejection**: Filters out derived adjectives with inflectional suffixes (`-lich`, `-isch`, `-haft`, `-ig`, `-bar`, `-los` combined with `-e`, `-er`, `-en`, `-es`, `-em`, `-st`, `-ste`, etc. like `körperlicher`, `menschlichen`, `wesentliche`), preventing non-compound ordinary vocabulary from inflating candidate scores.
+  - **Linking Morpheme Verification**: Requires meaningful root bounds ($\ge 4$ characters on both sides) for linking elements (`s`, `en`, `er`).
+* **Complexity**: Time: $O(\text{len}(word))$, Space: $O(1)$.
+* **Canonical Usage**:
+  ```python
+  from utils.language_utils import is_german_compound_word
+
+  assert is_german_compound_word("Wirklichkeitsbewusstsein") is True
+  assert is_german_compound_word("körperlicher") is False
+  ```
+
+### 5.2 `get_german_morphological_patterns`
+* **Location**: [`utils/language_utils.py`](../utils/language_utils.py)
+* **Signature**: `get_german_morphological_patterns() -> dict[str, list[str]]`
+* **Purpose**: Returns canonical German morphological patterns (compound linking elements, philosophical prefixes, abstract suffixes, philosophical endings, and compound regexes) for morphological analysis.
+* **Complexity**: Time: $O(1)$, Space: $O(1)$.
+
+### 5.3 `extract_text_sample_for_language_detection`
+* **Location**: [`utils/language_utils.py`](../utils/language_utils.py)
+* **Signature**: `extract_text_sample_for_language_detection(content: dict[str, Any]) -> str`
+* **Purpose**: Extracts consistent, representative text samples from diverse document payloads (`pdf_advanced`, plain text dictionaries) for fast upstream language identification.
+* **Complexity**: Time: $O(K)$ where $K$ is sample length, Space: $O(K)$.
 
 ---
 

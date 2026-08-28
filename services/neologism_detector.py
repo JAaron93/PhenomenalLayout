@@ -35,6 +35,7 @@ from services.confidence_scorer import ConfidenceScorer
 # Import the new component classes
 from services.morphological_analyzer import MorphologicalAnalyzer
 from services.philosophical_context_analyzer import PhilosophicalContextAnalyzer
+from utils.language_utils import is_german_compound_word
 
 logger = logging.getLogger(__name__)
 
@@ -557,50 +558,11 @@ class NeologismDetector:
         return candidates
 
     def _is_compound_word(self, word: str) -> bool:
-        """Check if word appears to be a German compound."""
-        if len(word) < 10:  # Increase minimum length for compounds
-            return False
+        """Check if word appears to be a German compound.
 
-        word_lower = word.lower()
-
-        # Exclude common single words that might match patterns
-        single_words = {
-            "bewusstsein",
-            "wirklichkeit",
-            "erkenntnis",
-            "wahrnehmung",
-            "philosophie",
-            "wissenschaft",
-            "gesellschaft",
-        }
-        if word_lower in single_words:
-            return False
-
-        # Pattern 1: Philosophical compounds (requires prefix before philosophical terms)
-        philosophical_endings = self.german_morphological_patterns[
-            "philosophical_endings"
-        ]
-        for ending in philosophical_endings:
-            if word_lower.endswith(ending) and len(word_lower) > len(ending):
-                prefix = word_lower[: -len(ending)]
-                if len(prefix) >= 4:  # Require meaningful prefix (increased from 3)
-                    return True
-
-        # Pattern 2: Philosophical prefix compounds
-        if re.search(r"^(?:welt|lebens|seins|geist|seele)\w{4,}$", word_lower):
-            return True
-
-        # Pattern 3: Standard compound linking (more restrictive)
-        # Only match if there's a clear compound structure with meaningful parts
-        if re.search(r"^\w{4,}(?:s|en|er)\w{4,}$", word_lower):
-            return True
-
-        # Check for multiple capital letters (German noun compounds)
-        capital_count = sum(1 for c in word if c.isupper())
-        if capital_count >= 2:
-            return True
-
-        return False
+        Delegates to canonical helper `utils.language_utils.is_german_compound_word`.
+        """
+        return is_german_compound_word(word)
 
     def _analyze_morphology(self, term: str) -> MorphologicalAnalysis:
         """Analyze morphological structure of a term."""

@@ -374,3 +374,272 @@ class TestAtomicFileHandler:
         atomic_write_text(target, text)
         assert target.exists()
         assert target.read_text(encoding="utf-8") == text
+
+
+# ===========================================================================
+# 5. Tests for utils.language_utils (German compound detection)
+# ===========================================================================
+
+
+class TestGermanCompoundWord:
+    """Test suite for utils/language_utils.py is_german_compound_word."""
+
+    def test_valid_philosophical_compounds(self) -> None:
+        from utils.language_utils import is_german_compound_word
+
+        # Known philosophical compound nouns
+        assert is_german_compound_word("Wirklichkeitsbewusstsein")
+        assert is_german_compound_word("Bewusstseinsphilosophie")
+        assert is_german_compound_word("Lebensweltthematik")
+        assert is_german_compound_word("Lebensphilosophie")
+        assert is_german_compound_word("Weltanschauung")
+        assert is_german_compound_word("Erkenntnistheorie")
+        assert is_german_compound_word("Seinsverständnis")
+        assert is_german_compound_word("Geisteswissenschaft")
+        assert is_german_compound_word("Handlungsstruktur")
+        assert is_german_compound_word("Wissensbereich")
+
+    def test_non_compound_rejection(self) -> None:
+        from utils.language_utils import is_german_compound_word
+
+        # Single root nouns (should be excluded)
+        assert not is_german_compound_word("Bewusstsein")
+        assert not is_german_compound_word("Wirklichkeit")
+        assert not is_german_compound_word("Erkenntnis")
+        assert not is_german_compound_word("Wahrnehmung")
+        assert not is_german_compound_word("Philosophie")
+        assert not is_german_compound_word("Wissenschaft")
+        assert not is_german_compound_word("Gesellschaft")
+        assert not is_german_compound_word("Dasein")
+        assert not is_german_compound_word("Existenz")
+
+        # Ordinary derived words and adjectives (Greptile review P1 fix)
+        assert not is_german_compound_word("menschlich")
+        assert not is_german_compound_word("menschlichen")
+        assert not is_german_compound_word("wesentlich")
+        assert not is_german_compound_word("wesentliche")
+        assert not is_german_compound_word("eigentlich")
+        assert not is_german_compound_word("natürlich")
+        assert not is_german_compound_word("körperlich")
+        assert not is_german_compound_word("körperlicher")
+        assert not is_german_compound_word("körperlichste")
+
+        # Short words & particles
+        assert not is_german_compound_word("das")
+        assert not is_german_compound_word("und")
+        assert not is_german_compound_word("der")
+        assert not is_german_compound_word("die")
+        assert not is_german_compound_word("ist")
+        assert not is_german_compound_word("")
+        assert not is_german_compound_word("Sein")
+
+    def test_multiple_capital_letters(self) -> None:
+        from utils.language_utils import is_german_compound_word
+
+        # German noun compounds with internal capitals / camelCase
+        assert is_german_compound_word("WirklichkeitsBewusstsein")
+        assert is_german_compound_word("SeinsStruktur")
+
+    def test_type_and_input_safety(self) -> None:
+        from utils.language_utils import is_german_compound_word
+
+        assert not is_german_compound_word(None)  # type: ignore[arg-type]
+        assert not is_german_compound_word(12345)  # type: ignore[arg-type]
+
+    def test_get_german_morphological_patterns(self) -> None:
+        from utils.language_utils import get_german_morphological_patterns
+
+        patterns = get_german_morphological_patterns()
+        assert "compound_linking" in patterns
+        assert "philosophical_prefixes" in patterns
+        assert "abstract_suffixes" in patterns
+        assert "philosophical_endings" in patterns
+        assert "compound_patterns" in patterns
+
+    def test_extract_text_sample_for_language_detection(self) -> None:
+        from utils.language_utils import extract_text_sample_for_language_detection
+
+        # Test non-pdf content
+        sample = extract_text_sample_for_language_detection(
+            {"type": "txt", "text_content": "Das ist ein philosophischer Text."}
+        )
+        assert sample == "Das ist ein philosophischer Text."
+
+        # Test empty non-pdf content
+        empty_sample = extract_text_sample_for_language_detection(
+            {"type": "txt", "text_content": ""}
+        )
+        assert empty_sample == "No text content available"
+
+        # Test pdf_advanced with first page text
+        pdf_content = {
+            "type": "pdf_advanced",
+            "text_by_page": {0: ["First sentence.", "Second sentence."]},
+        }
+        pdf_sample = extract_text_sample_for_language_detection(pdf_content)
+        assert pdf_sample == "First sentence. Second sentence."
+
+        # Test pdf_advanced fallback to other page
+        fallback_pdf = {
+            "type": "pdf_advanced",
+            "text_by_page": {0: [], 1: ["Page one text."]},
+        }
+        fallback_sample = extract_text_sample_for_language_detection(fallback_pdf)
+        assert fallback_sample == "Page one text."
+
+        # Test invalid structure
+        invalid_sample = extract_text_sample_for_language_detection(
+            {"type": "pdf_advanced", "text_by_page": None}
+        )
+        assert invalid_sample == "No text content available"
+
+        error_sample = extract_text_sample_for_language_detection(None)  # type: ignore[arg-type]
+        assert error_sample == "No text content available"
+
+
+# ===========================================================================
+# 6. Tests for models.user_choice_models (detect_choice_conflicts optimization)
+# ===========================================================================
+
+
+class TestOptimizedChoiceConflictDetection:
+    """Test suite for hash-bucketed detect_choice_conflicts."""
+
+    def test_detect_conflicts_basic(self) -> None:
+        from models.user_choice_models import (
+            ChoiceType,
+            TranslationContext,
+            UserChoice,
+            detect_choice_conflicts,
+        )
+
+        ctx = TranslationContext(semantic_field="existentialism", author="Heidegger")
+
+        choice_a = UserChoice(
+            choice_id="choice_1",
+            neologism_term="Dasein",
+            choice_type=ChoiceType.TRANSLATE,
+            translation_result="being-there",
+            context=ctx,
+        )
+        choice_b = UserChoice(
+            choice_id="choice_2",
+            neologism_term="Dasein",
+            choice_type=ChoiceType.PRESERVE,
+            translation_result="",
+            context=ctx,
+        )
+        choice_other = UserChoice(
+            choice_id="choice_3",
+            neologism_term="Sein",
+            choice_type=ChoiceType.TRANSLATE,
+            translation_result="being",
+            context=ctx,
+        )
+
+        conflicts = detect_choice_conflicts([choice_a, choice_b, choice_other])
+        assert len(conflicts) == 1
+        assert conflicts[0].neologism_term == "Dasein"
+        assert {conflicts[0].choice_a.choice_id, conflicts[0].choice_b.choice_id} == {
+            "choice_1",
+            "choice_2",
+        }
+
+    def test_detect_conflicts_empty_or_single(self) -> None:
+        from models.user_choice_models import (
+            ChoiceType,
+            TranslationContext,
+            UserChoice,
+            detect_choice_conflicts,
+        )
+
+        assert detect_choice_conflicts([]) == []
+
+        ctx = TranslationContext()
+        single = UserChoice(
+            choice_id="c1",
+            neologism_term="Dasein",
+            choice_type=ChoiceType.TRANSLATE,
+            context=ctx,
+        )
+        assert detect_choice_conflicts([single]) == []
+
+    def test_no_conflicts_for_disjoint_terms(self) -> None:
+        from models.user_choice_models import (
+            ChoiceType,
+            TranslationContext,
+            UserChoice,
+            detect_choice_conflicts,
+        )
+
+        ctx = TranslationContext(semantic_field="ontology")
+        choices = [
+            UserChoice(
+                choice_id=f"c_{i}",
+                neologism_term=f"Term_{i}",
+                choice_type=ChoiceType.TRANSLATE,
+                translation_result=f"Trans_{i}",
+                context=ctx,
+            )
+            for i in range(50)
+        ]
+
+        # All disjoint terms -> zero conflicts, fast exit
+        assert detect_choice_conflicts(choices) == []
+
+    def test_conflict_detection_performance_benchmark(self) -> None:
+        """FR-08.3: 1,000 choices with 10 actual conflicts must complete in < 50ms."""
+        import time
+
+        from models.user_choice_models import (
+            ChoiceType,
+            TranslationContext,
+            UserChoice,
+            detect_choice_conflicts,
+        )
+
+        ctx = TranslationContext(semantic_field="metaphysics")
+        choices: list[UserChoice] = []
+
+        # 990 unique non-conflicting terms
+        for i in range(990):
+            choices.append(
+                UserChoice(
+                    choice_id=f"uniq_{i}",
+                    neologism_term=f"UniqueTerm_{i}",
+                    choice_type=ChoiceType.TRANSLATE,
+                    translation_result=f"Trans_{i}",
+                    context=ctx,
+                )
+            )
+
+        # 5 pairs of conflicting terms (total 10 choices, yielding 5 conflicts)
+        for i in range(5):
+            choices.append(
+                UserChoice(
+                    choice_id=f"conf_a_{i}",
+                    neologism_term=f"ConflictTerm_{i}",
+                    choice_type=ChoiceType.TRANSLATE,
+                    translation_result=f"VersionA_{i}",
+                    context=ctx,
+                )
+            )
+            choices.append(
+                UserChoice(
+                    choice_id=f"conf_b_{i}",
+                    neologism_term=f"ConflictTerm_{i}",
+                    choice_type=ChoiceType.PRESERVE,
+                    translation_result="",
+                    context=ctx,
+                )
+            )
+
+        assert len(choices) == 1000
+
+        start_time = time.perf_counter()
+        conflicts = detect_choice_conflicts(choices)
+        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+
+        assert len(conflicts) == 5
+        assert elapsed_ms < 50.0, f"Conflict detection took {elapsed_ms:.2f}ms (must be < 50ms)"
+
