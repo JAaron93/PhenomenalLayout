@@ -90,15 +90,9 @@ class TermPreference:
 
 
 def _escape_rfc4180_field(field_value: str) -> str:
-    """Format a string field for RFC 4180 TSV output.
-
-    If the value contains a tab, newline, carriage return, or double quote,
-    it must be enclosed in double quotes with existing quotes doubled.
-    """
-    if any(c in field_value for c in ('\t', '\n', '\r', '"')):
-        escaped = field_value.replace('"', '""')
-        return f'"{escaped}"'
-    return field_value
+    """Format a string field for RFC 4180 TSV output."""
+    from utils.tsv_utils import escape_rfc4180_field
+    return escape_rfc4180_field(field_value)
 
 
 class UserVocabularyStore:
@@ -398,16 +392,14 @@ class UserVocabularyStore:
             conn.commit()
 
     def export_tsv(self, user_id: str) -> bytes:
-        """Export user vocabulary as RFC 4180 compliant TSV bytes with header `de\\ten`."""
+        r"""Export user vocabulary as RFC 4180 compliant TSV bytes with header `de\ten`."""
+        from utils.tsv_utils import format_tsv_bytes
+
         preferences = self.get_user_preferences(user_id)
-        lines: list[str] = ["de\ten"]
-
-        for term in sorted(preferences.keys()):
-            pref = preferences[term]
-            translation = pref.german_term if pref.keep_untranslated else pref.preferred_translation
-            esc_term = _escape_rfc4180_field(pref.german_term)
-            esc_trans = _escape_rfc4180_field(translation)
-            lines.append(f"{esc_term}\t{esc_trans}")
-
-        tsv_content = "\n".join(lines) + "\n"
-        return tsv_content.encode("utf-8")
+        entries = {
+            pref.german_term: (
+                pref.german_term if pref.keep_untranslated else pref.preferred_translation
+            )
+            for pref in preferences.values()
+        }
+        return format_tsv_bytes(entries, header=("de", "en"))

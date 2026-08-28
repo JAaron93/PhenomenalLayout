@@ -14,13 +14,13 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from google.api_core import exceptions as gcp_exceptions
-from google.cloud import storage, translate_v3 as translate
-from google.cloud.storage import Bucket, Client as StorageClient
+from google.cloud import storage
+from google.cloud import translate_v3 as translate
+from google.cloud.storage import Bucket
+from google.cloud.storage import Client as StorageClient
 from google.cloud.translate_v3 import TranslationServiceClient
 from google.oauth2 import service_account
 
@@ -153,72 +153,22 @@ class _CredentialRecord:
 
 
 def _is_retryable(exc: Exception) -> bool:
-    """Return ``True`` when *exc* represents a transient GCP error.
-
-    Checks both :mod:`google.api_core.exceptions` status codes and the
-    ``status_code`` attribute that some SDK versions expose directly.
-    """
-    if isinstance(exc, gcp_exceptions.GoogleAPICallError):
-        code = getattr(exc, "code", None)
-        # gRPC status codes: RESOURCE_EXHAUSTED=8, UNAVAILABLE=14
-        if code in {8, 14}:
-            return True
-        # HTTP status codes surfaced via ``http_status`` or similar
-        http_status = getattr(exc, "http_status", None) or getattr(
-            exc, "status_code", None
-        )
-        if http_status in _RETRYABLE_STATUS_CODES:
-            return True
-    # Fallback: check if any string representation contains the code
-    for code_str in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"):
-        if code_str in str(exc):
-            return True
-    return False
+    """Return ``True`` when *exc* represents a transient GCP error."""
+    from utils.gcp_helpers import is_transient_gcp_error
+    return is_transient_gcp_error(exc)
 
 
 def _call_with_backoff(fn: Any, *args: Any, **kwargs: Any) -> Any:
-    """Call *fn* with up to :data:`_MAX_RETRIES` retries on transient errors.
-
-    Uses truncated exponential backoff with a base of
-    :data:`_BACKOFF_BASE_S` seconds and a ceiling of :data:`_BACKOFF_MAX_S`.
-
-    Args:
-        fn: Callable to invoke.
-        *args: Positional arguments forwarded to *fn*.
-        **kwargs: Keyword arguments forwarded to *fn*.
-
-    Returns:
-        Whatever *fn* returns on success.
-
-    Raises:
-        Exception: The last exception raised by *fn* after all retries are
-            exhausted, or any non-retryable exception immediately.
-    """
-    last_exc: Exception | None = None
-    wait: float = _BACKOFF_BASE_S
-
-    for attempt in range(1, _MAX_RETRIES + 2):  # +2 so attempt 1 is the first try
-        try:
-            return fn(*args, **kwargs)
-        except Exception as exc:
-            if not _is_retryable(exc):
-                raise
-            last_exc = exc
-            if attempt > _MAX_RETRIES:
-                break
-            logger.warning(
-                "Transient GCP error on attempt %d/%d — retrying in %.1fs: %s",
-                attempt,
-                _MAX_RETRIES,
-                wait,
-                type(exc).__name__,
-            )
-            time.sleep(wait)
-            wait = min(wait * _BACKOFF_MULTIPLIER, _BACKOFF_MAX_S)
-
-    # All retries exhausted
-    assert last_exc is not None
-    raise last_exc
+    """Call *fn* with up to :data:`_MAX_RETRIES` retries on transient errors."""
+    from utils.gcp_helpers import retry_gcp_call
+    return retry_gcp_call(
+        fn,
+        *args,
+        max_retries=_MAX_RETRIES,
+        base_delay=_BACKOFF_BASE_S,
+        max_delay=_BACKOFF_MAX_S,
+        **kwargs,
+    )
 
 
 def _parse_sa_json(sa_json_content: str | dict[str, Any]) -> dict[str, Any]:

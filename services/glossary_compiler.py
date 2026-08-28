@@ -28,10 +28,8 @@ logger = logging.getLogger(__name__)
 
 def _escape_rfc4180_field(val: str) -> str:
     """Format string for RFC 4180 TSV output with double-quote escaping when needed."""
-    if any(char in val for char in ('\t', '\n', '\r', '"')):
-        escaped = val.replace('"', '""')
-        return f'"{escaped}"'
-    return val
+    from utils.tsv_utils import escape_rfc4180_field
+    return escape_rfc4180_field(val)
 
 
 class GlossaryCompiler:
@@ -80,15 +78,8 @@ class GlossaryCompiler:
     @staticmethod
     def format_rfc4180_tsv(entries: dict[str, str]) -> bytes:
         """Format term mappings into RFC 4180 compliant TSV bytes with header `de\\ten`."""
-        lines: list[str] = ["de\ten"]
-        for german_term in sorted(entries.keys()):
-            translation = entries[german_term]
-            esc_term = _escape_rfc4180_field(german_term)
-            esc_trans = _escape_rfc4180_field(translation)
-            lines.append(f"{esc_term}\t{esc_trans}")
-
-        content = "\n".join(lines) + "\n"
-        return content.encode("utf-8")
+        from utils.tsv_utils import format_tsv_bytes
+        return format_tsv_bytes(entries, header=("de", "en"))
 
     def compile_entries(
         self,

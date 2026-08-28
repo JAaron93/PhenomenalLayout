@@ -21,12 +21,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import math
-import random
 import re
-import time
 import uuid
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from google.api_core import exceptions as gcp_exceptions
 from google.cloud import storage
@@ -51,39 +49,23 @@ T = TypeVar("T")
 
 def _retry_with_backoff(operation_desc: str, fn: Callable[[], T]) -> T:
     """Execute *fn* with exponential backoff on retryable GCP exceptions."""
-    last_exc: Exception | None = None
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            return fn()
-        except _RETRYABLE_GCP_EXCEPTIONS as exc:
-            last_exc = exc
-            if attempt == MAX_RETRIES:
-                logger.error(
-                    "Exhausted retries (%d/%d) during %s: %s",
-                    attempt,
-                    MAX_RETRIES,
-                    operation_desc,
-                    exc,
-                )
-                raise
-            delay = min(_RETRY_MAX_DELAY_S, _RETRY_BASE_DELAY_S * (2 ** (attempt - 1)))
-            jitter = delay * random.uniform(0.1, 0.3)
-            total_delay = delay + jitter
-            logger.warning(
-                "Retryable error on attempt %d/%d for %s: %s. Retrying in %.2fs...",
-                attempt,
-                MAX_RETRIES,
-                operation_desc,
-                exc,
-                total_delay,
-            )
-            time.sleep(total_delay)
-        except Exception:
-            raise
+    from utils.gcp_helpers import retry_gcp_call
 
-    if last_exc:
-        raise last_exc
-    raise RuntimeError(f"Unexpected termination of retry loop for {operation_desc}")
+    try:
+        return retry_gcp_call(
+            fn,
+            max_retries=MAX_RETRIES - 1,
+            base_delay=_RETRY_BASE_DELAY_S,
+            max_delay=_RETRY_MAX_DELAY_S,
+        )
+    except Exception as exc:
+        logger.error(
+            "Exhausted retries (%d) during %s: %s",
+            MAX_RETRIES,
+            operation_desc,
+            exc,
+        )
+        raise
 
 
 def sanitize_glossary_id(raw_id: str) -> str:
@@ -150,18 +132,14 @@ class GlossarySyncManager:
         return self._creds_manager.get_storage_client(user_id)
 
     def _format_glossary_name(self, project_id: str, glossary_id: str) -> str:
-        return f"projects/{project_id}/locations/{self._location}/glossaries/{glossary_id}"
+        from utils.gcp_helpers import format_gcp_glossary_name
+        return format_gcp_glossary_name(project_id, self._location, glossary_id)
 
     def _upload_tsv_to_gcs(self, user_id: str, gcs_uri: str, tsv_bytes: bytes) -> str:
         """Upload TSV bytes directly to the user's GCS bucket without host disk caching."""
-        if not gcs_uri.startswith("gs://"):
-            raise ValueError(f"Invalid GCS URI: {gcs_uri}")
+        from utils.gcp_helpers import parse_gcs_uri
+        bucket_name, blob_name = parse_gcs_uri(gcs_uri)
 
-        parts = gcs_uri[5:].split("/", 1)
-        if len(parts) != 2:
-            raise ValueError(f"Malformed GCS URI: {gcs_uri}")
-
-        bucket_name, blob_name = parts[0], parts[1]
         storage_client = self._get_storage_client(user_id)
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
@@ -181,17 +159,9 @@ class GlossarySyncManager:
         if not gcs_uri or not gcs_uri.startswith("gs://"):
             return
 
-        parts = gcs_uri[5:].split("/", 1)
-        if len(parts) != 2:
-            return
-
-        bucket_name, blob_name = parts[0], parts[1]
-        try:
-            storage_client = self._get_storage_client(user_id)
-            storage_client.bucket(bucket_name).blob(blob_name).delete()
-            logger.info("Cleaned up GCS TSV blob: %s", gcs_uri)
-        except Exception:
-            logger.debug("Failed to delete GCS blob %s", gcs_uri, exc_info=True)
+        from utils.gcp_helpers import delete_gcs_blob
+        storage_client = self._get_storage_client(user_id)
+        delete_gcs_blob(storage_client, gcs_uri)
 
     def get_glossary(self, user_id: str, glossary_id_or_name: str) -> translate.Glossary | None:
         """Retrieve existing glossary metadata from GCP Translation v3.

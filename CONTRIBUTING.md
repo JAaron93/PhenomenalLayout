@@ -40,19 +40,20 @@ python -m pip install -r requirements.txt -r requirements-dev.txt
 
 ### Manual Quality Checks
 
-Run the complete multi-track GCP migration test suite (209 tests across Tracks 1–4):
+Run the complete multi-track GCP migration test suite (235 tests across Tracks 1–4):
 
 ```bash
-pytest -o addopts="" tests/test_gcp_settings.py tests/test_byok_credentials_manager.py \
-  tests/test_gcp_batch_translation_service.py tests/test_lro_progress_monitor.py \
-  tests/test_cost_estimator.py tests/test_google_drive_exporter.py \
-  tests/test_user_vocabulary_store.py tests/test_glossary_compiler.py \
-  tests/test_glossary_sync_manager.py tests/test_session_glossary_lifecycle.py \
-  tests/test_fraktur_classifier.py tests/test_batch_job_recovery.py \
-  tests/test_fallback_translator.py tests/test_dual_pane_viewer.py \
-  tests/test_dynamic_programming.py tests/test_enum_hash.py \
-  tests/test_memory_api_security.py tests/test_memory_api_integration.py \
-  tests/test_memory_gc_endpoint.py tests/test_problem_case_fixed.py -v
+pytest -o addopts="" tests/test_dry_helpers.py tests/test_gcp_settings.py \
+  tests/test_byok_credentials_manager.py tests/test_gcp_batch_translation_service.py \
+  tests/test_lro_progress_monitor.py tests/test_cost_estimator.py \
+  tests/test_google_drive_exporter.py tests/test_user_vocabulary_store.py \
+  tests/test_glossary_compiler.py tests/test_glossary_sync_manager.py \
+  tests/test_session_glossary_lifecycle.py tests/test_fraktur_classifier.py \
+  tests/test_batch_job_recovery.py tests/test_fallback_translator.py \
+  tests/test_dual_pane_viewer.py tests/test_dynamic_programming.py \
+  tests/test_enum_hash.py tests/test_memory_api_security.py \
+  tests/test_memory_api_integration.py tests/test_memory_gc_endpoint.py \
+  tests/test_problem_case_fixed.py -v
 ```
 
 Lint and type-check:
@@ -86,6 +87,7 @@ With `pytest-asyncio>=0.23` and pytest 8, the asyncio mode must be declared. We 
 > Under [ADR 0001](docs/adr/0001-migrate-to-google-cloud-document-translation.md), full-length PDF document translation and pixel-perfect layout preservation are handled natively by **Google Cloud Document Translation Advanced (v3)**. Custom canvas painting, ReportLab box placement, and dynamic programming text scaling are deprecated.
 
 When contributing to PhenomenalLayout, focus on:
+- **Consolidated Helper Utilities**: When interacting with Google Cloud Storage, Cloud Translation APIs, RFC 4180 TSV data, or persistent file writes, always utilize the canonical utilities in `utils/gcp_helpers.py`, `utils/tsv_utils.py`, `utils/pdf_stream.py`, and `utils/file_handler.py`. Refer to [REUSABLE_HELPER_FUNCTIONS.md](docs/REUSABLE_HELPER_FUNCTIONS.md) for usage patterns and complexity guarantees.
 - **Neologism Detection & Morphological Analysis**: Accurate German compound decomposition and philosophical term recognition.
 - **Dual-Tier Glossary Synchronization**: Ensuring RFC 4180 TSV compliance, zero-downtime Blue-Green replacement, and regional quota bounds in GCP `us-central1`.
 - **Scholarly Resilience**: Fraktur OCR assessment, job recovery, and side-by-side verification.

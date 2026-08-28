@@ -22,10 +22,7 @@ Design invariants
 
 from __future__ import annotations
 
-import io
 import logging
-import math
-import random
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -195,73 +192,33 @@ class GCPBatchTranslationService:
     def _parse_gcs_uri(gcs_uri: str) -> tuple[str, str]:
         """Split a ``gs://bucket/blob`` URI into ``(bucket_name, blob_name)``.
 
-        Parameters
-        ----------
-        gcs_uri:
-            A fully-qualified GCS URI, e.g. ``"gs://my-bucket/path/to/file.pdf"``.
-
-        Returns
-        -------
-        tuple[str, str]
-            ``(bucket_name, blob_name)`` extracted from the URI.
-
-        Raises
-        ------
-        ValueError
-            If *gcs_uri* does not start with ``"gs://"`` or has no blob component.
+        Delegates to :func:`utils.gcp_helpers.parse_gcs_uri`.
         """
-        if not gcs_uri.startswith("gs://"):
-            raise ValueError(
-                f"Invalid GCS URI — expected 'gs://bucket/blob', got: {gcs_uri!r}"
-            )
-        without_scheme = gcs_uri[len("gs://"):]
-        parts = without_scheme.split("/", 1)
-        if len(parts) != 2 or not parts[1]:
-            raise ValueError(
-                f"Invalid GCS URI — could not extract blob path from: {gcs_uri!r}"
-            )
-        bucket_name, blob_name = parts
-        return bucket_name, blob_name
+        from utils.gcp_helpers import parse_gcs_uri
+        return parse_gcs_uri(gcs_uri)
 
     @staticmethod
     def _backoff_delay(attempt: int) -> float:
         """Return a jittered exponential backoff delay for *attempt* (0-indexed).
 
-        The delay is capped at :data:`_RETRY_MAX_DELAY_S` seconds and a random
-        jitter of ±20 % is applied to avoid thundering-herd effects.
-
-        Parameters
-        ----------
-        attempt:
-            Zero-indexed retry attempt number.
-
-        Returns
-        -------
-        float
-            Seconds to sleep before the next attempt.
+        Delegates to :func:`utils.gcp_helpers.compute_backoff_delay`.
         """
-        base = min(
-            _RETRY_BASE_DELAY_S * math.pow(2, attempt),
-            _RETRY_MAX_DELAY_S,
+        from utils.gcp_helpers import compute_backoff_delay
+        return compute_backoff_delay(
+            attempt + 1,
+            base_delay=_RETRY_BASE_DELAY_S,
+            max_delay=_RETRY_MAX_DELAY_S,
+            jitter_factor=0.2,
         )
-        jitter = base * 0.2 * (2 * random.random() - 1)  # ±20 %
-        return max(0.0, base + jitter)
 
     @staticmethod
     def _is_retryable(exc: Exception) -> bool:
         """Return ``True`` if *exc* represents a transient GCP error worth retrying.
 
-        Parameters
-        ----------
-        exc:
-            The exception raised by a GCP API call.
-
-        Returns
-        -------
-        bool
-            ``True`` for HTTP 429 / 503 GCP exceptions.
+        Delegates to :func:`utils.gcp_helpers.is_transient_gcp_error`.
         """
-        return isinstance(exc, _RETRYABLE_GCP_EXCEPTIONS)
+        from utils.gcp_helpers import is_transient_gcp_error
+        return is_transient_gcp_error(exc)
 
     # ------------------------------------------------------------------
     # Public API
@@ -549,60 +506,41 @@ class GCPBatchTranslationService:
 
         request = translate.BatchTranslateDocumentRequest(**request_kwargs)
 
-        last_exc: Exception | None = None
-        for attempt in range(MAX_RETRIES):
-            try:
-                logger.info(
-                    "Submitting batch translation job | user=%s input=%s "
-                    "output_prefix=%s src=%s tgt=%s attempt=%d/%d",
-                    user_id,
-                    gcs_input_uri,
-                    gcs_output_uri_prefix,
-                    source_lang,
-                    target_lang,
-                    attempt + 1,
-                    MAX_RETRIES,
-                )
-                operation = translate_client.batch_translate_document(request=request)
-                operation_name: str = operation.operation.name
-                logger.info(
-                    "Batch job submitted | user=%s operation=%s",
-                    user_id,
-                    operation_name,
-                )
-                return operation_name
+        from utils.gcp_helpers import retry_gcp_call
 
-            except _RETRYABLE_GCP_EXCEPTIONS as exc:
-                last_exc = exc
-                delay = self._backoff_delay(attempt)
-                logger.warning(
-                    "Retryable GCP error on batch submit | user=%s attempt=%d/%d "
-                    "error=%s sleeping=%.2fs",
-                    user_id,
-                    attempt + 1,
-                    MAX_RETRIES,
-                    exc,
-                    delay,
-                )
-                time.sleep(delay)
+        def _do_submit() -> str:
+            logger.info(
+                "Submitting batch translation job | user=%s input=%s output_prefix=%s src=%s tgt=%s",
+                user_id,
+                gcs_input_uri,
+                gcs_output_uri_prefix,
+                source_lang,
+                target_lang,
+            )
+            operation = translate_client.batch_translate_document(request=request)
+            operation_name: str = operation.operation.name
+            logger.info(
+                "Batch job submitted | user=%s operation=%s",
+                user_id,
+                operation_name,
+            )
+            return operation_name
 
-            except Exception as exc:
-                # Non-retryable — bubble up immediately
-                logger.error(
-                    "Non-retryable error on batch submit | user=%s error=%s",
-                    user_id,
-                    exc,
-                )
-                raise
-
-        # All retries exhausted
-        assert last_exc is not None  # guaranteed by loop structure
-        logger.error(
-            "All %d retry attempts exhausted for batch job | user=%s",
-            MAX_RETRIES,
-            user_id,
-        )
-        raise last_exc
+        try:
+            return retry_gcp_call(
+                _do_submit,
+                max_retries=MAX_RETRIES - 1,
+                base_delay=_RETRY_BASE_DELAY_S,
+                max_delay=_RETRY_MAX_DELAY_S,
+            )
+        except Exception as exc:
+            logger.error(
+                "All %d retry attempts exhausted or non-retryable error for batch job | user=%s error=%s",
+                MAX_RETRIES,
+                user_id,
+                exc,
+            )
+            raise
 
     def stream_translated_book(
         self,

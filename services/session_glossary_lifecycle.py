@@ -26,8 +26,6 @@ from pathlib import Path
 from typing import Any
 
 from google.api_core import exceptions as gcp_exceptions
-from google.cloud import storage
-from google.cloud import translate_v3 as translate
 
 from config.settings import gcp_settings
 from services.byok_credentials_manager import BYOKCredentialsManager
@@ -138,8 +136,9 @@ class SessionGlossaryLifecycleManager:
             sessions = self._cache.get(user_id, {})
             meta_file = self._get_meta_file(user_id)
             try:
+                from utils.file_handler import atomic_write_json
                 data = {sess_id: rec.to_dict() for sess_id, rec in sessions.items()}
-                meta_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+                atomic_write_json(meta_file, data, indent=2)
             except Exception:
                 logger.exception("Failed to persist session glossary metadata for %s", user_id)
 
@@ -204,23 +203,9 @@ class SessionGlossaryLifecycleManager:
 
         # 2. Delete GCS TSV staging object
         if record.gcs_tsv_uri and record.gcs_tsv_uri.startswith("gs://"):
-            try:
-                parts = record.gcs_tsv_uri[5:].split("/", 1)
-                if len(parts) == 2:
-                    bucket_name, blob_name = parts[0], parts[1]
-                    storage_client = self._creds_manager.get_storage_client(user_id)
-                    bucket = storage_client.bucket(bucket_name)
-                    blob = bucket.blob(blob_name)
-                    blob.delete()
-                    logger.info("Deleted staged GCS TSV file: %s", record.gcs_tsv_uri)
-                    gcs_deleted = True
-                else:
-                    gcs_deleted = True
-            except gcp_exceptions.NotFound:
-                logger.info("GCS TSV blob already removed: %s", record.gcs_tsv_uri)
-                gcs_deleted = True
-            except Exception:
-                logger.exception("Error deleting GCS TSV blob %s during cleanup", record.gcs_tsv_uri)
+            from utils.gcp_helpers import delete_gcs_blob
+            storage_client = self._creds_manager.get_storage_client(user_id)
+            gcs_deleted = delete_gcs_blob(storage_client, record.gcs_tsv_uri)
         else:
             gcs_deleted = True
 

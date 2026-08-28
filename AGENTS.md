@@ -87,6 +87,16 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
   3. The engine MUST generate dynamic big-endian `/CIDToGIDMap` stream objects mapping each dynamic CID to its TrueType glyph ID, and `/W` arrays with exact advance widths.
 * **Fallback Limitations Documentation**: Any modification to the fallback translation engine MUST keep `docs/FALLBACK_TRANSLATION_LIMITATIONS.md` up to date, documenting font glyph coverage limits, lack of vector diagram reproduction, and table line-wrapping behaviors.
 
+### 2.13 Canonical Helper Routing & DRY Invariants
+* **No Bespoke Infrastructure Duplication**: Code across all services MUST NOT introduce inlined or bespoke implementations of core cloud, storage, TSV, or descriptor algorithms. All components must route through the canonical modules:
+  1. **GCS URI Parsing & Deletion**: Use `utils.gcp_helpers.parse_gcs_uri` and `utils.gcp_helpers.delete_gcs_blob`.
+  2. **GCP Exponential Backoff & Transient Retry**: Use `utils.gcp_helpers.retry_gcp_call` or `@retry_gcp_operation`. Must apply truncated exponential backoff with $\pm 20\%$ random jitter, covering `ResourceExhausted` (429), `ServiceUnavailable` (503), `InternalServerError` (500), gRPC codes 8/14, and Drive `HttpError`.
+  3. **GCP Regional Glossary Naming**: Use `utils.gcp_helpers.format_gcp_glossary_name`.
+  4. **RFC 4180 TSV Escaping & Serialization**: Use `utils.tsv_utils.escape_rfc4180_field` (with early-return fast-path for unquoted tokens) and `utils.tsv_utils.format_tsv_bytes`.
+  5. **Polymorphic PDF Streaming**: Use `utils.pdf_stream.open_pdf_stream` context manager to guarantee deterministic closure of internally opened file descriptors.
+  6. **Crash-Safe File Persistence**: Use `utils.file_handler.atomic_write_json`, `atomic_write_text`, or `atomic_write_bytes` to stage writes via `.tmp` and `os.replace`.
+* **Backward-Compatibility Shims**: When deprecating inlined service helpers, retain delegating shims where required to preserve existing public method interfaces.
+
 ---
 
 ## 3. Modal Labs Serverless Deployment Architecture

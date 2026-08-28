@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
 import logging
 import os
 import shutil
@@ -88,10 +90,8 @@ class FileHandler:
         except Exception as e:
             # Clean up partially written file if any error occurs
             if file_path and os.path.exists(file_path):
-                try:
+                with contextlib.suppress(OSError):
                     os.remove(file_path)
-                except OSError:
-                    pass
             logger.error(f"Upload file save error: {e}")
             raise
 
@@ -183,3 +183,67 @@ class FileHandler:
         except Exception as e:
             logger.error(f"Unexpected error during cleanup: {e}")
             raise
+
+
+def atomic_write_json(
+    target_path: Path | str,
+    data: Any,
+    indent: int = 2,
+) -> None:
+    """Atomically write data as JSON to target_path using tempfile and os.replace.
+
+    Ensures the parent directory exists, writes to a temporary file in the
+    same directory, flushes and fsyncs, then atomically renames the temporary
+    file to target_path. This guarantees crash safety on serverless scale-down.
+
+    Args:
+        target_path: Destination path for the JSON file.
+        data: JSON-serializable Python data structure.
+        indent: Indentation level for pretty-printing.
+    """
+    path = Path(target_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    data_str = json.dumps(data, indent=indent, ensure_ascii=False)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        delete=False,
+    ) as tmp:
+        tmp.write(data_str)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        temp_name = tmp.name
+
+    os.replace(temp_name, path)
+
+
+def atomic_write_text(
+    target_path: Path | str,
+    text: str,
+    encoding: str = "utf-8",
+) -> None:
+    """Atomically write text to target_path using tempfile and os.replace.
+
+    Args:
+        target_path: Destination path for the text file.
+        text: String content to write.
+        encoding: Text encoding, defaults to 'utf-8'.
+    """
+    path = Path(target_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding=encoding,
+        dir=path.parent,
+        delete=False,
+    ) as tmp:
+        tmp.write(text)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        temp_name = tmp.name
+
+    os.replace(temp_name, path)
+
