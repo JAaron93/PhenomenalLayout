@@ -1,9 +1,108 @@
-"""Utility functions for language detection and text extraction."""
+"""Utility functions for language detection, text extraction, and linguistic compound analysis."""
+
+from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "DEFAULT_SUPPORTED_LANGUAGES",
+    "extract_text_sample_for_language_detection",
+    "get_german_morphological_patterns",
+    "is_german_compound_word",
+]
+
+_PHILOSOPHICAL_ENDINGS: tuple[str, ...] = (
+    "bewusstsein",
+    "wirklichkeit",
+    "erkenntnis",
+    "wahrnehmung",
+    "philosophie",
+    "theorie",
+    "anschauung",
+    "thematik",
+)
+
+_SINGLE_ROOT_NOUNS: frozenset[str] = frozenset({
+    "bewusstsein",
+    "wirklichkeit",
+    "erkenntnis",
+    "wahrnehmung",
+    "philosophie",
+    "wissenschaft",
+    "gesellschaft",
+    "dasein",
+    "existenz",
+    "phänomenologie",
+    "phanomenologie",
+    "intentionalität",
+    "intentionalitat",
+})
+
+_PHILOSOPHICAL_PREFIX_RE: re.Pattern[str] = re.compile(
+    r"^(?:welt|lebens|seins|geist|seele)\w{4,}$", re.IGNORECASE
+)
+_STANDARD_LINKING_RE: re.Pattern[str] = re.compile(
+    r"^\w{3,}(?:s|n|es|en|er|e|ns|ts)\w{3,}$", re.IGNORECASE
+)
+_COMPOUND_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\w+(?:s|n|es|en|er|e|ns|ts)\w+", re.IGNORECASE),
+    re.compile(
+        r"\w+(?:bewusstsein|wirklichkeit|erkenntnis|wahrnehmung|philosophie|theorie|anschauung|thematik)",
+        re.IGNORECASE,
+    ),
+    re.compile(r"(?:welt|lebens|seins|geist|seele)\w+", re.IGNORECASE),
+)
+
+
+def is_german_compound_word(word: str) -> bool:
+    """Identify if a word is likely a German philosophical compound noun.
+
+    Employs module-level precompiled regular expressions, minimum-length
+    filters, uppercase checks, and set lookups to detect compound structures
+    with zero per-call regex compilation overhead (O(len(word)) time, O(1) space).
+
+    Args:
+        word: Token string to analyze.
+
+    Returns:
+        bool: True if the word exhibits German compound structure, False otherwise.
+    """
+    if not isinstance(word, str) or len(word) < 7:
+        return False
+
+    word_lower = word.lower()
+
+    # Exclude common single root words that might otherwise match suffixes
+    if word_lower in _SINGLE_ROOT_NOUNS:
+        return False
+
+    # Check for multiple capital letters (German noun compounds / CamelCase)
+    capital_count = sum(1 for c in word if c.isupper())
+    if capital_count >= 2:
+        return True
+
+    # Check for philosophical compounds (suffix ending with prefix >= 3 chars)
+    for ending in _PHILOSOPHICAL_ENDINGS:
+        if word_lower.endswith(ending) and len(word_lower) > len(ending):
+            prefix = word_lower[: -len(ending)]
+            if len(prefix) >= 3:
+                return True
+
+    # Check philosophical prefix compounds (e.g. Lebenswelt, Seinsstruktur)
+    if _PHILOSOPHICAL_PREFIX_RE.match(word_lower):
+        return True
+
+    # Check standard linking elements (e.g. Wirklichkeits-, Bewusstseins-)
+    if _STANDARD_LINKING_RE.match(word_lower):
+        return True
+
+    # Fallback to compiled compound patterns
+    return any(pattern.search(word_lower) for pattern in _COMPOUND_PATTERNS)
+
 
 DEFAULT_SUPPORTED_LANGUAGES = (
     "English",
