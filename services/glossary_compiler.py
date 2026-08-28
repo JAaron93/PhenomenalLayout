@@ -1,5 +1,5 @@
-"""services/glossary_compiler.py
-================================
+r"""RFC 4180 Glossary TSV Compiler for Google Cloud Translation.
+
 Track 2 — Dual-Tier Glossary Sync & Persistent User Vocabulary Store
 Traceability: FR-02, NFR-04
 
@@ -8,7 +8,7 @@ user persistent terminology, and book session overrides into RFC 4180 TSV bytes.
 
 Design invariants:
 - **Strict Precedence Hierarchy** — Book Session Overrides > User Persistent Vocabulary > Base Dictionary.
-- **RFC 4180 TSV Formatting** — Header `de\\ten`, tab-separated, quotes escaped (`""`), newline-terminated.
+- **RFC 4180 TSV Formatting** — Header `de\ten`, tab-separated, quotes escaped (`""`), newline-terminated.
 - **Keep-Untranslated Directive** — Translates `term -> term` to instruct Google Cloud Translation to retain original German.
 - **Unicode UTF-8 Preservation** — Full preservation of German umlauts, ligatures, and scholarly characters.
 """
@@ -24,12 +24,6 @@ from config.settings import gcp_settings
 from services.user_vocabulary_store import TermPreference, UserVocabularyStore
 
 logger = logging.getLogger(__name__)
-
-
-def _escape_rfc4180_field(val: str) -> str:
-    """Format string for RFC 4180 TSV output with double-quote escaping when needed."""
-    from utils.tsv_utils import escape_rfc4180_field
-    return escape_rfc4180_field(val)
 
 
 class GlossaryCompiler:
@@ -77,7 +71,7 @@ class GlossaryCompiler:
 
     @staticmethod
     def format_rfc4180_tsv(entries: dict[str, str]) -> bytes:
-        """Format term mappings into RFC 4180 compliant TSV bytes with header `de\\ten`."""
+        r"""Format term mappings into RFC 4180 compliant TSV bytes with header `de\ten`."""
         from utils.tsv_utils import format_tsv_bytes
         return format_tsv_bytes(entries, header=("de", "en"))
 

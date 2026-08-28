@@ -1,5 +1,5 @@
-"""services/user_vocabulary_store.py
-====================================
+r"""Persistent User Vocabulary Store for Google Cloud Translation.
+
 Track 2 — Dual-Tier Glossary Sync & Persistent User Vocabulary Store
 Traceability: FR-06, NFR-03, NFR-09
 
@@ -9,7 +9,7 @@ stored persistently on the Modal Volume (e.g. `/data/user_vocabularies/{user_id}
 Design invariants:
 - **Persistent storage on Modal Volume** — isolated SQLite database per user.
 - **ACID atomicity and thread-safety** — WAL mode enabled, per-file locking, safe concurrent writes.
-- **RFC 4180 TSV export** — exports personal dictionaries with strict escaping and `de\\ten` header.
+- **RFC 4180 TSV export** — exports personal dictionaries with strict escaping and `de\ten` header.
 - **Deterministic File Handle Cleanup** — all SQLite connections closed deterministically in try...finally.
 - **Zero host PDF leakage** — only stores lightweight terminology strings (<= 5MB).
 """
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 class TermPreference:
     """Represents a translator's saved terminology decision for a philosophical term or neologism.
 
-    Attributes
+    Attributes:
     ----------
     german_term:
         The source German term or coined compound (e.g. "Schauung", "Dasein").
@@ -87,12 +87,6 @@ class TermPreference:
             created_at=float(data.get("created_at", time.time())),
             updated_at=float(data.get("updated_at", time.time())),
         )
-
-
-def _escape_rfc4180_field(field_value: str) -> str:
-    """Format a string field for RFC 4180 TSV output."""
-    from utils.tsv_utils import escape_rfc4180_field
-    return escape_rfc4180_field(field_value)
 
 
 class UserVocabularyStore:
