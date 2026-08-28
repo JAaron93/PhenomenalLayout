@@ -407,3 +407,50 @@ class TestDualPaneViewerCoverageBranches:
         missing = tmp_path / "missing.pdf"
         with pytest.raises(ValueError, match="file not found"):
             viewer._open_source(missing)
+
+    def test_get_bilingual_page_pair_with_file_paths(
+        self,
+        viewer: DualPaneViewerController,
+        german_pdf_bytes: bytes,
+        english_pdf_bytes: bytes,
+        tmp_path: Path,
+    ) -> None:
+        de_path = tmp_path / "german.pdf"
+        en_path = tmp_path / "english.pdf"
+        de_path.write_bytes(german_pdf_bytes)
+        en_path.write_bytes(english_pdf_bytes)
+
+        pair = viewer.get_bilingual_page_pair(
+            german_source=de_path,
+            english_source=en_path,
+            page_number=1,
+            render_images=False,
+        )
+        assert pair.total_pages_german == 2
+        assert pair.total_pages_english == 2
+        assert "Schauung" in pair.german_text
+        assert "Intuitive Vision" in pair.english_text
+
+    def test_search_term_across_panes_with_file_paths(
+        self,
+        viewer: DualPaneViewerController,
+        german_pdf_bytes: bytes,
+        english_pdf_bytes: bytes,
+        tmp_path: Path,
+    ) -> None:
+        de_path = tmp_path / "german.pdf"
+        en_path = tmp_path / "english.pdf"
+        de_path.write_bytes(german_pdf_bytes)
+        en_path.write_bytes(english_pdf_bytes)
+
+        coords = viewer.search_term_across_panes(
+            german_source=de_path,
+            english_source=en_path,
+            german_term="Schauung",
+            english_term="Intuitive Vision",
+            page_number=1,
+        )
+        assert coords.page_number == 1
+        assert len(coords.german_matches) > 0
+        assert len(coords.english_matches) > 0
+

@@ -520,3 +520,46 @@ class TestFallbackCoverageAndErrorBranches:
         for line in lines:
             assert len(line) <= max_chars
             assert "\n" not in line
+
+
+class TestFallbackTranslatorOptimizations:
+    """Test suite for Track 3 TrueType memoization and stream normalization [FR-04, FR-05]."""
+
+    def test_parse_ttf_metrics_lru_caching(self) -> None:
+        font_bytes = FallbackPageTranslator._get_fallback_font_bytes()
+        if not font_bytes:
+            font_bytes = b"fake-ttf-bytes-for-caching"
+
+        # Verify function has LRU cache wrapper
+        assert hasattr(FallbackPageTranslator._parse_ttf_metrics_and_cmap, "cache_info")
+        FallbackPageTranslator._parse_ttf_metrics_and_cmap.cache_clear()
+
+        info_before = FallbackPageTranslator._parse_ttf_metrics_and_cmap.cache_info()
+        assert info_before.hits == 0
+
+        # Call 1: cache miss
+        res1 = FallbackPageTranslator._parse_ttf_metrics_and_cmap(font_bytes)
+
+        # Call 2: cache hit
+        res2 = FallbackPageTranslator._parse_ttf_metrics_and_cmap(font_bytes)
+
+        info_after = FallbackPageTranslator._parse_ttf_metrics_and_cmap.cache_info()
+        assert info_after.hits >= 1
+        assert res1 == res2
+
+    def test_extract_failed_pages_with_file_path(
+        self,
+        fallback_translator: FallbackPageTranslator,
+        sample_source_pdf: bytes,
+        tmp_path: Path,
+    ) -> None:
+        pdf_file = tmp_path / "source_doc.pdf"
+        pdf_file.write_bytes(sample_source_pdf)
+
+        results = fallback_translator.extract_failed_pages_text(
+            pdf_file, failed_page_indices=[0]
+        )
+        assert len(results) == 1
+        assert results[0].page_index == 0
+        assert results[0].extracted_successfully is True
+

@@ -17,6 +17,7 @@ BDD Scenario: FR-13.1
 from __future__ import annotations
 
 import contextlib
+import functools
 import io
 import logging
 import struct
@@ -114,46 +115,48 @@ class FallbackPageTranslator:
         Returns:
             List of PageText records for each requested page index.
         """
-        stream, should_close = self._open_source(source)
         try:
-            reader = pypdf.PdfReader(stream)
-            total_pages = len(reader.pages)
-            extracted_pages: list[PageText] = []
+            from utils.pdf_stream import open_pdf_stream
 
-            for idx in failed_page_indices:
-                if 0 <= idx < total_pages:
-                    page = reader.pages[idx]
-                    text = page.extract_text() or ""
-                    extracted_pages.append(
-                        PageText(
-                            page_index=idx,
-                            page_number=idx + 1,
-                            raw_text=text.strip(),
-                            extracted_successfully=True,
-                        )
-                    )
-                else:
-                    logger.warning(
-                        "Requested failed page index %d out of range (total pages: %d)",
-                        idx,
-                        total_pages,
-                    )
-                    extracted_pages.append(
-                        PageText(
-                            page_index=idx,
-                            page_number=idx + 1,
-                            raw_text="",
-                            extracted_successfully=False,
-                        )
-                    )
+            with open_pdf_stream(source) as (stream, _):
+                reader = pypdf.PdfReader(stream)
+                total_pages = len(reader.pages)
+                extracted_pages: list[PageText] = []
 
-            return extracted_pages
+                for idx in failed_page_indices:
+                    if 0 <= idx < total_pages:
+                        page = reader.pages[idx]
+                        text = page.extract_text() or ""
+                        extracted_pages.append(
+                            PageText(
+                                page_index=idx,
+                                page_number=idx + 1,
+                                raw_text=text.strip(),
+                                extracted_successfully=True,
+                            )
+                        )
+                    else:
+                        logger.warning(
+                            "Requested failed page index %d out of range (total pages: %d)",
+                            idx,
+                            total_pages,
+                        )
+                        extracted_pages.append(
+                            PageText(
+                                page_index=idx,
+                                page_number=idx + 1,
+                                raw_text="",
+                                extracted_successfully=False,
+                            )
+                        )
+
+                return extracted_pages
+        except FileNotFoundError as exc:
+            raise ValueError(f"File not found: {source}") from exc
+        except TypeError as exc:
+            raise TypeError(f"Unsupported source type: {type(source)}") from exc
         except Exception as exc:
             raise ValueError(f"Failed to parse source PDF: {exc}") from exc
-        finally:
-            if should_close:
-                with contextlib.suppress(Exception):
-                    stream.close()
 
     def translate_failed_pages(
         self,
@@ -248,52 +251,54 @@ class FallbackPageTranslator:
         Returns:
             io.BytesIO or Path to the spliced PDF document.
         """
-        stream, should_close = self._open_source(layout_pdf)
         try:
-            reader = pypdf.PdfReader(stream)
-            total_pages = len(reader.pages)
-            writer = pypdf.PdfWriter()
+            from utils.pdf_stream import open_pdf_stream
 
-            # Index replacements by page index
-            replacements: dict[int, TranslatedPage] = {
-                tp.page_index: tp for tp in translated_pages if tp.success
-            }
+            with open_pdf_stream(layout_pdf) as (stream, _):
+                reader = pypdf.PdfReader(stream)
+                total_pages = len(reader.pages)
+                writer = pypdf.PdfWriter()
 
-            for idx in range(total_pages):
-                if idx in replacements:
-                    replacement = replacements[idx]
-                    fallback_page = self._render_fallback_page(
-                        text=replacement.translated_text,
-                        page_number=idx + 1,
-                    )
-                    writer.add_page(fallback_page)
+                # Index replacements by page index
+                replacements: dict[int, TranslatedPage] = {
+                    tp.page_index: tp for tp in translated_pages if tp.success
+                }
+
+                for idx in range(total_pages):
+                    if idx in replacements:
+                        replacement = replacements[idx]
+                        fallback_page = self._render_fallback_page(
+                            text=replacement.translated_text,
+                            page_number=idx + 1,
+                        )
+                        writer.add_page(fallback_page)
+                    else:
+                        writer.add_page(reader.pages[idx])
+
+                if output_destination is not None:
+                    if isinstance(output_destination, (str, Path)):
+                        out_path = Path(output_destination)
+                        out_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(out_path, "wb") as f:
+                            writer.write(f)
+                        return out_path
+                    else:
+                        writer.write(output_destination)
+                        return output_destination
                 else:
-                    writer.add_page(reader.pages[idx])
+                    out_buf = io.BytesIO()
+                    writer.write(out_buf)
+                    out_buf.seek(0)
+                    return out_buf
 
-            if output_destination is not None:
-                if isinstance(output_destination, (str, Path)):
-                    out_path = Path(output_destination)
-                    out_path.parent.mkdir(parents=True, exist_ok=True)
-                    with open(out_path, "wb") as f:
-                        writer.write(f)
-                    return out_path
-                else:
-                    writer.write(output_destination)
-                    return output_destination
-            else:
-                out_buf = io.BytesIO()
-                writer.write(out_buf)
-                out_buf.seek(0)
-                return out_buf
-
+        except FileNotFoundError as exc:
+            raise ValueError(f"File not found: {layout_pdf}") from exc
+        except TypeError as exc:
+            raise TypeError(f"Unsupported source type: {type(layout_pdf)}") from exc
         except Exception as exc:
             if isinstance(exc, ValueError) and "Failed to parse layout PDF" in str(exc):
                 raise
             raise ValueError(f"Failed to parse layout PDF: {exc}") from exc
-        finally:
-            if should_close:
-                with contextlib.suppress(Exception):
-                    stream.close()
 
     # ------------------------------------------------------------------
     # Internal Helpers
@@ -386,6 +391,7 @@ class FallbackPageTranslator:
         return b""
 
     @staticmethod
+    @functools.lru_cache(maxsize=4)
     def _parse_ttf_metrics_and_cmap(
         ttf_data: bytes,
     ) -> tuple[int, dict[int, int], dict[int, int]]:
@@ -853,7 +859,11 @@ class FallbackPageTranslator:
     def _open_source(
         source: Path | str | bytes | BinaryIO,
     ) -> tuple[BinaryIO, bool]:
-        """Normalize input into an open binary stream with closure flag."""
+        """Normalize input into an open binary stream with closure flag.
+
+        Deprecated backward-compatibility shim. Callers should migrate to
+        :func:`utils.pdf_stream.open_pdf_stream` context manager.
+        """
         if isinstance(source, (str, Path)):
             p = Path(source)
             if not p.exists():

@@ -68,15 +68,22 @@ def open_pdf_stream(
             stream = io.BytesIO(source)
             should_close = True
 
-        elif hasattr(source, "read") and hasattr(source, "seek"):
-            # Ensure seekable stream is rewound to beginning
-            source.seek(0)
-            cur_pos = source.tell()
-            end_pos = source.seek(0, io.SEEK_END)
-            source.seek(cur_pos)
-            file_size_mb = max(0.0, end_pos) / (1024.0 * 1024.0)
-            stream = source
-            should_close = False
+        elif hasattr(source, "read"):
+            try:
+                # Ensure seekable stream is rewound to beginning
+                source.seek(0)
+                cur_pos = source.tell()
+                end_pos = source.seek(0, io.SEEK_END)
+                source.seek(cur_pos)
+                file_size_mb = max(0.0, end_pos) / (1024.0 * 1024.0)
+                stream = source
+                should_close = False
+            except (AttributeError, OSError):
+                # Non-seekable stream: buffer into memory to measure size
+                data = source.read()
+                file_size_mb = len(data) / (1024.0 * 1024.0)
+                stream = io.BytesIO(data)
+                should_close = True
 
         else:
             raise TypeError(

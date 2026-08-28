@@ -328,6 +328,22 @@ class TestPDFStream:
         ):
             pass
 
+    def test_open_pdf_stream_with_non_seekable_stream(self) -> None:
+        from utils.pdf_stream import open_pdf_stream
+
+        class NonSeekableStream(io.BytesIO):
+            def seek(self, _offset: int, _whence: int = 0) -> int:
+                raise OSError("Stream not seekable")
+
+        raw_bytes = b"%PDF-1.4 non-seekable content"
+        stream_in = NonSeekableStream(raw_bytes)
+        with open_pdf_stream(stream_in) as (stream_out, size_mb):
+            assert stream_out.read() == raw_bytes
+            assert size_mb > 0
+            assert not stream_out.closed
+        assert stream_out.closed
+
+
 
 # ===========================================================================
 # 4. Tests for utils.file_handler (atomic writes)

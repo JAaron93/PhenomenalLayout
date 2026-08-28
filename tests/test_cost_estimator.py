@@ -14,8 +14,8 @@ import io
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 import pypdf
+import pytest
 
 from services.cost_estimator import CostQuote, GCPCostEstimator
 
@@ -109,7 +109,7 @@ class TestCostEstimatorEdgeCases:
         pdf_bytes = _create_mock_pdf_bytes(page_count=3)
 
         class NonSeekableStream(io.BytesIO):
-            def seek(self, offset: int, whence: int = 0) -> int:
+            def seek(self, _offset: int, _whence: int = 0) -> int:
                 raise OSError("Stream not seekable")
 
         stream = NonSeekableStream(pdf_bytes)
