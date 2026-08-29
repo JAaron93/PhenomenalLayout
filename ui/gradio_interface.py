@@ -21,6 +21,8 @@ def render_metrics(metrics_dict: dict) -> str:
     Recognizes common keys like OCR confidence, layout scores, and
     text accuracy. Falls back to compact JSON if no known keys are present.
     """
+    if not metrics_dict:
+        return ""
     parts: list[str] = []
     ocr = metrics_dict.get("ocr_conf") or metrics_dict.get("ocr_confidence")
     if isinstance(ocr, (int, float)):
@@ -52,7 +54,7 @@ __doc__ = f"Gradio interface for {APP_TITLE}."
 
 def on_file_upload(
     file,
-    progress=None,
+    progress: gr.Progress = gr.Progress(track_tqdm=False),  # noqa: B008
 ):
     """Wrapper to handle validation errors and quality metrics.
 
@@ -60,11 +62,12 @@ def on_file_upload(
     (preview, upload_status, detected_language, preprocessing, processing_info,
      quality_metrics)
     """
-    if progress is None:
-        progress = gr.Progress(track_tqdm=False)
-    try:
+    if file is None:
+        return "", "", "", "", "", ""
+    if progress is not None:
         with contextlib.suppress(Exception):
             progress(0.05, desc="Validating file")
+    try:
         result = process_file_upload_sync(file)
     except Exception as exc:  # Fallback for unexpected client/server issues
         logging.error(
@@ -84,8 +87,9 @@ def on_file_upload(
             friendly = "Only PDF format supported"
         elif code == "DOLPHIN_014":
             friendly = "Encrypted PDFs not supported - please provide unlocked PDF"
-        with contextlib.suppress(Exception):
-            progress(1.0)
+        if progress is not None:
+            with contextlib.suppress(Exception):
+                progress(1.0)
         return "", f"{code}: {friendly}", "", "", "", ""
 
     # If server returned a structured non-error dict, try to map keys
@@ -134,8 +138,9 @@ def on_file_upload(
         metrics_str = ""
         if isinstance(metrics_obj, dict):
             metrics_str = render_metrics(metrics_obj)
-        with contextlib.suppress(Exception):
-            progress(1.0)
+        if progress is not None:
+            with contextlib.suppress(Exception):
+                progress(1.0)
         return (
             preview,
             upload_status,
@@ -177,8 +182,9 @@ def on_file_upload(
                     vals[4] = {**info, "progress_text": note}
         except Exception:  # ignore extraction errors
             metrics = ""
-        with contextlib.suppress(Exception):
-            progress(1.0)
+        if progress is not None:
+            with contextlib.suppress(Exception):
+                progress(1.0)
         return vals[0], vals[1], vals[2], vals[3], vals[4], metrics
 
     # Unknown return; show generic status
@@ -189,17 +195,16 @@ def start_translation_with_progress(
     target_language,
     pages_to_translate,
     philosophy_mode,
-    progress=None,
+    progress: gr.Progress = gr.Progress(track_tqdm=False),  # noqa: B008
 ):
     """Start translation and update a subtle progress indicator.
 
     Returns 4 values to update the UI:
     (progress_status, upload_status, download_btn, progress_timer)
     """
-    if progress is None:
-        progress = gr.Progress(track_tqdm=False)
-    with contextlib.suppress(Exception):
-        progress(0.05, desc="Starting translation")
+    if progress is not None:
+        with contextlib.suppress(Exception):
+            progress(0.05, desc="Starting translation")
 
     try:
         res = start_translation_sync(
@@ -208,22 +213,27 @@ def start_translation_with_progress(
             philosophy_mode,
         )
         if isinstance(res, (list, tuple)) and len(res) >= 4:
-            with contextlib.suppress(Exception):
-                progress(0.2, desc="Submitted to backend")
+            if progress is not None:
+                with contextlib.suppress(Exception):
+                    progress(0.2, desc="Submitted to backend")
             return tuple(res[:4])
         status, upload_status, is_ready = res
     except Exception as e:
         logging.error("Translation start failed: %s", e, exc_info=True)
         status, upload_status, is_ready = f"❌ Error: {e!s}", "", False
 
-    with contextlib.suppress(Exception):
-        progress(0.2, desc="Submitted to backend")
+    if progress is not None:
+        with contextlib.suppress(Exception):
+            progress(0.2, desc="Submitted to backend")
+
+    is_error = "❌" in str(status) or "failed" in str(status).lower()
+    timer_active = not is_ready and not is_error
 
     return (
         status,
         upload_status,
-        gr.update(interactive=is_ready),
-        gr.Timer(active=not is_ready),
+        gr.Button(interactive=is_ready),
+        gr.Timer(active=timer_active),
     )
 
 
@@ -234,6 +244,7 @@ def estimate_cost_ui(file_obj: Any) -> str:
     path = getattr(file_obj, "name", str(file_obj))
     try:
         from services.cost_estimator import GCPCostEstimator
+
         quote = GCPCostEstimator().estimate_book_cost(Path(path))
         return (
             f"### 📊 Itemized GCP Budget Quote\n\n"
@@ -280,7 +291,12 @@ def _authenticate_gradio_caller(
         return
 
     token = auth_token.strip()
-    if not token and request is not None and hasattr(request, "headers") and request.headers:
+    if (
+        not token
+        and request is not None
+        and hasattr(request, "headers")
+        and request.headers
+    ):
         token = request.headers.get("x-api-key") or ""
         if not token:
             auth_hdr = request.headers.get("authorization", "")
@@ -322,13 +338,23 @@ def validate_byok_ui(
     request: gr.Request | None = None,
 ) -> str:
     """Validate user BYOK credentials via non-billable API calls after enforcing ownership."""
-    if not user_id.strip() or not project_id.strip() or not bucket_name.strip() or not sa_json.strip():
+    if (
+        not user_id.strip()
+        or not project_id.strip()
+        or not bucket_name.strip()
+        or not sa_json.strip()
+    ):
         return "❌ Please enter User ID, Project ID, Bucket Name, and Service Account JSON."
     try:
-        _authenticate_gradio_caller(user_id.strip(), auth_token=auth_token, request=request)
+        _authenticate_gradio_caller(
+            user_id.strip(), auth_token=auth_token, request=request
+        )
         from services.byok_credentials_manager import BYOKCredentialsManager
+
         mgr = BYOKCredentialsManager()
-        mgr.set_credentials(user_id.strip(), project_id.strip(), bucket_name.strip(), sa_json.strip())
+        mgr.set_credentials(
+            user_id.strip(), project_id.strip(), bucket_name.strip(), sa_json.strip()
+        )
         val = mgr.validate_credentials(user_id.strip())
         icon = "✅" if val.status == "VALID" else "❌"
         return (
@@ -354,8 +380,11 @@ def pre_scan_ui(
         return "Please provide User ID and upload a PDF.", "", ""
     path = getattr(file_obj, "name", str(file_obj))
     try:
-        _authenticate_gradio_caller(user_id.strip(), auth_token=auth_token, request=request)
+        _authenticate_gradio_caller(
+            user_id.strip(), auth_token=auth_token, request=request
+        )
         from services.book_translation_orchestrator import BookTranslationOrchestrator
+
         orch = BookTranslationOrchestrator()
         res = orch.pre_scan_book(user_id=user_id.strip(), source=Path(path))
         badge = (
@@ -414,17 +443,27 @@ def create_gradio_interface() -> gr.Blocks:
         # -------------------------------------------------------------------
         # Track 5: GCP Migration & Scholarly Studio (TASK-5.2)
         # -------------------------------------------------------------------
-        with gr.Accordion("🏛️ GCP Book Translation, BYOK & Scholarly Studio", open=True):
-            gr.Markdown("Zero host storage full-length book translation via Google Cloud Document Translation & GCS.")
+        with gr.Accordion(
+            "🏛️ GCP Book Translation, BYOK & Scholarly Studio", open=True
+        ):
+            gr.Markdown(
+                "Zero host storage full-length book translation via Google Cloud Document Translation & GCS."
+            )
 
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### 💰 1. Zero-Auth GCP Cost & Storage Estimator")
                     cost_input = gr.File(label="Upload Book PDF", file_types=[".pdf"])
-                    calc_quote_btn = gr.Button("Calculate Budget Quote", variant="secondary")
-                    cost_quote_display = gr.Markdown("Upload a PDF to view itemized translation and retention costs.")
+                    calc_quote_btn = gr.Button(
+                        "Calculate Budget Quote", variant="secondary"
+                    )
+                    cost_quote_display = gr.Markdown(
+                        "Upload a PDF to view itemized translation and retention costs."
+                    )
 
-                    with gr.Accordion("📘 2. Interactive GCP Onboarding Walkthrough", open=False):
+                    with gr.Accordion(
+                        "📘 2. Interactive GCP Onboarding Walkthrough", open=False
+                    ):
                         gr.Markdown(
                             "1. Create or select a GCP project (`projects.create`).\n"
                             "2. Enable Cloud Translation API (`translate.googleapis.com`).\n"
@@ -438,27 +477,61 @@ def create_gradio_interface() -> gr.Blocks:
                         )
 
                     gr.Markdown("### 🔑 3. Bring Your Own Key (BYOK) Setup")
-                    byok_token = gr.Textbox(label="API Key or Bearer Token", type="password", placeholder="Enter API key or JWT token (or login via session)")
+                    byok_token = gr.Textbox(
+                        label="API Key or Bearer Token",
+                        type="password",
+                        placeholder="Enter API key or JWT token (or login via session)",
+                    )
                     byok_uid = gr.Textbox(label="User ID", value="scholar-01")
-                    byok_pid = gr.Textbox(label="GCP Project ID", placeholder="my-gcp-project")
-                    byok_bkt = gr.Textbox(label="GCS Bucket Name", placeholder="my-translation-bucket")
-                    byok_key = gr.Textbox(label="Service Account JSON", placeholder='{"type": "service_account", ...}', lines=2)
-                    validate_key_btn = gr.Button("Validate Credentials", variant="primary")
+                    byok_pid = gr.Textbox(
+                        label="GCP Project ID", placeholder="my-gcp-project"
+                    )
+                    byok_bkt = gr.Textbox(
+                        label="GCS Bucket Name", placeholder="my-translation-bucket"
+                    )
+                    byok_key = gr.Textbox(
+                        label="Service Account JSON",
+                        placeholder='{"type": "service_account", ...}',
+                        lines=2,
+                    )
+                    validate_key_btn = gr.Button(
+                        "Validate Credentials", variant="primary"
+                    )
                     byok_status_display = gr.Markdown("Awaiting credentials...")
 
                 with gr.Column():
                     gr.Markdown("### 🔍 4. Pre-Scan & Fraktur Script Confidence")
-                    prescan_token = gr.Textbox(label="API Key or Bearer Token", type="password", placeholder="Enter API key or JWT token (or login via session)")
+                    prescan_token = gr.Textbox(
+                        label="API Key or Bearer Token",
+                        type="password",
+                        placeholder="Enter API key or JWT token (or login via session)",
+                    )
                     prescan_uid = gr.Textbox(label="User ID", value="scholar-01")
-                    prescan_input = gr.File(label="Select Book PDF", file_types=[".pdf"])
-                    run_prescan_btn = gr.Button("Run Pre-Scan Assessment", variant="primary")
+                    prescan_input = gr.File(
+                        label="Select Book PDF", file_types=[".pdf"]
+                    )
+                    run_prescan_btn = gr.Button(
+                        "Run Pre-Scan Assessment", variant="primary"
+                    )
                     script_badge_display = gr.Markdown("Awaiting pre-scan...")
                     neo_display = gr.Markdown("Neologisms will be displayed here...")
-                    vocab_display = gr.Markdown("Saved user terminology will be displayed here...")
+                    vocab_display = gr.Markdown(
+                        "Saved user terminology will be displayed here..."
+                    )
 
-            calc_quote_btn.click(fn=estimate_cost_ui, inputs=[cost_input], outputs=[cost_quote_display])
-            validate_key_btn.click(fn=validate_byok_ui, inputs=[byok_uid, byok_pid, byok_bkt, byok_key, byok_token], outputs=[byok_status_display])
-            run_prescan_btn.click(fn=pre_scan_ui, inputs=[prescan_uid, prescan_input, prescan_token], outputs=[script_badge_display, neo_display, vocab_display])
+            calc_quote_btn.click(
+                fn=estimate_cost_ui, inputs=[cost_input], outputs=[cost_quote_display]
+            )
+            validate_key_btn.click(
+                fn=validate_byok_ui,
+                inputs=[byok_uid, byok_pid, byok_bkt, byok_key, byok_token],
+                outputs=[byok_status_display],
+            )
+            run_prescan_btn.click(
+                fn=pre_scan_ui,
+                inputs=[prescan_uid, prescan_input, prescan_token],
+                outputs=[script_badge_display, neo_display, vocab_display],
+            )
 
         with gr.Row():
             with gr.Column(scale=1):
@@ -567,7 +640,7 @@ def create_gradio_interface() -> gr.Blocks:
                     refresh_btn = gr.Button("🔄 Refresh", size="sm", scale=1)
 
                 # Timer for auto-refreshing progress while translation runs
-                progress_timer = gr.Timer(1.0, active=False)
+                progress_timer = gr.Timer(value=1.0, active=False)
 
                 # Export Section
                 gr.Markdown("## 💾 Download Translated Document")
@@ -610,13 +683,37 @@ def create_gradio_interface() -> gr.Blocks:
             ],
         )
 
-        # Status update function for manual refresh
+        # Status update function for manual refresh and timer tick
         def update_status(_progress: "gr.Progress | None" = None):
             if _progress is None:
                 _progress = gr.Progress(track_tqdm=False)
-            status, _unused, download_ready, _output_file = get_translation_status()
-            timer_update = gr.Timer(active=not bool(download_ready))
-            return status, gr.update(interactive=download_ready), timer_update
+            res = get_translation_status()
+            if hasattr(res, "message"):
+                status = res.message
+                is_done = bool(res.is_done)
+                is_error = bool(res.is_error)
+            elif isinstance(res, (list, tuple)):
+                status = res[0]
+                is_done = bool(res[2]) if len(res) > 2 else False
+                is_error = bool(res[3]) if len(res) > 3 else False
+            else:
+                status = str(res)
+                is_done = False
+                is_error = False
+
+            status_str = str(status).lower()
+            if not is_error and ("❌" in str(status) or "failed" in status_str):
+                is_error = True
+            is_idle = (
+                "ready for advanced translation" in status_str
+                or "idle" in status_str
+            )
+            is_active = (not is_done) and (not is_error) and (not is_idle)
+            return (
+                status,
+                gr.Button(interactive=is_done),
+                gr.Timer(active=is_active),
+            )
 
         # Connect refresh button to status update
         # Manual refresh

@@ -32,6 +32,12 @@ def dolphin_env_defaults(monkeypatch):
         ),
     )
     yield
+    try:
+        from utils.memory_monitor import cleanup_memory_monitor
+
+        cleanup_memory_monitor()
+    except Exception:
+        pass
 
 
 @pytest.fixture
@@ -85,7 +91,6 @@ def pytest_configure(config: pytest.Config) -> None:
             "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
         )
         sys.modules["services.dolphin_client"] = dummy_dolphin
-
     # When focusing, quiet output at runtime without relying on pre-parsed
     # addopts
     if os.getenv("FOCUSED"):

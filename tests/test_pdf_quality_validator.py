@@ -54,7 +54,7 @@ def test_extract_text_hybrid_pdfminer_fallback(
         def __init__(self, _path: str) -> None:
             self.pages = [_FakePage(), _FakePage()]
 
-    def _extract_text(_pdf_path: str, _page_numbers=None) -> str:
+    def _extract_text(_pdf_path: str, page_numbers=None) -> str:
         # Return one chunk per page separated by form feed
         return "X\x0cY"
 
@@ -91,7 +91,7 @@ def test_extract_text_hybrid_ocr_fallback(
             self.pages = [_FakePage(), _FakePage()]
 
     # pdfminer returns empty -> force OCR
-    def _pdfminer_extract(_pdf_path: str, _page_numbers=None) -> str:
+    def _pdfminer_extract(_pdf_path: str, page_numbers=None) -> str:
         return ""
 
     class _Img:
@@ -99,16 +99,17 @@ def test_extract_text_hybrid_ocr_fallback(
             self.idx = idx
 
     def _convert_from_path(
-        _pdf_path: str,
-        _dpi: int,
-        first_page: int,
-        last_page: int,
+        _pdf_path: str = "",
+        _dpi: int = 72,
+        first_page: int = 1,
+        last_page: int = 1,
         _poppler_path=None,
+        **_kwargs,
     ) -> list[_Img]:
         count = (last_page - first_page) + 1
         return [_Img(i) for i in range(count)]
 
-    def _image_to_string(img: _Img, _lang: str, _timeout: float) -> str:
+    def _image_to_string(img: _Img, lang: str = "eng", timeout: float = 10.0, **_kwargs) -> str:
         return f"OCR{img.idx + 1}"
 
     fake_pypdf = _make_module(PdfReader=_FakeReader)
@@ -465,11 +466,12 @@ def test_extract_text_clamps_dpi_minimum(
     dpi_seen: list[int] = []
 
     def _convert_from_path(
-        _pdf_path: str,
-        dpi: int,
-        _first_page: int,
-        _last_page: int,
+        _pdf_path: str = "",
+        dpi: int = 72,
+        first_page: int = 1,
+        last_page: int = 1,
         _poppler_path=None,
+        **_kwargs,
     ) -> list[object]:
         dpi_seen.append(dpi)
         return [object()]
@@ -518,11 +520,12 @@ def test_extract_text_honors_dpi_boundary(
     dpi_seen: list[int] = []
 
     def _convert_from_path(
-        _pdf_path: str,
-        dpi: int,
-        _first_page: int,
-        _last_page: int,
+        _pdf_path: str = "",
+        dpi: int = 72,
+        first_page: int = 1,
+        last_page: int = 1,
         _poppler_path=None,
+        **_kwargs,
     ) -> list[object]:
         dpi_seen.append(dpi)
         return [object()]

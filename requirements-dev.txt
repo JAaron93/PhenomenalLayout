@@ -2,7 +2,7 @@
 # Install development environment: pip install -r requirements.txt -r requirements-dev.txt
 
 # Test harness (dev-only)
-pytest==8.4.2
+pytest==9.1.1
 pytest-asyncio==1.4.0
 pytest-timeout==2.3.1
 pytest-cov==6.3.0
@@ -10,7 +10,8 @@ reportlab>=4.2,<5.0
 
 # Linters & type-checkers (dev-only)
 mypy==1.20.2
-ruff==0.16.4
+ruff==0.16.5
+black==26.5.1
 
 # Optional: richer output and sharding (dev-only)
 pytest-xdist==3.6.1

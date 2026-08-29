@@ -225,8 +225,11 @@ class PhilosophyEnhancedDocumentProcessor:
         Returns:
             Dictionary containing extracted content and metadata
         """
-        # Use base processor for content extraction
-        content = await self.base_processor.extract_content(file_path)
+        import inspect
+
+        # Use base processor for content extraction (supports async and sync mocks)
+        extracted = self.base_processor.extract_content(file_path)
+        content = await extracted if inspect.isawaitable(extracted) else extracted
 
         # Add philosophy-enhanced metadata
         content["philosophy_enhanced"] = True
@@ -378,8 +381,11 @@ class PhilosophyEnhancedDocumentProcessor:
         progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> dict[str, Any]:
         """Extract content asynchronously with progress tracking."""
-        # Await the now-async base processor's extraction
-        content = await self.base_processor.extract_content(file_path)
+        import inspect
+
+        # Await base processor's extraction if coroutine/awaitable
+        extracted = self.base_processor.extract_content(file_path)
+        content = await extracted if inspect.isawaitable(extracted) else extracted
 
         # Update progress metrics
         if content.get("type") == "pdf_advanced" and "layouts" in content:

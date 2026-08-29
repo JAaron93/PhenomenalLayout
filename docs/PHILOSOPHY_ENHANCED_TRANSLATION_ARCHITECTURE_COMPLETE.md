@@ -412,7 +412,7 @@ def create_enhanced_main_interface() -> gr.Blocks:
 
         # Event Handlers
         def update_custom_translation_visibility(choice):
-            return gr.update(visible=(choice == "Custom Translation"))
+            return gr.Textbox(visible=(choice == "Custom Translation"))
 
         choice_radio.change(
             fn=update_custom_translation_visibility,

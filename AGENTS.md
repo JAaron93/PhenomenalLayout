@@ -163,3 +163,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 ### 6.3 Parallel Test Suite Execution & Inner-Loop Hygiene
 * **Multi-Core Test Parallelization**: When running the full repository test suite (700+ tests), agents MUST leverage multi-core parallelism using `pytest -n auto` (or `-n <CPU_COUNT>`) via `pytest-xdist` to avoid multi-minute serial test timeouts and latency.
 * **Inner-Loop Targeted Runs**: During rapid TDD red-green cycles, run targeted test files with `--no-cov` to verify individual behaviors quickly (< 1s) before triggering full multi-module coverage runs (`--cov=services --cov=utils --cov=models`).
+
+### 6.4 Gradio 6 UI Contracts & Timer Lifecycle Invariants
+* **Typed Component Returns**: Event handlers in `ui/gradio_interface.py` MUST return typed component instances (e.g., `gr.Button(interactive=...)`, `gr.Timer(active=...)`) rather than deprecated `gr.update(...)` dictionaries.
+* **Bounded Polling & Idle Deactivation**: Status polling timers (`gr.Timer(value=1.0, active=False)`) MUST be dynamically stopped (`active=False`) upon translation completion, startup errors (`"❌"`), or when returning to an idle state (`"ready for advanced translation"`). Timers MUST NEVER poll indefinitely during idle or error states.

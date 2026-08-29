@@ -179,9 +179,10 @@ class TestMemoryMonitoringErrorHandling:
 @pytest.fixture
 def memory_test_client() -> Generator[tuple[TestClient, MagicMock], None, None]:
     """Fixture to provide a TestClient with mocked memory stats and auth disabled."""
-    with patch('api.memory_routes.get_memory_stats') as mock_stats, \
-         patch('api.memory_routes.ENABLE_AUTH', False):
+    with patch('api.memory_routes.get_memory_stats') as mock_stats:
         app = create_app()
+        from api.auth import get_read_only_user
+        app.dependency_overrides[get_read_only_user] = lambda: {"user_id": "test", "role": "read_only"}
         client = TestClient(app)
         yield client, mock_stats
 

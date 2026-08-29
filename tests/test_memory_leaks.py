@@ -312,14 +312,13 @@ class TestMemoryMonitor:
         assert "process_count" in stats
         assert "thread_count" in stats
 
-        # Test baseline setting with event-based synchronization
-        monitor.start_monitoring()
-
-        # Wait for baseline to be established (deterministic)
-        baseline_established = monitor.wait_for_baseline(timeout=1.0)
-        assert baseline_established, "Baseline should be established within 1 second"
-
-        monitor.stop_monitoring()
+        try:
+            # Test baseline setting
+            monitor.start_monitoring()
+            assert monitor.baseline_memory is not None
+            assert monitor.is_monitoring is True
+        finally:
+            monitor.stop_monitoring()
 
         # Verify monitoring ran
         assert monitor._baseline_memory is not None

@@ -294,14 +294,14 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Requirements
 
-- Python 3.11 or 3.12 recommended (3.8–3.12 supported). Python 3.13 support pending due to Pillow 10 wheels.
-- Core libs are pinned in `requirements.txt` (e.g., `pdf2image==1.17.0`, `Pillow==11.3.0`, `reportlab==4.2.5`, `pypdf==6.7.3`).
+- Python 3.11 or 3.12 recommended (3.8–3.12 supported).
+- Core libs are pinned in `requirements.txt` (e.g., `gradio==6.26.0`, `pillow==12.3.0`, `starlette==1.6.0`, `pdf2image==1.17.0`, `reportlab==4.5.1`, `pypdf==6.16.2`).
 - Poppler runtime required by `pdf2image` (provides `pdftoppm`/`pdfinfo`). Ensure it's installed and on PATH:
   - Ubuntu/Debian: `sudo apt-get update && sudo apt-get install -y poppler-utils`
   - macOS: `brew install poppler`
-- Client/Server: `fastapi`, `uvicorn`, `httpx`
-- UI: `gradio`
-- Testing: `pytest`, `pytest-cov`
+- Client/Server: `fastapi`, `uvicorn`, `httpx`, `starlette>=1.0.0`
+- UI: `gradio>=6.0,<7.0`
+- Testing: `pytest>=9.0,<10.0`, `pytest-cov`, `pytest-asyncio`
 - Valid Lingo API key for translation functionality
 
 ## 📁 Key Files

@@ -21,7 +21,7 @@ This project uses pinned dev tooling and automation to keep CI stable and reprod
 ## Tooling and configs
 
 - Pytest is configured in `pytest.ini`:
-  - `asyncio_mode = auto` for `pytest-asyncio>=0.23` on pytest 8.
+  - `asyncio_mode = auto` for `pytest-asyncio>=1.4` on pytest 9.x.
   - Markers: `slow`, `load`. Run only non-slow and non-load tests with `pytest -q -m "not slow and not load"`.
   - Coverage gates ($\ge 85\%$) are applied by default; set `FOCUSED=1` to disable locally for focused test runs.
 - Ruff and mypy live in `pyproject.toml` under `[tool.ruff]` and `[tool.mypy]` so local and CI share rules.
@@ -35,6 +35,10 @@ Prerequisite: Python 3.11 or 3.12 (match CI). Verify with: `python3 --version`
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
+
+# If building packages with native Rust extensions (e.g. cbor2) from source:
+export PATH="$HOME/.rustup/toolchains/stable-x86_64-apple-darwin/bin:$PATH"
+
 python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 

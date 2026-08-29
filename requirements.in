@@ -7,12 +7,13 @@ uvicorn[standard]>=0.34,<1.0
 python-dotenv>=1.1,<2.0
 
 # UI Framework
-gradio>=5.9,<6.0
+gradio>=6.0,<7.0
 
 # PDF Processing & OCR
 pdf2image>=1.17,<2.0
 pypdf>=6.7,<7.0
-pillow>=11.3,<12.0
+reportlab>=4.2,<5.0
+pillow>=12.0,<13.0
 
 # Translation & NLP
 spacy>=3.8,<4.0
@@ -34,6 +35,6 @@ PyJWT[crypto]>=2.11,<3.0
 httpx>=0.28,<1.0
 
 # Development Utilities
-rich>=14.1,<15.0
+rich>=14.1,<16.0
 tqdm>=4.67,<5.0
 psutil>=7.0,<8.0
