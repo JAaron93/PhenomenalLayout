@@ -20,6 +20,8 @@ def render_metrics(metrics_dict: dict) -> str:
     Recognizes common keys like OCR confidence, layout scores, and
     text accuracy. Falls back to compact JSON if no known keys are present.
     """
+    if not metrics_dict:
+        return ""
     parts: list[str] = []
     ocr = metrics_dict.get("ocr_conf") or metrics_dict.get("ocr_confidence")
     if isinstance(ocr, (int, float)):
@@ -51,7 +53,7 @@ __doc__ = f"Gradio interface for {APP_TITLE}."
 
 def on_file_upload(
     file,
-    progress=None,
+    progress: gr.Progress = gr.Progress(track_tqdm=False),  # noqa: B008
 ):
     """Wrapper to handle validation errors and quality metrics.
 
@@ -59,11 +61,12 @@ def on_file_upload(
     (preview, upload_status, detected_language, preprocessing, processing_info,
      quality_metrics)
     """
-    if progress is None:
-        progress = gr.Progress(track_tqdm=False)
-    try:
+    if file is None:
+        return "", "", "", "", "", ""
+    if progress is not None:
         with contextlib.suppress(Exception):
             progress(0.05, desc="Validating file")
+    try:
         result = process_file_upload_sync(file)
     except Exception as exc:  # Fallback for unexpected client/server issues
         logging.error(
@@ -83,8 +86,9 @@ def on_file_upload(
             friendly = "Only PDF format supported"
         elif code == "DOLPHIN_014":
             friendly = "Encrypted PDFs not supported - please provide unlocked PDF"
-        with contextlib.suppress(Exception):
-            progress(1.0)
+        if progress is not None:
+            with contextlib.suppress(Exception):
+                progress(1.0)
         return "", f"{code}: {friendly}", "", "", "", ""
 
     # If server returned a structured non-error dict, try to map keys
@@ -133,8 +137,9 @@ def on_file_upload(
         metrics_str = ""
         if isinstance(metrics_obj, dict):
             metrics_str = render_metrics(metrics_obj)
-        with contextlib.suppress(Exception):
-            progress(1.0)
+        if progress is not None:
+            with contextlib.suppress(Exception):
+                progress(1.0)
         return (
             preview,
             upload_status,
@@ -176,8 +181,9 @@ def on_file_upload(
                     vals[4] = {**info, "progress_text": note}
         except Exception:  # ignore extraction errors
             metrics = ""
-        with contextlib.suppress(Exception):
-            progress(1.0)
+        if progress is not None:
+            with contextlib.suppress(Exception):
+                progress(1.0)
         return vals[0], vals[1], vals[2], vals[3], vals[4], metrics
 
     # Unknown return; show generic status
@@ -188,18 +194,17 @@ def start_translation_with_progress(
     target_language,
     pages_to_translate,
     philosophy_mode,
-    progress=None,
+    progress: gr.Progress = gr.Progress(track_tqdm=False),  # noqa: B008
 ):
     """Start translation and update a subtle progress indicator.
 
     Returns 4 values to update the UI:
     (progress_status, upload_status, download_btn, progress_timer)
     """
-    if progress is None:
-        progress = gr.Progress(track_tqdm=False)
-    with contextlib.suppress(Exception):
-        progress(0.05, desc="Starting translation")
-        
+    if progress is not None:
+        with contextlib.suppress(Exception):
+            progress(0.05, desc="Starting translation")
+
     try:
         status, upload_status, is_ready = start_translation_sync(
             target_language,
@@ -210,13 +215,14 @@ def start_translation_with_progress(
         logging.error("Translation start failed: %s", e, exc_info=True)
         status, upload_status, is_ready = f"❌ Error: {e!s}", "", False
 
-    with contextlib.suppress(Exception):
-        progress(0.2, desc="Submitted to backend")
-        
+    if progress is not None:
+        with contextlib.suppress(Exception):
+            progress(0.2, desc="Submitted to backend")
+
     return (
         status,
         upload_status,
-        gr.update(interactive=is_ready),
+        gr.Button(interactive=is_ready),
         gr.Timer(active=not is_ready),
     )
 
@@ -357,11 +363,8 @@ def create_gradio_interface() -> gr.Blocks:
                     )
                     refresh_btn = gr.Button("🔄 Refresh", size="sm", scale=1)
 
-                # Progress section without standalone Progress bar
-                # progress_bar = gr.Progress()
-
                 # Timer for auto-refreshing progress while translation runs
-                progress_timer = gr.Timer(1.0, active=False)
+                progress_timer = gr.Timer(value=1.0, active=False)
 
                 # Export Section
                 gr.Markdown("## 💾 Download Translated Document")
@@ -404,13 +407,19 @@ def create_gradio_interface() -> gr.Blocks:
             ],
         )
 
-        # Status update function for manual refresh
+        # Status update function for manual refresh and timer tick
         def update_status(_progress: "gr.Progress | None" = None):
             if _progress is None:
                 _progress = gr.Progress(track_tqdm=False)
             status, _unused, download_ready, _output_file = get_translation_status()
-            timer_update = gr.Timer(active=not bool(download_ready))
-            return status, gr.update(interactive=download_ready), timer_update
+            is_active = not bool(download_ready)
+            if "❌" in str(status) or "failed" in str(status).lower():
+                is_active = False
+            return (
+                status,
+                gr.Button(interactive=bool(download_ready)),
+                gr.Timer(active=is_active),
+            )
 
         # Connect refresh button to status update
         # Manual refresh

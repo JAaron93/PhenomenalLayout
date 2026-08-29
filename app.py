@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """PhenomenalLayout application.
 
 Orchestrates Lingo.dev translation services with Dolphin OCR for pixel-perfect
@@ -86,23 +87,37 @@ async def lifespan(_app: FastAPI):
             try:
                 check_interval = float(os.getenv("MEMORY_CHECK_INTERVAL", "60"))
                 if check_interval <= 0:
-                    logger.warning("Invalid MEMORY_CHECK_INTERVAL: %s, using default 60", check_interval)
+                    logger.warning(
+                        "Invalid MEMORY_CHECK_INTERVAL: %s, using default 60",
+                        check_interval,
+                    )
                     check_interval = 60.0
             except ValueError as e:
-                logger.warning("Invalid MEMORY_CHECK_INTERVAL format, using default 60: %s", e)
+                logger.warning(
+                    "Invalid MEMORY_CHECK_INTERVAL format, using default 60: %s", e
+                )
                 check_interval = 60.0
 
             try:
                 alert_threshold = float(os.getenv("MEMORY_ALERT_THRESHOLD_MB", "100"))
                 if alert_threshold < 0:
-                    logger.warning("Invalid MEMORY_ALERT_THRESHOLD_MB: %s, using default 100", alert_threshold)
+                    logger.warning(
+                        "Invalid MEMORY_ALERT_THRESHOLD_MB: %s, using default 100",
+                        alert_threshold,
+                    )
                     alert_threshold = 100.0
             except ValueError as e:
-                logger.warning("Invalid MEMORY_ALERT_THRESHOLD_MB format, using default 100: %s", e)
+                logger.warning(
+                    "Invalid MEMORY_ALERT_THRESHOLD_MB format, using default 100: %s", e
+                )
                 alert_threshold = 100.0
 
             start_memory_monitoring(check_interval, alert_threshold)
-            logger.info("Memory monitoring enabled (interval: %.1fs, threshold: %.1f MB)", check_interval, alert_threshold)
+            logger.info(
+                "Memory monitoring enabled (interval: %.1fs, threshold: %.1f MB)",
+                check_interval,
+                alert_threshold,
+            )
         except Exception as e:
             logger.warning("Failed to start memory monitoring: %s", e)
 
@@ -119,14 +134,13 @@ async def lifespan(_app: FastAPI):
                 # Expected during shutdown - handle silently
                 pass
             except Exception:
-                logger.exception(
-                    "Exception during tracked translation task shutdown"
-                )
+                logger.exception("Exception during tracked translation task shutdown")
     state.drop_tracked_translation_task()
 
     # Stop memory monitoring
     try:
         from utils.memory_monitor import log_memory_usage, stop_memory_monitoring
+
         log_memory_usage("shutdown")
         stop_memory_monitoring()
     except Exception:
@@ -140,26 +154,26 @@ async def lifespan(_app: FastAPI):
 
 def get_config_value(app: FastAPI, key: str, default=None):
     """Get configuration value from injected config or fallback to environment.
-    
+
     Args:
         app: FastAPI application instance
         key: Configuration key to look up
         default: Default value if not found in config or environment
-        
+
     Returns:
         Configuration value from injected config or environment variable
     """
-    if hasattr(app.state, '_config') and key in app.state._config:
+    if hasattr(app.state, "_config") and key in app.state._config:
         return app.state._config[key]
     return os.getenv(key, default)
 
 
 def create_app(config: dict | None = None):
     """Create FastAPI app with optional configuration injection.
-    
+
     Args:
         config: Optional configuration dict for testing/overrides
-        
+
     Returns:
         FastAPI: Configured application instance
     """

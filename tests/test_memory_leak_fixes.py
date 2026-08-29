@@ -43,16 +43,16 @@ async def test_start_translation_single_flight_cancels_previous(monkeypatch: pyt
         state.source_language = "en"
 
         res1 = await translation_handler.start_translation("de", 0, False)
-        _, is_running = res1[2]
-        assert not is_running
+        is_ready = res1[2]
+        assert not is_ready
         first_task = state.get_tracked_translation_task()
         assert first_task is not None
 
         await asyncio.wait_for(started_event.wait(), timeout=2.0)
 
         res2 = await translation_handler.start_translation("fr", 0, False)
-        _, is_running2 = res2[2]
-        assert not is_running2
+        is_ready2 = res2[2]
+        assert not is_ready2
         second_task = state.get_tracked_translation_task()
         assert second_task is not None
         assert second_task is not first_task

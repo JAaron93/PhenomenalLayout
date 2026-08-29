@@ -31,6 +31,12 @@ def dolphin_env_defaults(monkeypatch):
         ),
     )
     yield
+    try:
+        from utils.memory_monitor import cleanup_memory_monitor
+
+        cleanup_memory_monitor()
+    except Exception:
+        pass
 
 
 @pytest.fixture
@@ -59,6 +65,7 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ.setdefault("MEMORY_API_ENABLE_AUTH", "true")
     os.environ.setdefault("MEMORY_API_JWT_SECRET", "test-secret-key")
     os.environ.setdefault("MEMORY_API_KEY", "test-admin-key")
+    os.environ.setdefault("LINGO_API_KEY", "test-lingo-api-key")
     # When focusing, quiet output at runtime without relying on pre-parsed
     # addopts
     if os.getenv("FOCUSED"):

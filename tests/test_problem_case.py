@@ -17,7 +17,7 @@ from tests.test_memory_api_integration import reload_app_with_env
 logger = logging.getLogger(__name__)
 
 
-def test_problematic_case():
+def test_problematic_case(reload_app_with_env):
     """Test the problematic scenario from the failing test."""
     auth_enabled = "false"
     logger.debug("Testing with auth_enabled=%s", auth_enabled)

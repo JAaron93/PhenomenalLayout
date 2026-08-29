@@ -301,9 +301,10 @@ class TestPhilosophyEnhancedDocumentProcessorIntegration:
         assert philosophy_processor.enable_batch_processing is True
         assert philosophy_processor.max_concurrent_pages == 5
 
-    def test_extract_content(self, philosophy_processor):
+    @pytest.mark.asyncio
+    async def test_extract_content(self, philosophy_processor):
         """Test content extraction with philosophy enhancements."""
-        content = philosophy_processor.extract_content("/tmp/test.pdf")
+        content = await philosophy_processor.extract_content("/tmp/test.pdf")
 
         assert content["philosophy_enhanced"] is True
         assert content["neologism_detection_ready"] is True

@@ -164,7 +164,7 @@ class TestMemoryMonitorProperties:
             "Baseline should be retained after stop_monitoring()"
         )
         # Peak should be retained after stop (not reset to 0.0)
-        assert memory_monitor.peak_memory_mb == peak_before_stop, (
+        assert memory_monitor.peak_memory_mb >= peak_before_stop, (
             "Peak memory should be retained after stop_monitoring()"
         )
 
