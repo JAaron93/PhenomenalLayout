@@ -241,6 +241,7 @@ def estimate_cost_ui(file_obj: Any) -> str:
     path = getattr(file_obj, "name", str(file_obj))
     try:
         from services.cost_estimator import GCPCostEstimator
+
         quote = GCPCostEstimator().estimate_book_cost(Path(path))
         return (
             f"### 📊 Itemized GCP Budget Quote\n\n"
@@ -287,7 +288,12 @@ def _authenticate_gradio_caller(
         return
 
     token = auth_token.strip()
-    if not token and request is not None and hasattr(request, "headers") and request.headers:
+    if (
+        not token
+        and request is not None
+        and hasattr(request, "headers")
+        and request.headers
+    ):
         token = request.headers.get("x-api-key") or ""
         if not token:
             auth_hdr = request.headers.get("authorization", "")
@@ -329,13 +335,23 @@ def validate_byok_ui(
     request: gr.Request | None = None,
 ) -> str:
     """Validate user BYOK credentials via non-billable API calls after enforcing ownership."""
-    if not user_id.strip() or not project_id.strip() or not bucket_name.strip() or not sa_json.strip():
+    if (
+        not user_id.strip()
+        or not project_id.strip()
+        or not bucket_name.strip()
+        or not sa_json.strip()
+    ):
         return "❌ Please enter User ID, Project ID, Bucket Name, and Service Account JSON."
     try:
-        _authenticate_gradio_caller(user_id.strip(), auth_token=auth_token, request=request)
+        _authenticate_gradio_caller(
+            user_id.strip(), auth_token=auth_token, request=request
+        )
         from services.byok_credentials_manager import BYOKCredentialsManager
+
         mgr = BYOKCredentialsManager()
-        mgr.set_credentials(user_id.strip(), project_id.strip(), bucket_name.strip(), sa_json.strip())
+        mgr.set_credentials(
+            user_id.strip(), project_id.strip(), bucket_name.strip(), sa_json.strip()
+        )
         val = mgr.validate_credentials(user_id.strip())
         icon = "✅" if val.status == "VALID" else "❌"
         return (
@@ -361,8 +377,11 @@ def pre_scan_ui(
         return "Please provide User ID and upload a PDF.", "", ""
     path = getattr(file_obj, "name", str(file_obj))
     try:
-        _authenticate_gradio_caller(user_id.strip(), auth_token=auth_token, request=request)
+        _authenticate_gradio_caller(
+            user_id.strip(), auth_token=auth_token, request=request
+        )
         from services.book_translation_orchestrator import BookTranslationOrchestrator
+
         orch = BookTranslationOrchestrator()
         res = orch.pre_scan_book(user_id=user_id.strip(), source=Path(path))
         badge = (
@@ -421,17 +440,27 @@ def create_gradio_interface() -> gr.Blocks:
         # -------------------------------------------------------------------
         # Track 5: GCP Migration & Scholarly Studio (TASK-5.2)
         # -------------------------------------------------------------------
-        with gr.Accordion("🏛️ GCP Book Translation, BYOK & Scholarly Studio", open=True):
-            gr.Markdown("Zero host storage full-length book translation via Google Cloud Document Translation & GCS.")
+        with gr.Accordion(
+            "🏛️ GCP Book Translation, BYOK & Scholarly Studio", open=True
+        ):
+            gr.Markdown(
+                "Zero host storage full-length book translation via Google Cloud Document Translation & GCS."
+            )
 
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### 💰 1. Zero-Auth GCP Cost & Storage Estimator")
                     cost_input = gr.File(label="Upload Book PDF", file_types=[".pdf"])
-                    calc_quote_btn = gr.Button("Calculate Budget Quote", variant="secondary")
-                    cost_quote_display = gr.Markdown("Upload a PDF to view itemized translation and retention costs.")
+                    calc_quote_btn = gr.Button(
+                        "Calculate Budget Quote", variant="secondary"
+                    )
+                    cost_quote_display = gr.Markdown(
+                        "Upload a PDF to view itemized translation and retention costs."
+                    )
 
-                    with gr.Accordion("📘 2. Interactive GCP Onboarding Walkthrough", open=False):
+                    with gr.Accordion(
+                        "📘 2. Interactive GCP Onboarding Walkthrough", open=False
+                    ):
                         gr.Markdown(
                             "1. Create or select a GCP project (`projects.create`).\n"
                             "2. Enable Cloud Translation API (`translate.googleapis.com`).\n"
@@ -445,27 +474,61 @@ def create_gradio_interface() -> gr.Blocks:
                         )
 
                     gr.Markdown("### 🔑 3. Bring Your Own Key (BYOK) Setup")
-                    byok_token = gr.Textbox(label="API Key or Bearer Token", type="password", placeholder="Enter API key or JWT token (or login via session)")
+                    byok_token = gr.Textbox(
+                        label="API Key or Bearer Token",
+                        type="password",
+                        placeholder="Enter API key or JWT token (or login via session)",
+                    )
                     byok_uid = gr.Textbox(label="User ID", value="scholar-01")
-                    byok_pid = gr.Textbox(label="GCP Project ID", placeholder="my-gcp-project")
-                    byok_bkt = gr.Textbox(label="GCS Bucket Name", placeholder="my-translation-bucket")
-                    byok_key = gr.Textbox(label="Service Account JSON", placeholder='{"type": "service_account", ...}', lines=2)
-                    validate_key_btn = gr.Button("Validate Credentials", variant="primary")
+                    byok_pid = gr.Textbox(
+                        label="GCP Project ID", placeholder="my-gcp-project"
+                    )
+                    byok_bkt = gr.Textbox(
+                        label="GCS Bucket Name", placeholder="my-translation-bucket"
+                    )
+                    byok_key = gr.Textbox(
+                        label="Service Account JSON",
+                        placeholder='{"type": "service_account", ...}',
+                        lines=2,
+                    )
+                    validate_key_btn = gr.Button(
+                        "Validate Credentials", variant="primary"
+                    )
                     byok_status_display = gr.Markdown("Awaiting credentials...")
 
                 with gr.Column():
                     gr.Markdown("### 🔍 4. Pre-Scan & Fraktur Script Confidence")
-                    prescan_token = gr.Textbox(label="API Key or Bearer Token", type="password", placeholder="Enter API key or JWT token (or login via session)")
+                    prescan_token = gr.Textbox(
+                        label="API Key or Bearer Token",
+                        type="password",
+                        placeholder="Enter API key or JWT token (or login via session)",
+                    )
                     prescan_uid = gr.Textbox(label="User ID", value="scholar-01")
-                    prescan_input = gr.File(label="Select Book PDF", file_types=[".pdf"])
-                    run_prescan_btn = gr.Button("Run Pre-Scan Assessment", variant="primary")
+                    prescan_input = gr.File(
+                        label="Select Book PDF", file_types=[".pdf"]
+                    )
+                    run_prescan_btn = gr.Button(
+                        "Run Pre-Scan Assessment", variant="primary"
+                    )
                     script_badge_display = gr.Markdown("Awaiting pre-scan...")
                     neo_display = gr.Markdown("Neologisms will be displayed here...")
-                    vocab_display = gr.Markdown("Saved user terminology will be displayed here...")
+                    vocab_display = gr.Markdown(
+                        "Saved user terminology will be displayed here..."
+                    )
 
-            calc_quote_btn.click(fn=estimate_cost_ui, inputs=[cost_input], outputs=[cost_quote_display])
-            validate_key_btn.click(fn=validate_byok_ui, inputs=[byok_uid, byok_pid, byok_bkt, byok_key, byok_token], outputs=[byok_status_display])
-            run_prescan_btn.click(fn=pre_scan_ui, inputs=[prescan_uid, prescan_input, prescan_token], outputs=[script_badge_display, neo_display, vocab_display])
+            calc_quote_btn.click(
+                fn=estimate_cost_ui, inputs=[cost_input], outputs=[cost_quote_display]
+            )
+            validate_key_btn.click(
+                fn=validate_byok_ui,
+                inputs=[byok_uid, byok_pid, byok_bkt, byok_key, byok_token],
+                outputs=[byok_status_display],
+            )
+            run_prescan_btn.click(
+                fn=pre_scan_ui,
+                inputs=[prescan_uid, prescan_input, prescan_token],
+                outputs=[script_badge_display, neo_display, vocab_display],
+            )
 
         with gr.Row():
             with gr.Column(scale=1):

@@ -16,9 +16,7 @@ def _launch_blocks() -> tuple[gr.blocks.Blocks, str]:
         os.environ.setdefault("GRADIO_SHARE", "true")
     demo = create_gradio_interface()
     # Launch in headless mode; request a share link as fallback
-    _app, local_url, share_url = demo.launch(
-        prevent_thread_lock=True, share=True
-    )
+    _app, local_url, share_url = demo.launch(prevent_thread_lock=True, share=True)
     # Prefer share_url if provided, otherwise local_url
     url = share_url or local_url or ""
     if not url:
