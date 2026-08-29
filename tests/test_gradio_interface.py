@@ -193,11 +193,9 @@ class TestGradioTranslationWorkflowAndTimer:
         )
 
         assert "❌ Error" in status
-        assert getattr(timer, "active", None) is True or isinstance(
-            timer, (gr.Timer, dict)
-        )
+        assert getattr(timer, "active", None) is False
 
-    def test_update_status_halts_timer_on_completion(
+    def test_update_status_halts_timer_on_completion_and_idle(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from core.translation_handler import TranslationStatusResult
@@ -217,6 +215,17 @@ class TestGradioTranslationWorkflowAndTimer:
         status_res = fake_status_completed()
         assert status_res.is_done is True
         assert status_res.output_file == "downloads/translated_doc.pdf"
+
+        # Verify interface update_status function deactivates timer on idle and completion
+        interface = create_gradio_interface()
+        # Find update_status in interface event handlers
+        for fn in interface.fns.values():
+            if fn.fn and fn.fn.__name__ == "update_status":
+                _status, btn, timer = fn.fn()
+                # When completed, download ready is True and timer is inactive
+                assert getattr(timer, "active", None) is False
+                assert getattr(btn, "interactive", None) is True
+                break
 
 
 class TestGradioBlocksStructureAndFastAPIMount:

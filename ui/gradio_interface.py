@@ -226,11 +226,14 @@ def start_translation_with_progress(
         with contextlib.suppress(Exception):
             progress(0.2, desc="Submitted to backend")
 
+    is_error = "❌" in str(status) or "failed" in str(status).lower()
+    timer_active = not is_ready and not is_error
+
     return (
         status,
         upload_status,
         gr.Button(interactive=is_ready),
-        gr.Timer(active=not is_ready),
+        gr.Timer(active=timer_active),
     )
 
 
@@ -684,13 +687,31 @@ def create_gradio_interface() -> gr.Blocks:
         def update_status(_progress: "gr.Progress | None" = None):
             if _progress is None:
                 _progress = gr.Progress(track_tqdm=False)
-            status, _unused, download_ready, _output_file = get_translation_status()
-            is_active = not bool(download_ready)
-            if "❌" in str(status) or "failed" in str(status).lower():
-                is_active = False
+            res = get_translation_status()
+            if hasattr(res, "message"):
+                status = res.message
+                is_done = bool(res.is_done)
+                is_error = bool(res.is_error)
+            elif isinstance(res, (list, tuple)):
+                status = res[0]
+                is_done = bool(res[2]) if len(res) > 2 else False
+                is_error = bool(res[3]) if len(res) > 3 else False
+            else:
+                status = str(res)
+                is_done = False
+                is_error = False
+
+            status_str = str(status).lower()
+            if not is_error and ("❌" in str(status) or "failed" in status_str):
+                is_error = True
+            is_idle = (
+                "ready for advanced translation" in status_str
+                or "idle" in status_str
+            )
+            is_active = (not is_done) and (not is_error) and (not is_idle)
             return (
                 status,
-                gr.Button(interactive=bool(download_ready)),
+                gr.Button(interactive=is_done),
                 gr.Timer(active=is_active),
             )
 
