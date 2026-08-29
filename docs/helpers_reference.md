@@ -1,5 +1,8 @@
 # Project Helpers Reference
 
+> [!NOTE]
+> For modern Google Cloud Translation, GCS, RFC 4180 TSV, and PDF stream helpers introduced during the cloud migration, see the primary reference: [REUSABLE_HELPER_FUNCTIONS.md](REUSABLE_HELPER_FUNCTIONS.md).
+
 This document catalogs shared utility functions added to consolidate logic and maintain DRY principles.
 
 ## Language Identification & Text Processing

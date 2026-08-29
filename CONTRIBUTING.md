@@ -1,13 +1,20 @@
 # Contributing to PhenomenalLayout
 
-Welcome to PhenomenalLayout, an advanced layout preservation engine for document translation. This project orchestrates Lingo.dev's translation services with ByteDance's Dolphin OCR to achieve pixel-perfect formatting integrity.
+Welcome to PhenomenalLayout, a domain-specific **German Philosophical Book Translation & Neologism Orchestration Engine**. PhenomenalLayout pairs **Google Cloud Document Translation Advanced (v3)** with a specialized **German Philosophical Neologism Detection Engine** to translate full-length treatises and books with pixel-perfect typography, layout preservation, and consistent terminology.
 
 ## Project Context
 
-PhenomenalLayout's core innovation lies in solving the fundamental challenge of preserving document layout when translated text differs in length from the original. Our sophisticated algorithms include:
-- Intelligent text fitting strategies (font scaling, text wrapping, bounding box optimization)
-- Quality assessment engines for layout preservation decisions
-- Integration layer between high-quality translation and OCR services
+PhenomenalLayout's core architecture incorporates:
+- **Asynchronous GCS Batch Translation**: Serverless book-scale translation (`batchTranslateDocument`) via Google Cloud Storage with zero host PDF storage
+- **Bring Your Own Key (BYOK) Security**: In-memory credential vault with non-billable dual validation and 7-day auto-delete staging lifecycle enforcement
+- **Dual-Tier Glossary Synchronization**: Persistent base philosophical glossaries paired with dynamic per-book user choice dictionaries
+- **German Philosophical Neologism Detector**: Morphological analysis and contextual compound decomposition with interactive review
+- **Zero-Credential Cost Estimator**: Unauthenticated offline PDF pricing calculation ($\pm \$5.00$ tolerance)
+- **1-Click Google Drive Export**: Streamed multipart export via client-side Google Identity Services (GIS) OAuth (`drive.file` scope)
+- **Fraktur OCR Script Assessment**: Historical ligature analysis and calibrated confidence scoring ($C \in [0.0, 1.0]$)
+- **Atomic LRO Session Resumption**: Sub-second (< 1.0s) job recovery across browser closes and serverless scale-downs
+- **Scholarly Fallback Plaintext Translation**: Dynamic sequential 16-bit CID allocation and format 4/12 TrueType `cmap` parsing guaranteeing 100% translation completeness
+- **Synchronized Dual-Pane Viewer**: Synchronized bilingual page retrieval with word-level bounding box coordinate extraction
 
 This project uses pinned dev tooling and automation to keep CI stable and reproducible.
 
@@ -15,48 +22,38 @@ This project uses pinned dev tooling and automation to keep CI stable and reprod
 
 - Pytest is configured in `pytest.ini`:
   - `asyncio_mode = auto` for `pytest-asyncio>=0.23` on pytest 8.
-  - Markers: `slow`, `load`. Run only non-slow and non-load tests with `pytest -q -m "not slow and not load"`. List available markers with `pytest --markers`. Declare any custom markers in `pytest.ini` to avoid `PytestUnknownMarkWarning`.
-    Optional example:
-    ```ini
-    # pytest.ini
-    [pytest]
-    markers =
-        slow: marks tests as slow
-        load: marks load tests (deselect with "-m 'not load'")
-    ```
-  - Coverage gates are applied by default; set `FOCUSED=1` to disable locally for focused runs.
+  - Markers: `slow`, `load`. Run only non-slow and non-load tests with `pytest -q -m "not slow and not load"`.
+  - Coverage gates ($\ge 85\%$) are applied by default; set `FOCUSED=1` to disable locally for focused test runs.
 - Ruff and mypy live in `pyproject.toml` under `[tool.ruff]` and `[tool.mypy]` so local and CI share rules.
-- Runtime deps: `requirements.txt`. Dev-only pins: `requirements-dev.txt` (includes `-r requirements.txt`).
+- Runtime deps: `requirements.txt` (compiled from `requirements.in`). Dev-only pins: `requirements-dev.txt`.
 
 ## Development environment
 
-Prerequisite: Python 3.11 or 3.12 (match CI). Verify with: python3 --version
+Prerequisite: Python 3.11 or 3.12 (match CI). Verify with: `python3 --version`
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
-
-### Debug Scripts
-
-For local development and debugging, several utility scripts are available in the `scripts/` directory:
-
-- **`debug_test_env.py`**: Verify environment configuration and test authentication endpoints locally
-  ```bash
-  python scripts/debug_test_env.py
-  ```
-
-See `scripts/README.md` for complete documentation of available debug and test tools.
 
 ### Manual Quality Checks
 
-Run the test suite:
+Run the complete multi-track GCP migration test suite (235 tests across Tracks 1–4):
 
 ```bash
-export GRADIO_SCHEMA_PATCH=true GRADIO_SHARE=true CI=true
-pytest -q
+pytest -o addopts="" tests/test_dry_helpers.py tests/test_gcp_settings.py \
+  tests/test_byok_credentials_manager.py tests/test_gcp_batch_translation_service.py \
+  tests/test_lro_progress_monitor.py tests/test_cost_estimator.py \
+  tests/test_google_drive_exporter.py tests/test_user_vocabulary_store.py \
+  tests/test_glossary_compiler.py tests/test_glossary_sync_manager.py \
+  tests/test_session_glossary_lifecycle.py tests/test_fraktur_classifier.py \
+  tests/test_batch_job_recovery.py tests/test_fallback_translator.py \
+  tests/test_dual_pane_viewer.py tests/test_dynamic_programming.py \
+  tests/test_enum_hash.py tests/test_memory_api_security.py \
+  tests/test_memory_api_integration.py tests/test_memory_gc_endpoint.py \
+  tests/test_problem_case_fixed.py -v
 ```
 
 Lint and type-check:
@@ -86,24 +83,24 @@ With `pytest-asyncio>=0.23` and pytest 8, the asyncio mode must be declared. We 
 
 ## Layout Preservation Development Guidelines
 
-When contributing to PhenomenalLayout's core functionality, please follow these guidelines:
+> [!NOTE]
+> Under [ADR 0001](docs/adr/0001-migrate-to-google-cloud-document-translation.md), full-length PDF document translation and pixel-perfect layout preservation are handled natively by **Google Cloud Document Translation Advanced (v3)**. Custom canvas painting, ReportLab box placement, and dynamic programming text scaling are deprecated.
 
-### Text Fitting Algorithm Development
-- **Test with multiple languages**: Ensure algorithms work across different character densities (German→English, English→Chinese, etc.)
-- **Quality metrics**: Always include quality scoring for layout preservation strategies
-- **Fallback handling**: Implement graceful degradation when optimal fitting isn't possible
-- **Performance considerations**: Test with large documents (1000+ pages) to ensure scalability
+When contributing to PhenomenalLayout, focus on:
+- **Consolidated Helper Utilities**: When interacting with Google Cloud Storage, Cloud Translation APIs, RFC 4180 TSV data, or persistent file writes, always utilize the canonical utilities in `utils/gcp_helpers.py`, `utils/tsv_utils.py`, `utils/pdf_stream.py`, and `utils/file_handler.py`. Refer to [REUSABLE_HELPER_FUNCTIONS.md](docs/REUSABLE_HELPER_FUNCTIONS.md) for usage patterns and complexity guarantees.
+- **Neologism Detection & Morphological Analysis**: Accurate German compound decomposition and philosophical term recognition.
+- **Dual-Tier Glossary Synchronization**: Ensuring RFC 4180 TSV compliance, zero-downtime Blue-Green replacement, and regional quota bounds in GCP `us-central1`.
+- **Scholarly Resilience**: Fraktur OCR assessment, job recovery, and side-by-side verification.
 
 ### Integration Testing
-- **External service mocking**: Mock Lingo.dev and Dolphin OCR APIs for consistent testing
-- **Layout preservation validation**: Include visual regression tests for complex layouts
-- **Quality threshold testing**: Verify that layout preservation quality meets minimum standards (>0.7 score)
+- **External service mocking**: Mock Google Cloud Translation and Google Cloud Storage APIs using standard `unittest.mock` fixtures.
+- **Quality threshold testing**: Maintain $\ge 90\%$ test coverage on all newly added services and bug fixes.
 
 ### Documentation Requirements
-- **Algorithm explanations**: Document the mathematical basis for text fitting strategies
-- **Quality scoring**: Explain how layout preservation quality is calculated
-- **Integration patterns**: Describe how PhenomenalLayout orchestrates external services
-- **Performance characteristics**: Include benchmark data for large document processing
+- **Integration patterns**: Describe how PhenomenalLayout orchestrates Google Cloud Translation and GCS
+- **Terminology & Glossary structures**: Document RFC 4180 TSV formatting and glossary quota handling
+- **Scholarly resilience behavior**: Document Fraktur detection confidence scales and fallback TrueType font mappings
+- **Performance characteristics**: Include throughput and ETA benchmarks for large document processing
 
 ## CI notes
 

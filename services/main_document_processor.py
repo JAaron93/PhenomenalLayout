@@ -1,16 +1,18 @@
-from __future__ import annotations
-
 """Main document processing orchestrator.
 
 Coordinates OCR, layout-aware translation, and reconstruction steps
 into a single `DocumentProcessor` pipeline.
 """
 
+from __future__ import annotations
+
 import logging
 import time
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from dolphin_ocr.layout import BoundingBox, FontInfo
 from dolphin_ocr.monitoring import MonitoringService
@@ -18,14 +20,57 @@ from services.layout_aware_translation_service import (
     LayoutAwareTranslationService,
     TextBlock,
 )
-from services.dolphin_client import get_layout_sync
 from services.ocr_utils import parse_ocr_result
-from services.pdf_document_reconstructor import (
-    PDFDocumentReconstructor,
-    TranslatedElement,
-    TranslatedLayout,
-    TranslatedPage,
+
+warnings.warn(
+    "services.main_document_processor is deprecated and retired under ADR 0001. "
+    "Use services.gcp_batch_translation_service.GCPBatchTranslationService instead.",
+    DeprecationWarning,
+    stacklevel=2,
 )
+
+
+def get_layout_sync(*args: Any, **kwargs: Any) -> Any:
+    """Stub for retired DolphinClient.get_layout_sync."""
+    raise NotImplementedError("DolphinClient has been deleted under ADR 0001.")
+
+
+@dataclass
+class TranslatedElement:
+    """Stub for retired TranslatedElement."""
+
+    original_text: str = ""
+    translated_text: str = ""
+    adjusted_text: str | None = None
+    bbox: Any = None
+    font_info: Any = None
+
+
+@dataclass
+class TranslatedPage:
+    """Stub for retired TranslatedPage."""
+
+    page_number: int = 0
+    translated_elements: list[Any] = field(default_factory=list)
+
+
+@dataclass
+class TranslatedLayout:
+    """Stub for retired TranslatedLayout."""
+
+    pages: list[Any] = field(default_factory=list)
+
+
+class PDFDocumentReconstructor:
+    """Stub for retired PDFDocumentReconstructor."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize reconstructor stub."""
+        pass
+
+    def reconstruct_pdf_document(self, *args: Any, **kwargs: Any) -> Any:
+        """Reconstruct PDF document stub."""
+        raise NotImplementedError("PDFDocumentReconstructor has been deleted under ADR 0001.")
 
 # ----------------------------- Request/Result -----------------------------
 
@@ -142,7 +187,7 @@ class DocumentProcessor:
                 self._monitor.record_operation("ocr", ocr_ms, success=False)
             self._logger.error("OCR processing failed for %s: %s", request.file_path, e)
             raise
-            
+
         ocr_ms = (time.perf_counter() - start_ocr) * 1000.0
         _emit("ocr", pages=len(ocr_result.get("pages", [])))
         if self._monitor is not None:

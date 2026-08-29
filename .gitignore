@@ -30,7 +30,9 @@ pip-wheel-metadata/
 MANIFEST
 
 # Virtual environments
+venv
 venv/
+.venv
 .venv/
 env/
 ENV/
@@ -222,6 +224,7 @@ ocr_cache/
 dolphin_cache/
 
 # User data and generated content
+data/
 database/user_choices.db
 database/*.db
 database/*.sqlite*
@@ -281,8 +284,9 @@ WARP.md
 .kilocode/
 
 # Kiro IDE specific
-.kiro
-.kiro/
+.kiro/*
+!.kiro/specs/
+!.kiro/steering/
 
 # Qoder specific
 # .qoder

@@ -25,11 +25,11 @@ fi
 echo ""
 if [[ "$MODE" == "prod" ]]; then
     echo "⚙️  Production mode: Installing runtime dependencies only..."
-    pip-sync requirements-prod.txt
+    pip-sync requirements.txt
     echo "✅ Production dependencies synced!"
 else
     echo "⚙️  Development mode: Installing all dependencies..."
-    pip-sync dev-requirements.txt
+    pip-sync requirements.txt requirements-dev.txt
     echo "✅ Development dependencies synced!"
 fi
 

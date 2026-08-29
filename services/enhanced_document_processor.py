@@ -4,15 +4,21 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dolphin_ocr.layout import BoundingBox, FontInfo
+warnings.warn(
+    "services.enhanced_document_processor is deprecated and retired under ADR 0001 / Track 4. "
+    "Use services.gcp_batch_translation_service.GCPBatchTranslationService instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-# PDFToImageConverter and DolphinOCRService removed in favor of direct PDF submission via dolphin_client
-# Migrated off legacy PDF engine; uses pdf2image + Dolphin OCR (PDF-only)
-from .pdf_document_reconstructor import PDFDocumentReconstructor
+# PDFToImageConverter, DolphinOCRService, and PDFDocumentReconstructor removed under ADR 0001
+# Layout preservation is handled natively by Google Cloud Document Translation.
 
 logger = logging.getLogger(__name__)
 
@@ -105,24 +111,8 @@ class EnhancedDocumentProcessor:
         """
         self.dpi = dpi
         self.preserve_images = preserve_images
-        # Removed local pdf_converter and ocr service in favor of direct PDF submission
-        self.reconstructor = PDFDocumentReconstructor()
-
-    def _generate_text_preview(self, text: str, max_chars: int = 1000) -> str:
-        """Generate a text preview with ellipsis if needed.
-
-        Args:
-            text: The text to generate a preview for
-            max_chars: Maximum number of characters in the preview
-                (default: 1000)
-
-        Returns:
-            str: The text preview, truncated with ellipsis if longer than
-            max_chars
-        """
-        if len(text) > max_chars:
-            return text[:max_chars] + "..."
-        return text
+        # PDFDocumentReconstructor retired and deleted under ADR 0001
+        self.reconstructor = None
 
     async def extract_content(self, file_path: str) -> dict[str, Any]:
         """Extract content from document with format-specific processing.
@@ -152,16 +142,14 @@ class EnhancedDocumentProcessor:
 
     async def _extract_pdf_content(self, pdf_path: str) -> dict[str, Any]:
         """Extract content from PDF with advanced layout preservation."""
-        import time
-
-        from services.dolphin_client import get_layout
-
         start_time = time.time()
 
         # Call Dolphin OCR directly with the PDF path
         try:
+            from services.dolphin_client import get_layout
+
             dolphin_layout = await get_layout(pdf_path)
-        except Exception as e:
+        except (ImportError, Exception) as e:
             logger.error("OCR processing failed for %s: %s", pdf_path, e, exc_info=True)
             # Graceful degradation: continue with empty layout
             dolphin_layout = {"pages": []}
@@ -239,190 +227,36 @@ class EnhancedDocumentProcessor:
         output_filename: str,
     ) -> str:
         """Create translated document preserving original formatting."""
-        output_path = os.path.join("downloads", output_filename)
-        os.makedirs("downloads", exist_ok=True)
-
+        del translated_texts
+        del output_filename
         content_type = original_content["type"]
 
         if content_type == "pdf_advanced":
-            return self._create_translated_pdf(
-                original_content, translated_texts, output_path
+            raise NotImplementedError(
+                "Legacy PDF document reconstruction has been retired and deleted under "
+                "ADR 0001 / Track 4. Use Google Cloud Document Translation."
             )
         elif content_type in {"docx", "txt"}:
             raise ValueError("Only PDF content is supported in this project")
         else:
             raise ValueError(f"Unsupported content type: {content_type}")
 
-    def _create_translated_pdf(
+    async def reconstruct_document(
         self,
         original_content: dict[str, Any],
         translated_texts: dict[int, list[str]],
-        output_path: str,
+        output_path: str | None = None,
     ) -> str:
-        """Create translated PDF with preserved formatting.
+        """Reconstruct translated document (deprecated).
 
-        Uses ``PDFDocumentReconstructor.reconstruct_pdf_document``.
-        Raises NotImplementedError if reconstruction backend is
-        unavailable in the environment.
+        Raises:
+            NotImplementedError: Legacy ReportLab canvas reconstruction has been
+                retired and deleted under ADR 0001 in favor of Google Cloud
+                Document Translation.
         """
-        # Build TranslatedLayout from the content we have
-        try:
-            from services.pdf_document_reconstructor import (
-                DocumentReconstructionError,
-                TranslatedElement,
-                TranslatedLayout,
-                TranslatedPage,
-            )
-        except ImportError as e:  # pragma: no cover
-            raise NotImplementedError(
-                "PDF reconstruction is not available: missing dependencies"
-            ) from e
+        raise NotImplementedError(
+            "Legacy PDF document reconstruction has been retired and deleted under "
+            "ADR 0001 / Track 4. Use Google Cloud Document Translation."
+        )
 
-        # Translate the minimal dolphin-derived structure into
-        # TranslatedLayout for the reconstructor.
 
-        pages: list[TranslatedPage] = []
-        dolphin_layout = original_content.get("dolphin_layout")
-        for page_index, texts in sorted(
-            original_content.get("text_by_page", {}).items()
-        ):
-            elements: list[TranslatedElement] = []
-            for i, original in enumerate(texts):
-                translated = translated_texts.get(page_index, [])
-                translated_text = translated[i] if i < len(translated) else original
-
-                # Defaults
-                bbox = BoundingBox(x=0.0, y=0.0, width=612.0, height=12.0)
-                font_info = FontInfo(family="Helvetica", size=12.0)
-
-                # Try to use dolphin_layout data if available
-                try:
-                    if isinstance(dolphin_layout, dict) and page_index < len(
-                        dolphin_layout.get("pages", [])
-                    ):
-                        page_data = dolphin_layout["pages"][page_index]
-                        blocks = page_data.get("text_blocks", [])
-                        if i < len(blocks):
-                            block = blocks[i]
-                            if isinstance(block, dict):
-                                bbox_data = block.get("bbox")
-                                if (
-                                    isinstance(bbox_data, (list, tuple))
-                                    and len(bbox_data) >= 4
-                                ):
-                                    bbox = BoundingBox(
-                                        x=float(bbox_data[0]),
-                                        y=float(bbox_data[1]),
-                                        width=float(bbox_data[2]) - float(bbox_data[0]),
-                                        height=float(bbox_data[3])
-                                        - float(bbox_data[1]),
-                                    )
-                                font_data = block.get("font_info", {})
-                                if isinstance(font_data, dict):
-                                    font_info = FontInfo(
-                                        name=str(font_data.get("family", "Helvetica")),
-                                        size=float(font_data.get("size", 12.0)),
-                                    )
-                except Exception:
-                    # Best-effort only; fall back to defaults silently
-                    pass
-
-                elements.append(
-                    TranslatedElement(
-                        original_text=original,
-                        translated_text=translated_text,
-                        adjusted_text=None,
-                        bbox=bbox,
-                        font_info=font_info,
-                    )
-                )
-            pages.append(
-                TranslatedPage(page_number=page_index, translated_elements=elements)
-            )
-
-        layout = TranslatedLayout(pages=pages)
-
-        reconstructor = self.reconstructor
-        try:
-            result = reconstructor.reconstruct_pdf_document(
-                translated_layout=layout,
-                original_file_path=original_content.get("file_path", ""),
-                output_path=output_path,
-            )
-        except (DocumentReconstructionError, OSError, ValueError) as e:
-            raise NotImplementedError(
-                f"PDF reconstruction failed or is unavailable: {e}"
-            ) from e
-
-        if not result.success:
-            raise NotImplementedError(
-                f"PDF reconstruction did not complete successfully. Warnings: {getattr(result, 'warnings', [])}"
-            )
-
-        return result.output_path
-
-    # TXT output helpers removed (PDF-only)
-
-    def convert_format(self, input_path: str, target_format: str) -> str:
-        """Convert document format (PDF-only).
-
-        - If ``target_format`` is not PDF, raise ``ValueError``.
-        - If input is already a PDF and target is PDF, return the original path.
-        - Non-PDF inputs are rejected.
-        """
-        input_ext = Path(input_path).suffix.lower()
-        target_ext = f".{target_format.lower()}"
-
-        if target_ext != ".pdf":
-            raise ValueError("Only PDF output is supported in this project")
-
-        if input_ext == ".pdf":
-            return input_path
-
-        raise ValueError("Only PDF inputs are supported in this project")
-
-    # PDF->TXT conversion removed (PDF-only)
-
-    # DOCX/TXT conversion helpers removed (PDF-only)
-
-    async def generate_preview(
-        self, file_path: str, max_chars: int = 1000
-    ) -> str | None:
-        """Generate a preview of the document content.
-
-        Returns a short preview string when possible, None for expected
-        recoverable errors (e.g., missing file), and lets unexpected
-        exceptions bubble up after logging.
-        """
-        try:
-            content = await self.extract_content(file_path)
-
-            if content.get("type") == "pdf_advanced":
-                preview = content.get("preview")
-                if preview:
-                    return preview
-                # Fall through to try other content fields
-
-            preview_text = content.get(
-                "preview",
-                content.get("text_content", ""),
-            )
-            if isinstance(preview_text, str) and len(preview_text) > max_chars:
-                return preview_text[:max_chars] + "..."
-            return preview_text
-
-        except FileNotFoundError as err:
-            logger.error("Preview failed - file not found: %s", err)
-            return None
-        except ValueError as err:
-            # Content extraction/validation errors
-            logger.error("Preview failed - invalid input: %s", err)
-            return None
-        except (OSError, RuntimeError) as err:
-            # I/O or library-level issues (e.g., parser problems)
-            logger.error("Preview failed due to I/O or parser error: %s", err)
-            return None
-        except Exception:
-            # Log unexpected exceptions with traceback and re-raise
-            logger.exception("Unexpected error while generating preview")
-            raise

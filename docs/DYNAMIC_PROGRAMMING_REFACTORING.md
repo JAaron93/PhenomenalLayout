@@ -1,5 +1,8 @@
 # Dynamic Programming Refactoring Implementation
 
+> [!NOTE]
+> **Track 4 Architectural Status**: While core caching and performance primitives (`SmartCache`, `PerformanceMetrics`, `memoize`, `StrategyPattern`, `StrategyRegistry`) in `core/dynamic_programming.py` remain active and supported for backward compatibility, `core/dynamic_layout_engine.py` and custom bounding box expansion have been **deprecated under ADR 0001 / Track 4**. Document layout, font scaling, and line-wrapping are now handled natively by **Google Cloud Document Translation Advanced (v3)**.
+
 ## Overview
 
 This document provides comprehensive documentation for the dynamic programming refactoring implementation in PhenomenalLayout. The refactoring systematically replaces nested if-else conditional chains with data-driven, O(1) lookup systems for optimal performance.
