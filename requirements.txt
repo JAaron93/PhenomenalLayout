@@ -84,7 +84,7 @@ fsspec==2026.7.0
     # via
     #   gradio-client
     #   huggingface-hub
-google-api-core==2.34.0
+google-api-core[grpc]==2.34.0
     # via
     #   google-api-python-client
     #   google-cloud-core
@@ -106,7 +106,7 @@ google-cloud-core==2.7.0
     # via
     #   google-cloud-storage
     #   google-cloud-translate
-google-cloud-storage==2.19.0
+google-cloud-storage==3.13.1
     # via -r requirements.in
 google-cloud-translate==3.27.0
     # via -r requirements.in
@@ -116,7 +116,7 @@ google-crc32c==1.8.0
     #   google-resumable-media
 google-resumable-media==2.10.2
     # via google-cloud-storage
-googleapis-common-protos==1.75.2
+googleapis-common-protos[grpc]==1.75.2
     # via
     #   google-api-core
     #   grpc-google-iam-v1
@@ -215,7 +215,7 @@ murmurhash==1.0.15
     #   preshed
     #   spacy
     #   thinc
-numpy==2.5.2
+numpy==2.4.6
     # via
     #   blis
     #   gradio
@@ -288,10 +288,11 @@ pydub==0.25.1
     # via gradio
 pygments==2.21.0
     # via rich
-pyjwt==2.13.0
+pyjwt[crypto]==2.13.0
     # via
     #   -r requirements.in
     #   mcp
+    #   pyjwt
 pyparsing==3.3.2
     # via httplib2
 pypdf==6.16.2
@@ -339,10 +340,6 @@ safehttpx==0.1.7
     # via gradio
 semantic-version==2.10.0
     # via gradio
-setuptools==84.0.0
-    # via
-    #   spacy
-    #   thinc
 shellingham==1.5.4
     # via typer
 six==1.17.0
@@ -419,7 +416,7 @@ uritemplate==4.2.0
     # via google-api-python-client
 urllib3==2.7.0
     # via requests
-uvicorn==0.52.4
+uvicorn[standard]==0.52.4
     # via
     #   -r requirements.in
     #   gradio
