@@ -16,6 +16,7 @@ anyio==4.14.2
     # via
     #   gradio
     #   httpx
+    #   httpx2
     #   mcp
     #   sse-starlette
     #   starlette
@@ -84,7 +85,7 @@ fsspec==2026.7.0
     # via
     #   gradio-client
     #   huggingface-hub
-google-api-core==2.34.0
+google-api-core[grpc]==2.34.0
     # via
     #   google-api-python-client
     #   google-cloud-core
@@ -116,7 +117,7 @@ google-crc32c==1.8.0
     #   google-resumable-media
 google-resumable-media==2.10.2
     # via google-cloud-storage
-googleapis-common-protos==1.75.2
+googleapis-common-protos[grpc]==1.75.2
     # via
     #   google-api-core
     #   grpc-google-iam-v1
@@ -145,6 +146,7 @@ grpclib==0.4.9
 h11==0.16.0
     # via
     #   httpcore
+    #   httpcore2
     #   uvicorn
 h2==4.4.1
     # via grpclib
@@ -156,6 +158,8 @@ hpack==4.2.0
     # via h2
 httpcore==1.0.9
     # via httpx
+httpcore2==2.12.0
+    # via httpx2
 httplib2==0.32.0
     # via
     #   google-api-python-client
@@ -168,10 +172,9 @@ httpx==0.28.1
     #   gradio
     #   gradio-client
     #   huggingface-hub
-    #   mcp
     #   safehttpx
     #   weasel
-httpx-sse==0.4.3
+httpx2==2.12.0
     # via mcp
 huggingface-hub==1.29.0
     # via
@@ -183,6 +186,7 @@ idna==3.19
     # via
     #   anyio
     #   httpx
+    #   httpx2
     #   requests
     #   yarl
 jinja2==3.1.6
@@ -199,8 +203,10 @@ markupsafe==3.0.3
     # via
     #   gradio
     #   jinja2
-mcp==1.29.1
+mcp==2.1.1
     # via -r requirements.in
+mcp-types==2.1.1
+    # via mcp
 mdurl==0.1.2
     # via markdown-it-py
 modal==1.5.5
@@ -215,13 +221,15 @@ murmurhash==1.0.15
     #   preshed
     #   spacy
     #   thinc
-numpy==2.5.2
+numpy==2.4.6
     # via
     #   blis
     #   gradio
     #   pandas
     #   spacy
     #   thinc
+opentelemetry-api==1.44.0
+    # via mcp
 orjson==3.12.0
     # via gradio
 packaging==26.3
@@ -276,22 +284,21 @@ pydantic==2.13.5
     #   fastapi
     #   gradio
     #   mcp
-    #   pydantic-settings
+    #   mcp-types
     #   spacy
     #   thinc
     #   weasel
 pydantic-core==2.46.5
     # via pydantic
-pydantic-settings==2.15.0
-    # via mcp
 pydub==0.25.1
     # via gradio
 pygments==2.21.0
     # via rich
-pyjwt==2.13.0
+pyjwt[crypto]==2.13.0
     # via
     #   -r requirements.in
     #   mcp
+    #   pyjwt
 pyparsing==3.3.2
     # via httplib2
 pypdf==6.16.2
@@ -301,7 +308,6 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.2.3
     # via
     #   -r requirements.in
-    #   pydantic-settings
     #   uvicorn
 python-multipart==0.0.32
     # via
@@ -339,10 +345,6 @@ safehttpx==0.1.7
     # via gradio
 semantic-version==2.10.0
     # via gradio
-setuptools==84.0.0
-    # via
-    #   spacy
-    #   thinc
 shellingham==1.5.4
     # via typer
 six==1.17.0
@@ -381,6 +383,10 @@ tqdm==4.70.0
     #   -r requirements.in
     #   huggingface-hub
     #   spacy
+truststore==0.10.4
+    # via
+    #   httpcore2
+    #   httpx2
 typer==0.27.2
     # via
     #   gradio
@@ -400,9 +406,12 @@ typing-extensions==4.16.0
     #   gradio
     #   gradio-client
     #   grpcio
+    #   httpx2
     #   huggingface-hub
     #   mcp
+    #   mcp-types
     #   modal
+    #   opentelemetry-api
     #   pydantic
     #   pydantic-core
     #   referencing
@@ -414,12 +423,11 @@ typing-inspection==0.4.4
     #   fastapi
     #   mcp
     #   pydantic
-    #   pydantic-settings
 uritemplate==4.2.0
     # via google-api-python-client
 urllib3==2.7.0
     # via requests
-uvicorn==0.52.4
+uvicorn[standard]==0.52.4
     # via
     #   -r requirements.in
     #   gradio
