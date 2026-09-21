@@ -10,9 +10,9 @@ reportlab>=4.2,<5.0
 
 # Linters & type-checkers (dev-only)
 mypy==2.3.1
-ruff==0.16.6
+ruff==0.16.8
 black==26.5.1
 
 # Optional: richer output and sharding (dev-only)
 pytest-xdist==3.8.0
-pytest-rerunfailures==16.6.1
+pytest-rerunfailures==16.7
