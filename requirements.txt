@@ -106,7 +106,7 @@ google-cloud-core==2.7.0
     # via
     #   google-cloud-storage
     #   google-cloud-translate
-google-cloud-storage==2.19.0
+google-cloud-storage==3.14.1
     # via -r requirements.in
 google-cloud-translate==3.27.0
     # via -r requirements.in
