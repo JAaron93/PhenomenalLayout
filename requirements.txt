@@ -427,7 +427,7 @@ uritemplate==4.2.0
     # via google-api-python-client
 urllib3==2.7.0
     # via requests
-uvicorn[standard]==0.52.4
+uvicorn[standard]==0.54.0
     # via
     #   -r requirements.in
     #   gradio
