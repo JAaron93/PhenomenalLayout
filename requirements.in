@@ -3,7 +3,7 @@
 
 # Web Framework & API
 fastapi>=0.115,<1.0
-uvicorn[standard]>=0.34,<1.0
+uvicorn[standard]>=0.54.0,<1.0
 python-dotenv>=1.1,<2.0
 
 # UI Framework
