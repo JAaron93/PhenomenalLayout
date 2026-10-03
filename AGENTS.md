@@ -106,7 +106,7 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 ---
 
 ## 3. Modal Labs Serverless Deployment Architecture
-* **Framework**: Deployable as a serverless ASGI web app (architectural deployment specification under `TASK-5.3` / `modal_app.py`, `@modal.asgi_app()`; active deployment scripts in `scripts/deploy_modal.py`).
+* **Framework**: Deployable as a serverless ASGI web app (architectural deployment specification under `TASK-5.3` / `modal_app.py`, `@modal.asgi_app()`). `scripts/deploy_modal.py` is **legacy tooling** — its main-application deploy function is a stub (`"not yet implemented"`) and it references the deleted `services/dolphin_modal_service.py`; it must not be used as an active deployment path until TASK-5.3 is implemented.
 * **Compute Tier**: Must operate efficiently within Modal Labs' $30/month free compute tier by enforcing automatic scale-to-zero when idle (`scaledown_window=300`).
 * **Storage**: Persistent storage must utilize `modal.Volume` strictly for user metadata and terminology storage (`/data/`).
 
