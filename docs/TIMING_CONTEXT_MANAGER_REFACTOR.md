@@ -1,7 +1,7 @@
 # Timing Context Manager Refactoring
 
 ## Overview
-This document describes the refactoring of duplicated timing blocks in [`core/dynamic_layout_engine.py`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_layout_engine.py) by extracting a reusable timing context manager.
+This document describes the refactoring of duplicated timing blocks in [`core/dynamic_layout_engine.py`](../core/dynamic_layout_engine.py) by extracting a reusable timing context manager.
 
 ## Problem Statement
 The original code had duplicated timing patterns around lines 300 and 333-334:
@@ -72,7 +72,7 @@ def time_operation(metrics: PerformanceMetrics, cache_hit: bool = False) -> Gene
 ### Key Features
 1. **Automatic Timing**: Start time captured on entry, duration calculated on exit
 2. **Exception Safety**: `finally` block ensures timing is recorded even if exceptions occur
-3. **Metrics Integration**: Direct integration with existing [`PerformanceMetrics.record_operation`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_programming.py#L68-L78)
+3. **Metrics Integration**: Direct integration with existing [`PerformanceMetrics.record_operation`](../core/dynamic_programming.py#L68-L78)
 4. **Cache Hit Support**: Optional parameter to indicate cache hits
 5. **Type Hints**: Full type annotations for better IDE support
 

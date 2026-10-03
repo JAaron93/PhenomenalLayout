@@ -2,7 +2,7 @@
 
 ## Summary
 
-Optimized the cache key construction in [`TextFingerprint.to_cache_key()`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L148-L204) to address performance bottlenecks and improve collision resistance through streaming hash construction and better algorithmic design.
+Optimized the cache key construction in [`TextFingerprint.to_cache_key()`](../core/dynamic_language_engine.py#L148-L204) to address performance bottlenecks and improve collision resistance through streaming hash construction and better algorithmic design.
 
 ## Problems Addressed
 

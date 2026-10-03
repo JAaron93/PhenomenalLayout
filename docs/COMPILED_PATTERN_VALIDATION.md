@@ -2,11 +2,11 @@
 
 ## Summary
 
-Added `__post_init__` validation to the [`CompiledPattern`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L45-L74) dataclass to enforce consistency between optional regex patterns and their corresponding lists, preventing invalid combinations at initialization time.
+Added `__post_init__` validation to the [`CompiledPattern`](../core/dynamic_language_engine.py#L45-L74) dataclass to enforce consistency between optional regex patterns and their corresponding lists, preventing invalid combinations at initialization time.
 
 ## Problem Addressed
 
-The [`CompiledPattern`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L45-L74) dataclass previously allowed inconsistent states where:
+The [`CompiledPattern`](../core/dynamic_language_engine.py#L45-L74) dataclass previously allowed inconsistent states where:
 - `words_regex` could be `None` while `word_list` contained items
 - `chars_regex` could be `None` while `char_list` contained items
 
@@ -109,8 +109,8 @@ If no regex pattern is provided, char_list must be empty."
 ## Integration Points
 
 The validation integrates seamlessly with:
-- [`_compile_pattern()`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L305-L336) method in [`DynamicLanguageDetector`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L223-L674)
-- Pattern creation from [`LANGUAGE_PATTERNS`](file:///Users/pretermodernist/PhenomenalLayout/services/language_detector.py) configuration
+- [`_compile_pattern()`](../core/dynamic_language_engine.py#L305-L336) method in [`DynamicLanguageDetector`](../core/dynamic_language_engine.py#L223-L674)
+- Pattern creation from [`LANGUAGE_PATTERNS`](../services/language_detector.py) configuration
 - Runtime pattern compilation and caching
 
-The validation automatically prevents creation of [`CompiledPattern`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L45-L74) instances with inconsistent regex/list combinations, ensuring robust language detection behavior throughout the system.
+The validation automatically prevents creation of [`CompiledPattern`](../core/dynamic_language_engine.py#L45-L74) instances with inconsistent regex/list combinations, ensuring robust language detection behavior throughout the system.

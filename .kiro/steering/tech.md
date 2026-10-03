@@ -88,6 +88,6 @@ export TRANSLATION_BATCH_SIZE=50
 ```
 
 ## Deployment
-- **Modal** - Cloud deployment platform (see deploy_modal.py)
+- **Modal** - Cloud deployment platform (scripts/deploy_modal.py is legacy tooling pending TASK-5.3; see modal_app.py specification)
 - **Docker** - Containerization support
 - **Environment-based configuration** - 12-factor app principles

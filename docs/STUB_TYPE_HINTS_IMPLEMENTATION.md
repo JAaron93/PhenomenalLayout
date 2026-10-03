@@ -1,7 +1,7 @@
 # Type Hints Implementation for Fallback Stub Classes
 
 ## Overview
-This document describes the type hints implementation for the fallback stub classes in [`core/dynamic_layout_engine.py`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_layout_engine.py) around lines 26-58.
+This document describes the type hints implementation for the fallback stub classes in [`core/dynamic_layout_engine.py`](../core/dynamic_layout_engine.py) around lines 26-58.
 
 ## Problem Statement
 The original fallback stub classes lacked type hints, which reduced IDE and type-checker assistance:

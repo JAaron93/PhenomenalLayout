@@ -236,8 +236,7 @@ The comprehensive testing suite includes:
 ### Running Tests
 
 ```bash
-cd /Users/pretermodernist/PhenomenalLayout
-python -m pytest tests/test_dynamic_programming.py -v
+pytest tests/test_dynamic_programming.py -v
 ```
 
 ## Memory Efficiency

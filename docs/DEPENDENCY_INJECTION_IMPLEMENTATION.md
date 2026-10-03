@@ -1,7 +1,7 @@
 # Dependency Injection Implementation for OptimizedLanguageDetector
 
 ## Overview
-This document describes the dependency injection implementation for the [`OptimizedLanguageDetector`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L693-L720) class constructor in `core/dynamic_language_engine.py` around lines 654-660.
+This document describes the dependency injection implementation for the [`OptimizedLanguageDetector`](../core/dynamic_language_engine.py#L693-L720) class constructor in `core/dynamic_language_engine.py` around lines 654-660.
 
 ## Problem Statement
 The original constructor had the following issues that hampered testing and configurability:

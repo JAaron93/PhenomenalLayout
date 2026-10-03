@@ -4,7 +4,7 @@
 PhenomenalLayout translates full-length philosophical treatises (e.g. Ludwig Klages, Kant, Heidegger) from German to English. Because German compound terms expand by 20–30% in English, traditional PDF translation breaks document layouts, tables, and embedded diagrams.
 
 ## 2. Technical Stack & Deployment
-* **Deployment & Hosting**: Serverless on **Modal Labs** (`modal>=0.60.0`, `modal_app.py`) with automatic scale-to-zero when idle, operating within Modal's $30/mo free compute tier.
+* **Deployment & Hosting**: Serverless on **Modal Labs** (`modal>=0.60.0`, `modal_app.py` deployment specification under `TASK-5.3`) with automatic scale-to-zero when idle, operating within Modal's $30/mo free compute tier.
 * **Storage Invariant (Zero Host Storage)**: Modal backend stores **zero book PDFs**. The source and translated PDFs reside strictly in the **user's GCS bucket** (`gs://<user_bucket>/`) or personal **Google Drive**. Modal Volume (`modal.Volume.from_name("phenomenal-user-data")`) mounted at `/data` is reserved strictly for lightweight user metadata, neologism dictionaries, and session recovery handles ($\le 5\text{MB}$).
 * **Language & Runtime**: Python 3.11 / 3.12, FastAPI, Gradio UI.
 * **Translation & Document Engine**: Google Cloud Translation API v3 (`google-cloud-translate>=3.15.0`).
