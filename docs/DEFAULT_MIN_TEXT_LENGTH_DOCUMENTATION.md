@@ -2,7 +2,7 @@
 
 ## Summary
 
-Added comprehensive documentation for the `DEFAULT_MIN_TEXT_LENGTH = 10` constant in [`core/dynamic_language_engine.py`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L35-L41) to explain the rationale, configuration options, and edge case handling for future maintainers.
+Added comprehensive documentation for the `DEFAULT_MIN_TEXT_LENGTH = 10` constant in [`core/dynamic_language_engine.py`](../core/dynamic_language_engine.py#L35-L41) to explain the rationale, configuration options, and edge case handling for future maintainers.
 
 ## Documentation Added
 

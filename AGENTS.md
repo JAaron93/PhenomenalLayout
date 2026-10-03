@@ -106,7 +106,7 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 ---
 
 ## 3. Modal Labs Serverless Deployment Architecture
-* **Framework**: Deployable as a serverless ASGI web app (`modal_app.py`, `@modal.asgi_app()`).
+* **Framework**: Deployable as a serverless ASGI web app (architectural deployment specification under `TASK-5.3` / `modal_app.py`, `@modal.asgi_app()`; active deployment scripts in `scripts/deploy_modal.py`).
 * **Compute Tier**: Must operate efficiently within Modal Labs' $30/month free compute tier by enforcing automatic scale-to-zero when idle (`scaledown_window=300`).
 * **Storage**: Persistent storage must utilize `modal.Volume` strictly for user metadata and terminology storage (`/data/`).
 
@@ -118,12 +118,12 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 
 | Prohibited Component / Pattern | Reason | Required Modern Replacement |
 | :--- | :--- | :--- |
-| **Custom Canvas Reconstruction** (`services/pdf_document_reconstructor.py`, ReportLab canvas drawing) | Heuristic font-scaling and box expansion broke tables and figures. | Rely on Google Cloud Document Translation, which natively generates complete, layout-preserved PDFs. |
-| **Dedicated GPU OCR Workers** (Modal Dolphin OCR instances, `services/dolphin_client.py`) | High operational complexity and cost. | Outsource OCR and document layout parsing directly to Google Cloud. |
+| **Custom Canvas Reconstruction** (Legacy ReportLab canvas drawing; former *services/pdf_document_reconstructor.py* [deleted under ADR 0001]) | Heuristic font-scaling and box expansion broke tables and figures. | Rely on Google Cloud Document Translation, which natively generates complete, layout-preserved PDFs. |
+| **Dedicated GPU OCR Workers** (Modal Dolphin OCR instances; former *services/dolphin_client.py* [deleted under ADR 0001]) | High operational complexity and cost. | Outsource OCR and document layout parsing directly to Google Cloud. |
 | **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py`, `core/dynamic_programming.py`) | Fragile heuristics and technical debt. | Cloud Translation handles typography scaling and line wrapping natively. |
 | **Third-Party Auth Middleware** (Auth0, Clerk, Firebase) | Unnecessary SaaS dependency, cost, and complexity. | Use native client-side Google Identity Services (GIS) OAuth with `drive.file` scope. |
 | **Storing Book PDFs on Host Disk** | Memory exhaustion and disk bloat on serverless instances. | Stream directly to/from user GCS bucket and Google Drive. |
-| **Absolute Local Worktree Links** (`file:///Users/...`) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`.kiro/specs/gcp-migration/design.md`). |
+| **Absolute Local Worktree Links** (`file:///` absolute paths) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`.kiro/specs/gcp-migration/design.md`). |
 | **Blocking Sync I/O in Async Paths** | Degrades throughput on multi-chapter books. | Use `asyncio` and non-blocking streaming I/O for GCS uploads and LRO polling. |
 | **Hardcoded Credentials or `.env` Commits** | Security vulnerability. | Use session-scoped BYOK vaults or Google Cloud Application Default Credentials (ADC). |
 | **Premature Glossary Deletion** (Deleting working glossary before replacement is READY) | Leaves translations without a glossary during creation windows or upon creation failures. | Zero-downtime Blue-Green replacement: provision alternating slot (`-a` / `-b`), verify `READY`, then retire old slot. |
@@ -158,7 +158,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 ### 6.2 Test Fixture Reload & Submodule Hygiene (Python 3.13)
 * **Safe Dynamic Reloading**: In tests that dynamically reload environment-dependent submodules via `importlib.reload(mod)`, always synchronize `sys.modules[mod.__name__] = mod` prior to calling `importlib.reload` to prevent Python 3.13 `sys.modules` identity desynchronization.
 * **Usefixtures for Side-Effect Fixtures**: Test functions that require an environment setup fixture solely for setup/teardown side effects MUST use `@pytest.mark.usefixtures("<fixture_name>")` instead of unpacking unused arguments, preventing `ARG001`, `RUF059`, and `N806` linter violations.
-* **Dead Documentation Pruning**: When completing dead code cleanups, all intermediate audit reports (`unused_code_report.md`, `reports/dead_code_*.md`) that have been addressed MUST be pruned to prevent documentation drift.
+* **Dead Documentation Pruning**: When completing dead code cleanups, all intermediate audit reports (e.g., historical unused code reports, `reports/dead_code_*.md`) that have been addressed MUST be pruned to prevent documentation drift.
 
 ### 6.3 Parallel Test Suite Execution & Inner-Loop Hygiene
 * **Multi-Core Test Parallelization**: When running the full repository test suite (700+ tests), agents MUST leverage multi-core parallelism using `pytest -n auto` (or `-n <CPU_COUNT>`) via `pytest-xdist` to avoid multi-minute serial test timeouts and latency.
@@ -167,3 +167,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 ### 6.4 Gradio 6 UI Contracts & Timer Lifecycle Invariants
 * **Typed Component Returns**: Event handlers in `ui/gradio_interface.py` MUST return typed component instances (e.g., `gr.Button(interactive=...)`, `gr.Timer(active=...)`) rather than deprecated `gr.update(...)` dictionaries.
 * **Bounded Polling & Idle Deactivation**: Status polling timers (`gr.Timer(value=1.0, active=False)`) MUST be dynamically stopped (`active=False`) upon translation completion, startup errors (`"❌"`), or when returning to an idle state (`"ready for advanced translation"`). Timers MUST NEVER poll indefinitely during idle or error states.
+
+### 6.5 Developer Tooling Scope vs. Runtime Application Architecture
+> [!NOTE]
+> This repository enforces a **CLI-first, stateful-MCP-sparing architecture** strictly for **Software Engineering Agents (SEAs) and developer workflows** (version control, PR management, testing, builds, containers, and environment inspection). The **runtime application itself** operates entirely through its native platform SDKs and in-process architecture (`google-cloud-translate`, `google-cloud-storage`, `pypdf`, `fastapi`, `modal`); review agents must **never** conflate developer tool routing with runtime application architecture or demand that runtime services shell out to CLI binaries.

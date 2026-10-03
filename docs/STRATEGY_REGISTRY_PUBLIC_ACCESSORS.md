@@ -1,10 +1,10 @@
 # Public Accessor Implementation for StrategyRegistry
 
 ## Overview
-This document describes the implementation of public accessor methods for the [StrategyRegistry](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_programming.py#L416-L480) class to replace direct access to private attributes, following the PhenomenalLayout project's emphasis on maintaining clean, maintainable APIs that preserve the integrity of the layout preservation system.
+This document describes the implementation of public accessor methods for the [StrategyRegistry](../core/dynamic_programming.py#L416-L480) class to replace direct access to private attributes, following the PhenomenalLayout project's emphasis on maintaining clean, maintainable APIs that preserve the integrity of the layout preservation system.
 
 ## Problem Statement
-The original code in [core/dynamic_layout_engine.py](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_layout_engine.py) at line 427 directly accessed the private attribute `_strategies`:
+The original code in [core/dynamic_layout_engine.py](../core/dynamic_layout_engine.py) at line 427 directly accessed the private attribute `_strategies`:
 
 ```python
 # Original problematic code
@@ -68,8 +68,8 @@ def __len__(self) -> int:
 ## Implementation Details
 
 ### Location of Changes
-- **[core/dynamic_programming.py](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_programming.py#L479-L503)**: Added public accessor methods to `StrategyRegistry`
-- **[core/dynamic_layout_engine.py](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_layout_engine.py#L426)**: Updated to use public API
+- **[core/dynamic_programming.py](../core/dynamic_programming.py#L479-L503)**: Added public accessor methods to `StrategyRegistry`
+- **[core/dynamic_layout_engine.py](../core/dynamic_layout_engine.py#L426)**: Updated to use public API
 
 ### Before and After
 

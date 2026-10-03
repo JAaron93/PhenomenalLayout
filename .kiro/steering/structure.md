@@ -90,44 +90,45 @@ templates/            # Jinja2 templates
 uploads/              # Temporary file uploads
 downloads/            # Generated translated documents
 input/                # Input document staging
-output/            esencige dependross-packa for clute importsd
-- Absoerrege pref same packats withinlative impor Re
--torts lasmption ipplicacal a- Lod
-orts seconrty imp
-- Third-pats first imporibraryStandard lon
-- t Organizati# Imporsor.py`
-
-#esr `_procrvice.py` oh `_se* end witrvice files*n
-- **Sextensio`.json` es with ptive name* use descriion files*nfigurat
-- **Coest_`h `tefixed wit files** pr*Testce.py`)
-- *rvilation_sehanced_trans(e.g., `enose rpng pudicatiames** inescriptive ns
-- **D directorie files andor Python** fke_case
-- **SnationsvenConing  File Nam
-
-##plicationout apg throughinggDetailed lol text)
-- to originallback ation (faegradraceful dervices
-- Gndling in sexception haensive omprehing
-- CHandlrror ### Eon data
-
-ratiic configustatN files for - JSOpy`
-s.g/settinggs in `confized settinCentralienv`
-- via `.iguration nfcosed vironment-ba- Engement
-on Manaigurati### Confic
-
-iness logs and buscces an datan betweer separatio Clea
--odels/`res in `mta structus define da
-- Modelayerase/` latabted in `dions isolaeratatabase optern
-- Dy Pat Repositor##
-#ance
-formr peroughout fot thrawai- Async/s
-ndler route hanjected intoe ies ar
-- Serviclitybi responsiinglehas a sice - Each servogic
-s lsines buin allconta` ces/n `servivices ittern
-- Ser Layer Pa# Servicetterns
-
-##tecture Pa Archi##
+output/               # Output document staging
+temp/                 # Temporary processing files
+logs/                 # Application logs
 ```
 
-n logsApplicatio        # s/  
-logssing filesroceemporary p       # T       emp/   taging
-tument s Output doc   #
+## Architecture Patterns
+
+### Service Layer Pattern
+- Services in `services/` contain all business logic
+- Each service has a single responsibility
+- Services are injected into route handlers
+- Async/await throughout for performance
+
+### Repository Pattern
+- Database operations isolated in `database/` layer
+- Models define data structures in `models/`
+- Clear separation between data access and business logic
+
+### Configuration Management
+- Environment-based configuration via `.env`
+- Centralized settings in `config/settings.py`
+- JSON files for static configuration data
+
+### Error Handling
+- Comprehensive exception handling in services
+- Graceful degradation (fallback to original text)
+- Detailed logging throughout application
+
+## File Naming Conventions
+- **Snake_case** for Python files and directories
+- **Descriptive names** indicating purpose (e.g., `enhanced_translation_service.py`)
+- **Test files** prefixed with `test_`
+- **Configuration files** use descriptive names with `.json` extensions
+- **Service files** end with `_service.py` or `_processor.py`
+
+## Import Organization
+- Standard library imports first
+- Third-party imports second
+- Local application imports last
+- Relative imports within same package preferred
+- Absolute imports for cross-package dependencies
+

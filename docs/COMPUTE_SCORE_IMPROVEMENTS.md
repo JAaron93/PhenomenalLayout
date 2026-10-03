@@ -2,7 +2,7 @@
 
 ## Summary
 
-Enhanced the [`compute_score`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L76-L122) method in [`CompiledPattern`](file:///Users/pretermodernist/PhenomenalLayout/core/dynamic_language_engine.py#L45-L122) to fix potential runtime errors, improve empty input handling, and simplify the score combination logic while preserving mathematical correctness.
+Enhanced the [`compute_score`](../core/dynamic_language_engine.py#L76-L122) method in [`CompiledPattern`](../core/dynamic_language_engine.py#L45-L122) to fix potential runtime errors, improve empty input handling, and simplify the score combination logic while preserving mathematical correctness.
 
 ## Issues Fixed
 
