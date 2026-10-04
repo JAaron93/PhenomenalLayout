@@ -425,7 +425,7 @@ typing-inspection==0.4.4
     #   pydantic
 uritemplate==4.2.0
     # via google-api-python-client
-urllib3==2.7.0
+urllib3==2.8.0
     # via requests
 uvicorn[standard]==0.54.0
     # via
