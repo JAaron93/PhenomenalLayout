@@ -9,8 +9,8 @@ pytest-cov==7.1.0
 reportlab>=5.0.1,<6.0
 
 # Linters & type-checkers (dev-only)
-mypy==2.3.1
-ruff==0.16.9
+mypy==2.4.0
+ruff==0.16.10
 black==26.5.1
 
 # Optional: richer output and sharding (dev-only)
