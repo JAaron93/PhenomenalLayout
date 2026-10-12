@@ -250,7 +250,7 @@ def debug_compound_detection(
         filter_category: Only test words from this category (legacy, use categories instead).
         categories: List of categories to load and test.
     """
-    logger.info("🐬 Dolphin OCR Translate - Compound Word Debug Analysis")
+    logger.info("🐬 PhenomenalLayout - Compound Word Debug Analysis")
     logger.info("=" * 60)
 
     try:

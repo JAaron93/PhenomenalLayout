@@ -563,12 +563,12 @@ def create_gradio_interface() -> gr.Blocks:
                 )
 
                 # Advanced Processing Info
-                gr.Markdown("## 🔍 OCR Processing Details")
+                gr.Markdown("## 🔍 Document Processing Details")
                 processing_info = gr.Textbox(
-                    label="Dolphin OCR Analysis",
+                    label="Document Analysis",
                     interactive=False,
                     lines=8,
-                    placeholder=("Pre-processing will show Dolphin OCR analysis..."),
+                    placeholder=("Pre-processing will show document analysis..."),
                     elem_classes=["info-panel"],
                 )
 

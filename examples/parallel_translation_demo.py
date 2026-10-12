@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Demonstration of Dolphin OCR Translate parallel translation capabilities for large document processing.
+Demonstration of PhenomenalLayout parallel translation capabilities for large document processing.
 
 This script shows how to use the enhanced translation service to process
 large documents efficiently with parallel processing.

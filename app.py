@@ -1,8 +1,8 @@
 # ruff: noqa: E402
 """PhenomenalLayout application.
 
-Orchestrates Lingo.dev translation services with Dolphin OCR for pixel-perfect
-formatting integrity during document translation.
+Orchestrates Lingo.dev translation services with Google Cloud Document
+Translation for pixel-perfect formatting integrity during document translation.
 """
 
 import asyncio
@@ -182,8 +182,8 @@ def create_app(config: dict | None = None):
         title="PhenomenalLayout",
         description=(
             "Advanced layout preservation engine for document translation - "
-            "orchestrating Lingo.dev translation services with Dolphin OCR "
-            "for pixel-perfect formatting integrity"
+            "orchestrating Lingo.dev translation services with Google Cloud "
+            "Document Translation for pixel-perfect formatting integrity"
         ),
         version="2.0.0",
         lifespan=lifespan,

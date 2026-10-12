@@ -1,4 +1,4 @@
-"""Parallel translation service for Dolphin OCR Translate document processing.
+"""Parallel translation service for PhenomenalLayout document processing.
 
 This module implements parallelized translation with bounded concurrency,
 robust error handling, and order preservation:
