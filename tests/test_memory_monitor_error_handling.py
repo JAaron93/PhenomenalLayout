@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Test error handling in MemoryMonitor to ensure no error masking."""
 
+import os
 from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
@@ -179,13 +180,15 @@ class TestMemoryMonitoringErrorHandling:
 @pytest.fixture
 def memory_test_client() -> Generator[tuple[TestClient, MagicMock], None, None]:
     """Fixture to provide a TestClient with mocked memory stats and auth disabled."""
-    with patch('api.memory_routes.get_memory_stats') as mock_stats:
+    # The memory routes are served through custom _IncludedRouter wrappers whose
+    # captured auth chain predates module reloads by sibling tests, so
+    # app.dependency_overrides cannot reliably engage. Disable auth at the
+    # source instead: AuthConfig re-reads MEMORY_API_ENABLE_AUTH from the live
+    # environment on every request.
+    with patch.dict(os.environ, {"MEMORY_API_ENABLE_AUTH": "false"}), patch(
+        "api.memory_routes.get_memory_stats"
+    ) as mock_stats:
         app = create_app()
-        # Override the object the route captured, not api.auth's: module
-        # reloads by other tests would leave the override keyed on a stale
-        # function object and requests would fall through to real auth (401).
-        from api import memory_routes
-        app.dependency_overrides[memory_routes.get_read_only_user] = lambda: {"user_id": "test", "role": "read_only"}
         client = TestClient(app)
         yield client, mock_stats
 
