@@ -40,5 +40,6 @@ tqdm>=4.67,<5.0
 psutil>=7.0,<8.0
 
 # pydub imports the stdlib `audioop` module, removed in Python 3.13 (PEP 594).
-# Keep the marker: uv pip compile run on 3.13 strips it, but CI installs on 3.11.
+# Keep the marker: uv pip compile run on 3.13 strips it, and the shim is not
+# installable below 3.13 (where stdlib audioop still exists anyway).
 audioop-lts>=0.2.2; python_version >= "3.13"
