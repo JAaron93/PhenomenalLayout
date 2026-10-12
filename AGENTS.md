@@ -157,12 +157,14 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 
 ### 6.2 Test Fixture Reload & Submodule Hygiene (Python 3.13)
 * **Safe Dynamic Reloading**: In tests that dynamically reload environment-dependent submodules via `importlib.reload(mod)`, always synchronize `sys.modules[mod.__name__] = mod` prior to calling `importlib.reload` to prevent Python 3.13 `sys.modules` identity desynchronization.
+* **Reload After Environment Patches Exit**: Fixtures combining `patch.dict(os.environ)` with `importlib.reload` MUST run teardown reloads *after* the patch context exits. Reloading inside the patched context re-executes module-level `os.getenv(...)` constants (e.g., `api.rate_limit.RATE_LIMITS`) with the patched values and bakes them into the module for the remainder of the worker process, producing scheduling-dependent failures in unrelated tests (root cause fixed in PR #118).
 * **Usefixtures for Side-Effect Fixtures**: Test functions that require an environment setup fixture solely for setup/teardown side effects MUST use `@pytest.mark.usefixtures("<fixture_name>")` instead of unpacking unused arguments, preventing `ARG001`, `RUF059`, and `N806` linter violations.
 * **Dead Documentation Pruning**: When completing dead code cleanups, all intermediate audit reports (e.g., historical unused code reports, `reports/dead_code_*.md`) that have been addressed MUST be pruned to prevent documentation drift.
 
 ### 6.3 Parallel Test Suite Execution & Inner-Loop Hygiene
 * **Multi-Core Test Parallelization**: When running the full repository test suite (700+ tests), agents MUST leverage multi-core parallelism using `pytest -n auto` (or `-n <CPU_COUNT>`) via `pytest-xdist` to avoid multi-minute serial test timeouts and latency.
 * **Inner-Loop Targeted Runs**: During rapid TDD red-green cycles, run targeted test files with `--no-cov` to verify individual behaviors quickly (< 1s) before triggering full multi-module coverage runs (`--cov=services --cov=utils --cov=models`).
+* **Parallel-Failure Triage**: Under `-n auto` (xdist `dist=load`), worker scheduling is nondeterministic and failure sets rotate between runs. Before diagnosing a failure, rerun the failing test serially and diff the failure set against previous runs — a signature that appears once and moves between runs is environmental, not a regression. For state-leak repro, order node IDs in a single invocation (e.g., suspected polluter test first, victim test second): pytest runs node IDs in the order given.
 
 ### 6.4 Gradio 6 UI Contracts & Timer Lifecycle Invariants
 * **Typed Component Returns**: Event handlers in `ui/gradio_interface.py` MUST return typed component instances (e.g., `gr.Button(interactive=...)`, `gr.Timer(active=...)`) rather than deprecated `gr.update(...)` dictionaries.
@@ -171,3 +173,6 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 ### 6.5 Developer Tooling Scope vs. Runtime Application Architecture
 > [!NOTE]
 > This repository enforces a **CLI-first, stateful-MCP-sparing architecture** strictly for **Software Engineering Agents (SEAs) and developer workflows** (version control, PR management, testing, builds, containers, and environment inspection). The **runtime application itself** operates entirely through its native platform SDKs and in-process architecture (`google-cloud-translate`, `google-cloud-storage`, `pypdf`, `fastapi`, `modal`); review agents must **never** conflate developer tool routing with runtime application architecture or demand that runtime services shell out to CLI binaries.
+
+### 6.6 API Test Authentication Bypass & Custom Router Caveat
+* **Dependency Overrides Do Not Reach Memory Routes**: `/api/v1/memory/*` routes are served through custom `_IncludedRouter` wrappers whose captured auth dependency predates sibling tests' module reloads — `app.dependency_overrides` silently never engages for them (verified by instrumentation in PR #116). Tests that need unauthenticated access to these routes MUST patch `MEMORY_API_ENABLE_AUTH=false` via `patch.dict(os.environ, ...)` instead; `AuthConfig.enable_auth` re-reads the live environment on every request, so this bypasses stale module instances and router wrappers alike. Do not "fix" such fixtures by re-keying `dependency_overrides` — that approach was attempted and empirically disproven.
