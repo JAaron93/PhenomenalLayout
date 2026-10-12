@@ -97,15 +97,20 @@ def test_client():
         client = TestClient(app_module.create_app())
         yield client
 
-        # Teardown: reload modules to restore state after patch context exits
-        for name in _RELOAD_MODULE_NAMES:
-            if name in sys.modules:
-                try:
-                    importlib.reload(sys.modules[name])
-                except Exception:
-                    logger.debug(
-                        "Failed to reload %s during teardown", name, exc_info=True
-                    )
+    # Teardown: reload modules to restore state after patch context exits.
+    # This MUST run after patch.dict exits — reloading inside the patched
+    # context bakes the test-env values (e.g., RATE_LIMITS=100) into the
+    # module constants for the rest of the worker process, which then makes
+    # tests asserting the default limits (api.rate_limit consumers) fail
+    # depending on xdist scheduling order.
+    for name in _RELOAD_MODULE_NAMES:
+        if name in sys.modules:
+            try:
+                importlib.reload(sys.modules[name])
+            except Exception:
+                logger.debug(
+                    "Failed to reload %s during teardown", name, exc_info=True
+                )
 
 
 @pytest.fixture
