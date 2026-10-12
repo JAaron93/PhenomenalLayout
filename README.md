@@ -499,7 +499,7 @@ export MAX_FILE_SIZE_BYTES=26214400   # 25MB
 
 ### Basic Security Features
 
-The Dolphin Modal service includes essential security measures:
+The serverless Modal application includes essential security measures:
 
 #### File Upload Security
 - **Content Validation**: PDF Content-Type and magic bytes validation
