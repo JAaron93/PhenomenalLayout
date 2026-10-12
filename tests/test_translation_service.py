@@ -134,11 +134,19 @@ def test_user_agent_env_override_and_default(monkeypatch):
 
     import services.translation_service as ts
 
-    monkeypatch.setenv("TRANSLATION_USER_AGENT", "custom-agent/9.9")
-    sys.modules[ts.__name__] = ts
-    reloaded = importlib.reload(ts)
-    assert reloaded.USER_AGENT == "custom-agent/9.9"
+    # importlib.reload mutates the shared module object in place: sibling
+    # tests holding the original LingoTranslator/MCPLingoTranslator class
+    # objects would fail isinstance checks against instances created through
+    # the reloaded globals. Snapshot and restore the full module state.
+    snapshot = dict(vars(ts))
+    try:
+        monkeypatch.setenv("TRANSLATION_USER_AGENT", "custom-agent/9.9")
+        sys.modules[ts.__name__] = ts
+        reloaded = importlib.reload(ts)
+        assert reloaded.USER_AGENT == "custom-agent/9.9"
 
-    monkeypatch.delenv("TRANSLATION_USER_AGENT", raising=False)
-    reloaded = importlib.reload(ts)
-    assert reloaded.USER_AGENT == "PhenomenalLayout-Translate/2.0"
+        monkeypatch.delenv("TRANSLATION_USER_AGENT", raising=False)
+        reloaded = importlib.reload(ts)
+        assert reloaded.USER_AGENT == "PhenomenalLayout-Translate/2.0"
+    finally:
+        vars(ts).update(snapshot)

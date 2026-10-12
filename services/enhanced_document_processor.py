@@ -145,13 +145,14 @@ class EnhancedDocumentProcessor:
 
         # OCR layout extraction is retired under ADR 0001; layout preservation
         # is handled natively by Google Cloud Document Translation.
-        layout: dict[str, Any] = {"pages": []}
+        layout: dict[str, Any] | None = {"pages": []}
 
         # Validate the placeholder structure against the real PDF page count so
         # consumers never see a layout claiming pages the PDF does not have.
         pdf_page_count = _get_pdf_page_count(pdf_path)
         if pdf_page_count is not None:
-            if not validate_pdf_layout(layout, pdf_page_count):
+            placeholder: dict[str, Any] = {"pages": []}
+            if not validate_pdf_layout(placeholder, pdf_page_count):
                 logger.warning("Invalid PDF layout structure, discarding")
                 layout = None
         else:
