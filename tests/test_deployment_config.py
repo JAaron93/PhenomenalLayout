@@ -1,4 +1,4 @@
-"""Deployment validation tests for Dolphin OCR PDF-only stack.
+"""Deployment validation tests for the GCP Document Translation stack.
 
 These tests ensure minimal configuration is present and that optional
 system dependencies are documented. They do not reach external networks.
@@ -16,7 +16,6 @@ import pytest
     "var",
     [
         "LINGO_API_KEY",
-        "DOLPHIN_ENDPOINT",
     ],
 )
 def test_required_env_vars_documented_and_optionally_set(var: str) -> None:

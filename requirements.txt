@@ -21,6 +21,8 @@ anyio==4.14.2
     #   sse-starlette
     #   starlette
     #   watchfiles
+audioop-lts==0.2.2 ; python_version >= "3.13"
+    # via -r requirements.in
 attrs==26.1.0
     # via
     #   aiohttp
@@ -107,7 +109,7 @@ google-cloud-core==2.7.0
     # via
     #   google-cloud-storage
     #   google-cloud-translate
-google-cloud-storage==3.16.0
+google-cloud-storage==3.17.0
     # via -r requirements.in
 google-cloud-translate==3.27.0
     # via -r requirements.in
