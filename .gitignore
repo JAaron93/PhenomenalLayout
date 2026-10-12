@@ -217,12 +217,6 @@ checkpoints/
 *.pt
 *.safetensors
 
-# Dolphin OCR Translate specific
-translation_cache/
-processed_documents/
-ocr_cache/
-dolphin_cache/
-
 # User data and generated content
 data/
 database/user_choices.db
@@ -420,8 +414,6 @@ database/*.sqlite3
 database/user_choices*.db
 
 # OCR and processing temporary files
-dolphin_ocr/temp/
-dolphin_ocr/cache/
 processing_temp/
 
 # Generated PDFs and documents (unless explicitly versioned)

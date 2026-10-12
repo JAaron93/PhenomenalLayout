@@ -1,8 +1,8 @@
 # Scripts Directory
 
-Dolphin OCR Translate is a toolkit for OCR-based multilingual translation of scanned documents with advanced formatting preservation and philosophy-enhanced neologism detection.
+PhenomenalLayout is a toolkit for GCP-backed multilingual translation of scanned documents with advanced formatting preservation and philosophy-enhanced neologism detection.
 
-This directory contains utility scripts, test runners, and debugging tools for Dolphin OCR Translate.
+This directory contains utility scripts, test runners, and debugging tools for PhenomenalLayout.
 
 ## Test Scripts
 
