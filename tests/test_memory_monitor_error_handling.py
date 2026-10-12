@@ -181,8 +181,11 @@ def memory_test_client() -> Generator[tuple[TestClient, MagicMock], None, None]:
     """Fixture to provide a TestClient with mocked memory stats and auth disabled."""
     with patch('api.memory_routes.get_memory_stats') as mock_stats:
         app = create_app()
-        from api.auth import get_read_only_user
-        app.dependency_overrides[get_read_only_user] = lambda: {"user_id": "test", "role": "read_only"}
+        # Override the object the route captured, not api.auth's: module
+        # reloads by other tests would leave the override keyed on a stale
+        # function object and requests would fall through to real auth (401).
+        from api import memory_routes
+        app.dependency_overrides[memory_routes.get_read_only_user] = lambda: {"user_id": "test", "role": "read_only"}
         client = TestClient(app)
         yield client, mock_stats
 
