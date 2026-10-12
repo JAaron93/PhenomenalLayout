@@ -23,7 +23,7 @@ PhenomenalLayout has migrated away from custom, heuristic-heavy PDF layout recon
 | :--- | :--- | :--- |
 | **Custom Canvas Reconstruction** (e.g. ReportLab canvas text painting, manual DPI coordinate transforms) | Heuristic font-scaling and box expansion broke tables and figures. | Use Google Cloud Document Translation (`batchTranslateDocument` / `translateDocument`), which natively outputs preserved PDFs. |
 | **Dedicated GPU OCR Workers** (e.g. Modal Dolphin OCR instances) | High operational overhead and cost. | Outsource OCR and document typesetting directly to Google Cloud Document Translation. |
-| **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py`, `core/dynamic_programming.py`) | Redundant and fragile. | Let Cloud Translation handle typography scaling and line wrapping natively. |
+| **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py` [deleted under ADR 0001]) | Redundant and fragile. | Let Cloud Translation handle typography scaling and line wrapping natively. `core/dynamic_programming.py` remains live for the other dynamic engines. |
 | **Third-Party Auth Middleware** (Auth0, Clerk, Firebase) | Unnecessary SaaS cost and operational dependency. | Use native client-side **Google Identity Services (GIS)** OAuth with `drive.file` scope. |
 | **Storing Book PDFs on Host Disk** | Causes disk bloat and memory leaks on serverless instances. | Stream directly to/from user GCS bucket and personal Google Drive. |
 | **Hardcoded Credentials & Keys** | Security violation. | Use Google Cloud **Application Default Credentials (ADC)** or session-scoped BYOK vaults. Never commit service account JSONs. |
@@ -32,8 +32,8 @@ PhenomenalLayout has migrated away from custom, heuristic-heavy PDF layout recon
 
 ### 2.1 Track 4 Completed Deletions & Caller Decoupling (Do NOT Flag as Errors)
 Under **Track 4 (`TASK-4.1`)**, the following legacy components were permanently deleted or retired:
-* **Permanently Deleted**: `services/pdf_document_reconstructor.py`, `services/dolphin_client.py`, `services/dolphin_modal_service.py`, and legacy ReportLab test suites.
-* **Deprecated Stubs**: `core/dynamic_layout_engine.py` and `services/enhanced_document_processor.py` emit `DeprecationWarning` under ADR 0001.
+* **Permanently Deleted**: `services/pdf_document_reconstructor.py`, `services/dolphin_client.py`, `services/dolphin_modal_service.py`, the `dolphin_ocr/` package, `core/dynamic_layout_engine.py`, and legacy ReportLab test suites.
+* **Deprecated Stubs**: `services/enhanced_document_processor.py` emits `DeprecationWarning` under ADR 0001.
 * **Dependency Removal**: `reportlab` was intentionally pruned from production `requirements.txt` (retained only in `requirements-dev.txt` for mock test fixtures).
 
 **Reviewer Instructions for Track 4 Deletions:**

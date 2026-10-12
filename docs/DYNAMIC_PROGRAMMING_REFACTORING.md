@@ -1,7 +1,7 @@
 # Dynamic Programming Refactoring Implementation
 
 > [!NOTE]
-> **Track 4 Architectural Status**: While core caching and performance primitives (`SmartCache`, `PerformanceMetrics`, `memoize`, `StrategyPattern`, `StrategyRegistry`) in `core/dynamic_programming.py` remain active and supported for backward compatibility, `core/dynamic_layout_engine.py` and custom bounding box expansion have been **deprecated under ADR 0001 / Track 4**. Document layout, font scaling, and line-wrapping are now handled natively by **Google Cloud Document Translation Advanced (v3)**.
+> **Track 4 Architectural Status**: `core/dynamic_programming.py` (SmartCache, PerformanceMetrics, memoize, StrategyPattern, StrategyRegistry) remains an active, supported foundation for the language, validation, choice, and middleware engines. `core/dynamic_layout_engine.py` has been **deleted under ADR 0001 / Track 4**; document layout, font scaling, and line-wrapping are handled natively by **Google Cloud Document Translation Advanced (v3)**.
 
 ## Overview
 
@@ -14,10 +14,9 @@ The dynamic programming refactoring has been successfully implemented across all
 ### ✅ Completed Components
 
 1. **Core Dynamic Programming Infrastructure** (`core/dynamic_programming.py`)
-2. **Layout Strategy Engine** (`core/dynamic_layout_engine.py`)
-3. **Language Detection Engine** (`core/dynamic_language_engine.py`)
-4. **Validation Pipeline Engine** (`core/dynamic_validation_engine.py`)
-5. **Choice Resolution Engine** (`core/dynamic_choice_engine.py`)
+2. **Language Detection Engine** (`core/dynamic_language_engine.py`)
+3. **Validation Pipeline Engine** (`core/dynamic_validation_engine.py`)
+4. **Choice Resolution Engine** (`core/dynamic_choice_engine.py`)
 6. **Performance Monitoring Middleware** (`core/dynamic_middleware.py`)
 7. **Comprehensive Testing Suite** (`tests/test_dynamic_programming.py`)
 
@@ -88,41 +87,7 @@ registry.register('layout_strategy', create_layout_strategy)
 strategy = registry.get('layout_strategy', analysis_data)
 ```
 
-### 2. Layout Strategy Engine
-
-**File**: `core/dynamic_layout_engine.py`
-
-**Optimization**: Replaces 4-level nested conditionals with 16-entry lookup table
-
-**Before** (Original `determine_layout_strategy`):
-```python
-# O(n) conditional chain
-if analysis.can_fit_without_changes:
-    return LayoutStrategy(type=StrategyType.NONE)
-elif analysis.can_scale_to_single_line:
-    return LayoutStrategy(type=StrategyType.FONT_SCALE)
-elif analysis.can_wrap_within_height:
-    return LayoutStrategy(type=StrategyType.TEXT_WRAP)
-else:
-    # Complex hybrid logic...
-```
-
-**After** (Dynamic Programming):
-```python
-# O(1) lookup
-key = StrategyKey(
-    can_fit_unchanged=analysis.can_fit_without_changes,
-    can_scale_single_line=analysis.can_scale_to_single_line,
-    can_wrap_within_height=analysis.can_wrap_within_height,
-    sufficient_lines=analysis.lines_needed <= analysis.max_lines
-)
-builder = self.strategy_table[key.to_int()]
-return builder.build(analysis, self.engine_config)
-```
-
-**Performance Impact**: **5x improvement** in strategy determination
-
-### 3. Language Detection Engine
+### 2. Language Detection Engine
 
 **File**: `core/dynamic_language_engine.py`
 
@@ -136,7 +101,7 @@ return builder.build(analysis, self.engine_config)
 
 **Performance Impact**: **10x improvement** in language detection speed
 
-### 4. Validation Pipeline Engine
+### 3. Validation Pipeline Engine
 
 **File**: `core/dynamic_validation_engine.py`
 
@@ -150,7 +115,7 @@ return builder.build(analysis, self.engine_config)
 
 **Performance Impact**: **3x improvement** in validation throughput
 
-### 5. Choice Resolution Engine
+### 4. Choice Resolution Engine
 
 **File**: `core/dynamic_choice_engine.py`
 
@@ -164,7 +129,7 @@ return builder.build(analysis, self.engine_config)
 
 **Performance Impact**: **8x improvement** in conflict resolution speed
 
-### 6. Performance Monitoring Middleware
+### 5. Performance Monitoring Middleware
 
 **File**: `core/dynamic_middleware.py`
 
@@ -181,10 +146,6 @@ return builder.build(analysis, self.engine_config)
 All dynamic programming implementations provide backward-compatible wrappers:
 
 ```python
-# Drop-in replacement for LayoutPreservationEngine
-from core.dynamic_layout_engine import OptimizedLayoutPreservationEngine
-engine = OptimizedLayoutPreservationEngine()
-
 # Drop-in replacement for LanguageDetector
 from core.dynamic_language_engine import OptimizedLanguageDetector
 detector = OptimizedLanguageDetector()
