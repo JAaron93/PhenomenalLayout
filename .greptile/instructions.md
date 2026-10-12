@@ -22,7 +22,7 @@ PhenomenalLayout has migrated away from custom, heuristic-heavy PDF layout recon
 | Prohibited / Deprecated Pattern | Reason | Required Architecture |
 | :--- | :--- | :--- |
 | **Custom Canvas Reconstruction** (e.g. ReportLab canvas text painting, manual DPI coordinate transforms) | Heuristic font-scaling and box expansion broke tables and figures. | Use Google Cloud Document Translation (`batchTranslateDocument` / `translateDocument`), which natively outputs preserved PDFs. |
-| **Dedicated GPU OCR Workers** (e.g. Modal Dolphin OCR instances) | High operational overhead and cost. | Outsource OCR and document typesetting directly to Google Cloud Document Translation. |
+| **Dedicated GPU OCR Workers** | High operational overhead and cost. | Outsource OCR and document typesetting directly to Google Cloud Document Translation. |
 | **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py` [deleted under ADR 0001]) | Redundant and fragile. | Let Cloud Translation handle typography scaling and line wrapping natively. `core/dynamic_programming.py` remains live for the other dynamic engines. |
 | **Third-Party Auth Middleware** (Auth0, Clerk, Firebase) | Unnecessary SaaS cost and operational dependency. | Use native client-side **Google Identity Services (GIS)** OAuth with `drive.file` scope. |
 | **Storing Book PDFs on Host Disk** | Causes disk bloat and memory leaks on serverless instances. | Stream directly to/from user GCS bucket and personal Google Drive. |
