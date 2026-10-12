@@ -25,6 +25,5 @@
 - **Track 4 Completed Deletions & Defensive Decoupling**: Legacy modules (*services/dolphin_client.py*, *services/dolphin_modal_service.py*, *services/pdf_document_reconstructor.py*) were permanently deleted under ADR 0001. Reviewers must NEVER request their restoration. Defensive decoupling via `try...except (ImportError, Exception)` or `NotImplementedError` is the approved pattern.
 
 ## 5. Evaluation, Mock Fixtures & Test Suite Invariants
-- **Mock Test Stubs**: Test fixtures registering mock stubs for deleted clients in `conftest.py` are approved resilience patterns to prevent test harness regressions.
 - **Parallel Test Execution**: The repository test suite leverages multi-core parallelism (`pytest -n auto`). Do NOT flag test isolation patterns designed for concurrent execution.
 

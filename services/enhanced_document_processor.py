@@ -17,37 +17,36 @@ warnings.warn(
     stacklevel=2,
 )
 
-# PDFToImageConverter, DolphinOCRService, and PDFDocumentReconstructor removed under ADR 0001
 # Layout preservation is handled natively by Google Cloud Document Translation.
 
 logger = logging.getLogger(__name__)
 
 
-def validate_dolphin_layout(layout: dict[str, Any], expected_page_count: int) -> bool:
-    """Validate the structure of the Dolphin layout data.
+def validate_pdf_layout(layout: dict[str, Any], expected_page_count: int) -> bool:
+    """Validate the structure of PDF layout data.
 
     Args:
-        layout: The Dolphin layout data to validate
+        layout: The layout data to validate
         expected_page_count: Expected number of pages in the layout
 
     Returns:
         bool: True if layout is valid, False otherwise
     """
     if not isinstance(layout, dict):
-        logger.warning("Dolphin layout must be a dictionary")
+        logger.warning("PDF layout must be a dictionary")
         return False
 
     if "pages" not in layout:
-        logger.warning("Dolphin layout missing 'pages' key")
+        logger.warning("PDF layout missing 'pages' key")
         return False
 
     if not isinstance(layout["pages"], list):
-        logger.warning("Dolphin layout 'pages' must be a list")
+        logger.warning("PDF layout 'pages' must be a list")
         return False
 
     if len(layout["pages"]) != expected_page_count:
         logger.warning(
-            "Dolphin layout page count mismatch. Expected %s, got %s",
+            "PDF layout page count mismatch. Expected %s, got %s",
             expected_page_count,
             len(layout["pages"]),
         )
@@ -59,8 +58,7 @@ def validate_dolphin_layout(layout: dict[str, Any], expected_page_count: int) ->
             logger.warning("Page %s is not a dictionary", i)
             return False
 
-        # Add more specific validations here based on Dolphin's schema
-        # For example, check for required fields in each page
+        # Add more specific validations here based on the expected schema
 
     return True
 
@@ -99,7 +97,8 @@ class DocumentMetadata:
 class EnhancedDocumentProcessor:
     """Enhanced document processor with comprehensive formatting preservation.
 
-    PDF-only with advanced layout preservation using Dolphin OCR.
+    PDF-only; layout preservation is handled by Google Cloud Document
+    Translation (ADR 0001).
     """
 
     def __init__(self, dpi: int = 300, preserve_images: bool = True) -> None:
@@ -141,40 +140,32 @@ class EnhancedDocumentProcessor:
             raise ValueError(f"Unsupported file format: {file_ext}")
 
     async def _extract_pdf_content(self, pdf_path: str) -> dict[str, Any]:
-        """Extract content from PDF with advanced layout preservation."""
+        """Extract content from PDF with layout metadata."""
         start_time = time.time()
 
-        # Call Dolphin OCR directly with the PDF path
-        try:
-            from services.dolphin_client import get_layout
+        # OCR layout extraction is retired under ADR 0001; layout preservation
+        # is handled natively by Google Cloud Document Translation.
+        layout: dict[str, Any] = {"pages": []}
 
-            dolphin_layout = await get_layout(pdf_path)
-        except (ImportError, Exception) as e:
-            logger.error("OCR processing failed for %s: %s", pdf_path, e, exc_info=True)
-            # Graceful degradation: continue with empty layout
-            dolphin_layout = {"pages": []}
-
-        # Validate dolphin_layout structure against the real PDF page count
+        # Validate the placeholder structure against the real PDF page count so
+        # consumers never see a layout claiming pages the PDF does not have.
         pdf_page_count = _get_pdf_page_count(pdf_path)
         if pdf_page_count is not None:
-            if dolphin_layout and not validate_dolphin_layout(
-                dolphin_layout,
-                pdf_page_count,
-            ):
-                logger.warning("Invalid Dolphin layout structure, discarding")
-                dolphin_layout = {"pages": []}  # Reset to empty rather than None
+            if not validate_pdf_layout(layout, pdf_page_count):
+                logger.warning("Invalid PDF layout structure, discarding")
+                layout = None
         else:
             logger.info(
-                "Skipping Dolphin layout page-count validation "
+                "Skipping PDF layout page-count validation "
                 "(could not determine real PDF page count)"
             )
 
-        # Build minimal text_by_page from Dolphin OCR
         text_by_page: dict[int, list[str]] = {}
-        for i, page in enumerate(dolphin_layout.get("pages", [])):
+        for i, page in enumerate(layout["pages"] if layout else []):
             blocks = page.get("text_blocks", [])
-            texts = [b.get("text", "") for b in blocks if isinstance(b, dict)]
-            text_by_page[i] = texts
+            text_by_page[i] = [
+                b.get("text", "") for b in blocks if isinstance(b, dict)
+            ]
 
         # Calculate metadata
         total_text_elements = sum(len(v) for v in text_by_page.values())
@@ -191,22 +182,6 @@ class EnhancedDocumentProcessor:
             dpi=self.dpi,
         )
 
-        # Validate dolphin_layout structure against the real PDF page count
-        # so we catch actual OCR/layout mismatches instead of comparing the
-        # layout against a value derived from itself (tautological check).
-        pdf_page_count = _get_pdf_page_count(pdf_path)
-        if pdf_page_count is not None:
-            if dolphin_layout and not validate_dolphin_layout(
-                dolphin_layout,
-                pdf_page_count,
-            ):
-                logger.warning("Invalid Dolphin layout structure, discarding")
-                dolphin_layout = None
-        else:
-            logger.info(
-                "Skipping Dolphin layout page-count validation "
-                "(could not determine real PDF page count)"
-            )
         return {
             "type": "pdf_advanced",
             "layouts": [],
@@ -215,7 +190,7 @@ class EnhancedDocumentProcessor:
             "file_path": pdf_path,
             "backup_path": "",
             "preview": "",
-            "dolphin_layout": dolphin_layout,
+            "layout": layout,
         }
 
     # TXT helpers removed (PDF-only)

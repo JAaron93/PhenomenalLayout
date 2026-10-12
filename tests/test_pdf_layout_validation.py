@@ -1,49 +1,49 @@
-"""Tests for validate_dolphin_layout and _get_pdf_page_count in enhanced_document_processor."""
+"""Tests for validate_pdf_layout and _get_pdf_page_count in enhanced_document_processor."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from services.enhanced_document_processor import (
     _get_pdf_page_count,
-    validate_dolphin_layout,
+    validate_pdf_layout,
 )
 
 
 # ---------------------------------------------------------------------------
-# validate_dolphin_layout
+# validate_pdf_layout
 # ---------------------------------------------------------------------------
 
 
-class TestValidateDolphinLayout:
-    """Tests for the standalone validate_dolphin_layout function."""
+class TestValidatePdfLayout:
+    """Tests for the standalone validate_pdf_layout function."""
 
     def test_valid_layout_matching_page_count(self) -> None:
         layout = {"pages": [{"text_blocks": []}]}
-        assert validate_dolphin_layout(layout, expected_page_count=1) is True
+        assert validate_pdf_layout(layout, expected_page_count=1) is True
 
     def test_valid_layout_multiple_pages(self) -> None:
         layout = {"pages": [{}, {}, {}]}
-        assert validate_dolphin_layout(layout, expected_page_count=3) is True
+        assert validate_pdf_layout(layout, expected_page_count=3) is True
 
     def test_page_count_mismatch_returns_false(self) -> None:
         """This is the scenario the tautological check never caught."""
         layout = {"pages": [{"text_blocks": []}]}
-        assert validate_dolphin_layout(layout, expected_page_count=5) is False
+        assert validate_pdf_layout(layout, expected_page_count=5) is False
 
     def test_missing_pages_key(self) -> None:
-        assert validate_dolphin_layout({}, expected_page_count=0) is False
+        assert validate_pdf_layout({}, expected_page_count=0) is False
 
     def test_pages_not_list(self) -> None:
-        assert validate_dolphin_layout({"pages": "bad"}, expected_page_count=0) is False
+        assert validate_pdf_layout({"pages": "bad"}, expected_page_count=0) is False
 
     def test_not_a_dict(self) -> None:
-        assert validate_dolphin_layout("bad", expected_page_count=0) is False  # type: ignore[arg-type]
+        assert validate_pdf_layout("bad", expected_page_count=0) is False  # type: ignore[arg-type]
 
     def test_page_not_dict(self) -> None:
-        assert validate_dolphin_layout({"pages": ["string"]}, expected_page_count=1) is False
+        assert validate_pdf_layout({"pages": ["string"]}, expected_page_count=1) is False
 
 
 # ---------------------------------------------------------------------------
@@ -60,8 +60,6 @@ class TestGetPdfPageCount:
             from pypdf import PdfWriter
         except ImportError:
             pytest.skip("pypdf not installed")
-
-        # Use pypdf's PdfWriter to create a 2-page PDF
 
         writer = PdfWriter()
         writer.add_blank_page(width=612, height=792)
@@ -87,37 +85,22 @@ class TestGetPdfPageCount:
 
 
 # ---------------------------------------------------------------------------
-# _extract_pdf_content integration: wiring verification
+# _extract_pdf_content integration: post-retirement layout handling
 # ---------------------------------------------------------------------------
 
 
-class TestExtractPdfContentValidation:
-    """Verify _extract_pdf_content passes the real PDF page count."""
+class TestExtractPdfContentLayout:
+    """Verify _extract_pdf_content layout handling after OCR retirement (ADR 0001)."""
 
     @pytest.mark.asyncio
-    async def test_uses_real_page_count_not_text_by_page_length(self) -> None:
-        """The core regression test: validation should use _get_pdf_page_count
-        output, not len(text_by_page)."""
+    async def test_known_page_count_discards_unsourced_layout(self) -> None:
+        """With a known real page count, the empty placeholder layout cannot
+        match and is discarded."""
         from services.enhanced_document_processor import EnhancedDocumentProcessor
 
         processor = EnhancedDocumentProcessor()
 
-        # Dolphin returns a 3-page layout
-        fake_layout = {
-            "pages": [
-                {"text_blocks": [{"text": "a"}]},
-                {"text_blocks": [{"text": "b"}]},
-                {"text_blocks": [{"text": "c"}]},
-            ]
-        }
-
         with (
-            patch(
-                "services.dolphin_client.get_layout",
-                new_callable=AsyncMock,
-                return_value=fake_layout,
-            ) as mock_get_layout,
-            # Real PDF has 5 pages — mismatch should trigger invalidation
             patch(
                 "services.enhanced_document_processor._get_pdf_page_count",
                 return_value=5,
@@ -126,61 +109,18 @@ class TestExtractPdfContentValidation:
         ):
             result = await processor._extract_pdf_content("/fake/doc.pdf")
 
-        # Because 5 != 3, validate_dolphin_layout should have returned False
-        # and dolphin_layout should be set to None
-        assert result["dolphin_layout"] is None
-        mock_get_layout.assert_called_once()
+        assert result["layout"] is None
+        assert result["text_by_page"] == {}
 
     @pytest.mark.asyncio
-    async def test_matching_page_count_keeps_layout(self) -> None:
-        """When real PDF page count matches layout, dolphin_layout is kept."""
+    async def test_unknown_page_count_preserves_empty_layout(self) -> None:
+        """When the page count cannot be determined, validation is skipped
+        and the empty layout is preserved as-is."""
         from services.enhanced_document_processor import EnhancedDocumentProcessor
 
         processor = EnhancedDocumentProcessor()
 
-        fake_layout = {
-            "pages": [
-                {"text_blocks": [{"text": "a"}]},
-                {"text_blocks": [{"text": "b"}]},
-            ]
-        }
-
         with (
-            patch(
-                "services.dolphin_client.get_layout",
-                new_callable=AsyncMock,
-                return_value=fake_layout,
-            ) as mock_get_layout,
-            patch(
-                "services.enhanced_document_processor._get_pdf_page_count",
-                return_value=2,
-            ),
-            patch("os.path.getsize", return_value=1024),
-        ):
-            result = await processor._extract_pdf_content("/fake/doc.pdf")
-
-        assert result["dolphin_layout"] is not None
-        mock_get_layout.assert_called_once()
-        assert len(result["dolphin_layout"]["pages"]) == 2
-
-    @pytest.mark.asyncio
-    async def test_unknown_page_count_skips_validation(self) -> None:
-        """When _get_pdf_page_count returns None, validation is skipped
-        and dolphin_layout is preserved as-is."""
-        from services.enhanced_document_processor import EnhancedDocumentProcessor
-
-        processor = EnhancedDocumentProcessor()
-
-        fake_layout = {
-            "pages": [{"text_blocks": [{"text": "x"}]}]
-        }
-
-        with (
-            patch(
-                "services.dolphin_client.get_layout",
-                new_callable=AsyncMock,
-                return_value=fake_layout,
-            ) as mock_get_layout,
             patch(
                 "services.enhanced_document_processor._get_pdf_page_count",
                 return_value=None,
@@ -189,6 +129,27 @@ class TestExtractPdfContentValidation:
         ):
             result = await processor._extract_pdf_content("/fake/doc.pdf")
 
-        # Layout should be preserved since we can't validate
-        assert result["dolphin_layout"] is not None
-        mock_get_layout.assert_called_once()
+        assert result["layout"] == {"pages": []}
+        assert result["text_by_page"] == {}
+
+    @pytest.mark.asyncio
+    async def test_metadata_computed_from_empty_layout(self) -> None:
+        """Metadata stays well-formed when no layout source exists."""
+        from services.enhanced_document_processor import EnhancedDocumentProcessor
+
+        processor = EnhancedDocumentProcessor()
+
+        with (
+            patch(
+                "services.enhanced_document_processor._get_pdf_page_count",
+                return_value=None,
+            ),
+            patch("os.path.getsize", return_value=1024),
+        ):
+            result = await processor._extract_pdf_content("/fake/doc.pdf")
+
+        metadata = result["metadata"]
+        assert metadata.file_type == "PDF"
+        assert metadata.total_pages == 0
+        assert metadata.total_text_elements == 0
+        assert metadata.file_size_mb == 1024 / (1024 * 1024)

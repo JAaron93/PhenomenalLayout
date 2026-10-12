@@ -39,7 +39,6 @@ Under **Track 4 (`TASK-4.1`)**, the following legacy components were permanently
 **Reviewer Instructions for Track 4 Deletions:**
 1. **Never Request Restoration**: Greptile must NEVER request restoring or re-importing `dolphin_client`, `dolphin_modal_service`, or `pdf_document_reconstructor`.
 2. **Accept Defensive Decoupling**: If legacy call sites handle the absence of these modules using `try...except (ImportError, Exception)` or raise `NotImplementedError` redirecting callers to `GCPBatchTranslationService`, this is the **approved and intended pattern**.
-3. **Accept Mock Test Stubs**: Test fixtures registering mock stubs for deleted clients in `conftest.py` are approved resilience patterns to prevent test harness regressions.
 
 ---
 
