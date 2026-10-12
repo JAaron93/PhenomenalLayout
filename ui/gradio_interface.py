@@ -83,9 +83,9 @@ def on_file_upload(
         code = result.get("error_code", "")
         message = result.get("message", "Validation failed")
         friendly = message
-        if code == "DOLPHIN_005":
+        if code == "DOC_INVALID_FORMAT":
             friendly = "Only PDF format supported"
-        elif code == "DOLPHIN_014":
+        elif code == "DOC_ENCRYPTED_PDF":
             friendly = "Encrypted PDFs not supported - please provide unlocked PDF"
         if progress is not None:
             with contextlib.suppress(Exception):

@@ -31,7 +31,7 @@ def test_upload_rejects_non_pdf(tmp_path: Path) -> None:
     assert "detail" in body
     detail = body["detail"]
     assert isinstance(detail, dict)
-    assert detail.get("error_code") == "DOLPHIN_005"
+    assert detail.get("error_code") == "DOC_INVALID_FORMAT"
     message = detail.get("message", "")
     assert isinstance(message, str) and message
     assert "Only PDF format" in message
@@ -55,7 +55,7 @@ def test_upload_rejects_encrypted_pdf(tmp_path: Path) -> None:
         )
     assert res.status_code == 400
     body = res.json()
-    assert body["detail"]["error_code"] == "DOLPHIN_014"
+    assert body["detail"]["error_code"] == "DOC_ENCRYPTED_PDF"
 
 
 def test_upload_accepts_valid_pdf(

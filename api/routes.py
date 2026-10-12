@@ -47,7 +47,12 @@ from core.translation_handler import (
     process_advanced_translation_job,
     user_choice_manager,
 )
-from dolphin_ocr.errors import get_error_message
+from utils.document_errors import (
+    DOC_ENCRYPTED_PDF,
+    DOC_INVALID_FORMAT,
+    DOC_SERVICE_UNAVAILABLE,
+    get_error_message,
+)
 from models.neologism_models import (
     ConfidenceFactors,
     DetectedNeologism,
@@ -594,7 +599,7 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "error_code": "DOLPHIN_005",
+                    "error_code": DOC_INVALID_FORMAT,
                     "message": "Only PDF format supported",
                     "timestamp": datetime.now(UTC).isoformat(),
                     "context": {"path": Path(file_path).name},
@@ -607,8 +612,8 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "error_code": "DOLPHIN_014",
-                    "message": get_error_message("DOLPHIN_014"),
+                    "error_code": DOC_ENCRYPTED_PDF,
+                    "message": get_error_message(DOC_ENCRYPTED_PDF),
                     "timestamp": datetime.now(UTC).isoformat(),
                     "context": {"path": Path(file_path).name},
                 },
@@ -713,8 +718,8 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
         raise HTTPException(
             status_code=500,
             detail={
-                "error_code": "DOLPHIN_002",
-                "message": get_error_message("DOLPHIN_002"),
+                "error_code": DOC_SERVICE_UNAVAILABLE,
+                "message": get_error_message(DOC_SERVICE_UNAVAILABLE),
                 "timestamp": datetime.now(UTC).isoformat(),
                 "filename": Path(file.filename).name
                 if getattr(file, "filename", None)

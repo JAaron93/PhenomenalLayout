@@ -6,8 +6,8 @@ Provides lightweight checks for:
 - Encryption detection using pypdf
 - Obvious structure corruption via header/xref/EOF heuristics
 
-Returns structured results with standardized Dolphin error codes
-(``DOLPHIN_005``, ``DOLPHIN_014``).
+Returns structured results with standardized document error codes
+(``DOC_INVALID_FORMAT``, ``DOC_ENCRYPTED_PDF``).
 """
 
 from __future__ import annotations
@@ -17,11 +17,15 @@ import importlib.util
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from dolphin_ocr.errors import get_error_message
+from utils.document_errors import (
+    DOC_ENCRYPTED_PDF,
+    DOC_INVALID_FORMAT,
+    get_error_message,
+)
 
-# Error codes mirrored from dolphin_ocr.errors
-ERR_INVALID_FORMAT = "DOLPHIN_005"
-ERR_ENCRYPTED_PDF = "DOLPHIN_014"
+# Error codes from utils.document_errors
+ERR_INVALID_FORMAT = DOC_INVALID_FORMAT
+ERR_ENCRYPTED_PDF = DOC_ENCRYPTED_PDF
 
 # Indirect module name to prevent static import warnings
 _PYPDF_MOD = "pypdf"

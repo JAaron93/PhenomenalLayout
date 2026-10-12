@@ -86,7 +86,7 @@ class TestGradioFileUploadValidation:
 
         def fake_process(_file: Any):
             return {
-                "error_code": "DOLPHIN_005",
+                "error_code": "DOC_INVALID_FORMAT",
                 "message": "Only PDF format supported",
             }
 
@@ -97,7 +97,7 @@ class TestGradioFileUploadValidation:
 
         preview, status, _lang, _prep, _info, _metrics = on_file_upload(str(fake_pdf))
         assert preview == ""
-        assert "DOLPHIN_005" in status
+        assert "DOC_INVALID_FORMAT" in status
         assert "Only PDF format supported" in status
 
     def test_on_file_upload_encrypted_pdf_rejection(
@@ -107,7 +107,7 @@ class TestGradioFileUploadValidation:
 
         def fake_process(_file: Any):
             return {
-                "error_code": "DOLPHIN_014",
+                "error_code": "DOC_ENCRYPTED_PDF",
                 "message": "Encrypted PDFs not supported - please provide unlocked PDF",
             }
 
@@ -118,7 +118,7 @@ class TestGradioFileUploadValidation:
 
         preview, status, _lang, _prep, _info, _metrics = on_file_upload(str(enc_pdf))
         assert preview == ""
-        assert "DOLPHIN_014" in status
+        assert "DOC_ENCRYPTED_PDF" in status
         assert "Encrypted PDFs not supported" in status
 
     def test_on_file_upload_tuple_contract_compatibility(

@@ -40,7 +40,7 @@ def test_extension_and_header_invalid_nonpdf(tmp_path: Path) -> None:
     txt.write_text("hello")
     res = validate_pdf_extension_and_header(str(txt))
     assert res.ok is False
-    assert any(issue.code == "DOLPHIN_005" for issue in res.issues)
+    assert any(issue.code == "DOC_INVALID_FORMAT" for issue in res.issues)
 
 
 def test_detect_encryption_for_encrypted_pdf(tmp_path: Path) -> None:
@@ -49,7 +49,7 @@ def test_detect_encryption_for_encrypted_pdf(tmp_path: Path) -> None:
     res = detect_pdf_encryption(str(enc))
     assert res.is_pdf is True
     assert res.is_encrypted is True
-    assert any(issue.code == "DOLPHIN_014" for issue in res.issues)
+    assert any(issue.code == "DOC_ENCRYPTED_PDF" for issue in res.issues)
 
 
 def test_validate_pdf_structure_minimal(tmp_path: Path) -> None:
@@ -74,4 +74,4 @@ def test_validate_pdf_nonpdf_file(tmp_path: Path) -> None:
     f.write_text("not a pdf")
     res = validate_pdf(str(f))
     assert res.ok is False
-    assert any(issue.code == "DOLPHIN_005" for issue in res.issues)
+    assert any(issue.code == "DOC_INVALID_FORMAT" for issue in res.issues)
