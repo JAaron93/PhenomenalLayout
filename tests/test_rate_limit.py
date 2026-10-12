@@ -11,6 +11,23 @@ from api.rate_limit import (
 )
 
 
+class _FrozenClock:
+    """Deterministic ``time.time()`` stand-in patched into ``api.rate_limit``.
+
+    The token bucket refills in real time (1 token/sec for the read scope),
+    so a loop that consumes exactly ``max_tokens`` races the refill: if the
+    loop spans >= 1 second of wall time — routine for a starved xdist
+    worker — the "limit exceeded" request succeeds and the test flakes.
+    Freezing the clock makes bucket state deterministic regardless of load.
+    """
+
+    def __init__(self) -> None:
+        self.now = 1_000_000.0
+
+    def time(self) -> float:
+        return self.now
+
+
 @pytest.fixture
 def test_app_sync():
     """Create a test FastAPI application with synchronous rate-limited endpoint."""
@@ -50,14 +67,12 @@ def test_client_async(test_app_async):
 
 
 @pytest.fixture
-def _reset_rate_limiter():
-    """Reset rate limiter state before and after each test."""
-    # Reset before test
+def _reset_rate_limiter(monkeypatch):
+    """Reset rate limiter state with a frozen clock before/after each test."""
+    monkeypatch.setattr("api.rate_limit.time", _FrozenClock())
     shutdown_rate_limiter()
-    # Reinitialize for the test
     get_rate_limiter()
     yield
-    # Reset after test
     shutdown_rate_limiter()
 
 
@@ -75,6 +90,7 @@ def test_sync_function_decorator(test_client_sync, _reset_rate_limiter):
     assert response.status_code == 429, "Rate limiting for sync function"
 
 
+@pytest.mark.usefixtures("_reset_rate_limiter")
 def test_async_function_decorator(test_client_async):
     """Test that the rate limit decorator works with asynchronous functions."""
     # Make multiple requests to trigger rate limiting
