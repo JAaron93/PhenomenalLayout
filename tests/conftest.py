@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -21,16 +20,8 @@ _RELOAD_MODULE_NAMES = [
 
 
 @pytest.fixture(autouse=True)
-def dolphin_env_defaults(monkeypatch):
-    """Provide sane default env vars for Dolphin config during tests."""
-    monkeypatch.setenv("HF_TOKEN", os.getenv("HF_TOKEN", "mock_hf_token_for_tests"))
-    monkeypatch.setenv(
-        "DOLPHIN_MODAL_ENDPOINT",
-        os.getenv(
-            "DOLPHIN_MODAL_ENDPOINT",
-            "https://mock-dolphin-endpoint.test.local",
-        ),
-    )
+def per_test_cleanup():
+    """Release memory-monitor resources after each test."""
     yield
     try:
         from utils.memory_monitor import cleanup_memory_monitor
@@ -69,28 +60,6 @@ def pytest_configure(config: pytest.Config) -> None:
     # Set mock Lingo API key to ensure safe collection for legacy translation services
     os.environ.setdefault("LINGO_API_KEY", "mock_lingo_api_key_for_tests")
 
-    # Register stub for deleted services.dolphin_client so legacy tests mocking it resolve safely
-    import sys
-    import types
-
-    if "services.dolphin_client" not in sys.modules:
-        dummy_dolphin = types.ModuleType("services.dolphin_client")
-
-        async def get_layout(*args: Any, **kwargs: Any) -> dict[str, Any]:
-            del args, kwargs
-            return {"pages": []}
-
-        def get_layout_sync(*args: Any, **kwargs: Any) -> dict[str, Any]:
-            del args, kwargs
-            return {"pages": []}
-
-        dummy_dolphin.get_layout = get_layout  # type: ignore[attr-defined]
-        dummy_dolphin.get_layout_sync = get_layout_sync  # type: ignore[attr-defined]
-        dummy_dolphin.DEFAULT_LOCAL_ENDPOINT = "http://localhost:8501/layout"
-        dummy_dolphin.DEFAULT_MODAL_ENDPOINT = (
-            "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
-        )
-        sys.modules["services.dolphin_client"] = dummy_dolphin
     # When focusing, quiet output at runtime without relying on pre-parsed
     # addopts
     if os.getenv("FOCUSED"):

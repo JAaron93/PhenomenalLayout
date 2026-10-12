@@ -1,6 +1,6 @@
 # Product Overview
 
-**Dolphin OCR Translate** is a professional document translation service with advanced OCR capabilities and comprehensive formatting preservation.
+**PhenomenalLayout** is a professional document translation service with GCP-backed document translation and comprehensive formatting preservation.
 
 ## Core Purpose
 Translates documents (PDF, DOCX, TXT) while maintaining original formatting, layout, and visual structure through advanced image-text overlay techniques.

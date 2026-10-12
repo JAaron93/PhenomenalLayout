@@ -82,7 +82,7 @@ def test_ui_non_pdf_validation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
 
         def fake_process(_file: Any):
             return {
-                "error_code": "DOLPHIN_005",
+                "error_code": "DOC_INVALID_FORMAT",
                 "message": "Only PDF format supported",
             }
 
@@ -98,7 +98,7 @@ def test_ui_non_pdf_validation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
         client = Client(url)
         out = client.predict(handle_file(str(fake_pdf)), api_name="/on_file_upload")
         # Second item is upload_status with the error code
-        assert "DOLPHIN_005" in (out[1] or "")
+        assert "DOC_INVALID_FORMAT" in (out[1] or "")
     finally:
         _teardown_blocks(demo)
 
@@ -112,7 +112,7 @@ def test_ui_encrypted_pdf_validation(
 
         def fake_process(_file: Any):
             return {
-                "error_code": "DOLPHIN_014",
+                "error_code": "DOC_ENCRYPTED_PDF",
                 "message": (
                     "Encrypted PDFs not supported - please provide " "unlocked PDF"
                 ),
@@ -131,7 +131,7 @@ def test_ui_encrypted_pdf_validation(
         assert isinstance(out, (list, tuple))
         assert len(out) >= 2
         status = out[1] or ""
-        assert "DOLPHIN_014" in status
+        assert "DOC_ENCRYPTED_PDF" in status
         assert "Encrypted PDFs not supported" in status
     finally:
         _teardown_blocks(demo)

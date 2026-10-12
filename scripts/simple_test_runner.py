@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple test runner for Dolphin OCR Translate to check basic functionality without pytest.
+"""Simple test runner for PhenomenalLayout to check basic functionality without pytest.
 
 This script provides a lightweight test runner that doesn't require pytest.
 It dynamically resolves the project root directory to ensure reliable imports

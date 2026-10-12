@@ -11,11 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypedDict
 
-# Migration note: Replaced legacy PDF engine with Dolphin OCR for all PDF 
-# processing. Rationale: improved OCR accuracy, better layout preservation via 
-# pdf2image rendering + reconstruction pipeline, and removal of heavyweight/unstable 
-# legacy PDF dependency. Scope: non-docs code no longer imports or references the 
-# legacy engine; PDF handling is now PDF-only using Dolphin OCR.
+# Layout preservation is handled by Google Cloud Document Translation (ADR 0001).
 from config.settings import Settings
 
 # Import optimized dynamic programming implementations
@@ -865,10 +861,10 @@ async def _show_pdf_preprocessing_steps(
         )
         preprocessing_steps.append("   🔄 Conversion method: pdf2image library")
 
-        # Step 3: Dolphin OCR Preparation
-        preprocessing_steps.append("\n🤖 Step 3: Dolphin OCR Preparation")
+        # Step 3: Document Analysis Preparation
+        preprocessing_steps.append("\n🤖 Step 3: Document Analysis Preparation")
         preprocessing_steps.append(
-            "   🚀 Target: ByteDance Dolphin via HuggingFace Spaces"
+            "   🚀 Target: Google Cloud Document Translation"
         )
         preprocessing_steps.append(
             "   📋 Expected output: Layout + text + bounding boxes"

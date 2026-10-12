@@ -33,10 +33,7 @@ This document catalogs shared utility functions added to consolidate logic and m
   print(f"Loaded {len(prefixes)} philosophical prefixes.")
   ```
 
-## OCR Result Processing
-**Location:** `services/ocr_utils.py`
-
-### `parse_ocr_result(result: dict[str, Any]) -> list[list[TextBlock]]`
+## `parse_ocr_result(result: dict[str, Any]) -> list[list[TextBlock]]`
 - **Description:** Standardizes the extraction of text, bounding boxes, confidence scores, and font data from OCR service JSON payloads into domain-specific `TextBlock` and `LayoutContext` objects.
 - **Previous Duplication:** This complex `_parse_ocr_result` method was duplicated across `services/async_document_processor.py` and `services/main_document_processor.py`.
 - **Usage:** Pass the raw OCR dictionary to receive a structured list of text blocks per page.

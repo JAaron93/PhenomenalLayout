@@ -17,55 +17,6 @@ def _make_app() -> TestClient:
     app.include_router(app_router)
     app.include_router(api_router, prefix="/api/v1")
     return TestClient(app)
-
-
-class TestDolphinConfigurationEndpoints:
-    """Tests for Dolphin OCR configuration endpoints."""
-
-    def test_get_dolphin_configuration_default(self):
-        """Test GET /config/dolphin returns default configuration."""
-        client = _make_app()
-        response = client.get("/api/v1/config/dolphin")
-        
-        assert response.status_code == 200
-        data = response.json()
-        
-        # Should return default modal endpoint
-        assert data["endpoint_type"] == "modal"
-        assert "modal_endpoint" in data
-        assert "local_endpoint" in data
-        assert "active_endpoint" in data
-        assert data["available_endpoint_types"] == ["modal", "local"]
-
-    def test_update_dolphin_configuration_valid(self):
-        """Test POST /config/dolphin updates configuration."""
-        client = _make_app()
-        response = client.post(
-            "/api/v1/config/dolphin",
-            json={"DOLPHIN_ENDPOINT_TYPE": "local"}
-        )
-        
-        assert response.status_code == 200
-        data = response.json()
-        
-        assert data["success"] is True
-        assert "Updated configuration" in data["message"]
-
-    def test_update_dolphin_configuration_invalid(self):
-        """Test POST /config/dolphin with invalid keys."""
-        client = _make_app()
-        response = client.post(
-            "/api/v1/config/dolphin",
-            json={"INVALID_KEY": "value"}
-        )
-        
-        assert response.status_code == 200
-        data = response.json()
-        
-        assert data["success"] is False
-        assert "No valid configuration keys" in data["message"]
-
-
 class TestPhilosophyTerminologyEndpoints:
     """Tests for philosophy terminology management endpoints."""
 

@@ -18,21 +18,11 @@ PERFORMANCE_SAMPLE_COUNT = int(os.getenv("TEST_PERFORMANCE_SAMPLES", "5"))
 PERFORMANCE_PERCENTILE = float(os.getenv("TEST_PERFORMANCE_PERCENTILE", "90"))
 PERFORMANCE_MAX_RETRIES = int(os.getenv("TEST_PERFORMANCE_MAX_RETRIES", "3"))
 
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
 from core.dynamic_choice_engine import (
     DynamicConflictResolutionEngine,
 )
 from core.dynamic_language_engine import (
     DynamicLanguageDetector,
-)
-from core.dynamic_layout_engine import (
-    DynamicLayoutEngine,
-    OptimizedLayoutPreservationEngine,
-    StrategyKey,
 )
 from core.dynamic_middleware import (
     DynamicProgrammingMonitor,
@@ -51,7 +41,6 @@ from core.dynamic_validation_engine import (
     DynamicValidationEngine,
     OptimizedFileValidator,
 )
-from dolphin_ocr.layout import FitAnalysis, StrategyType
 from models.user_choice_models import (
     ChoiceConflict,
     ChoiceScope,
@@ -212,125 +201,6 @@ class TestDynamicProgrammingCore:
             mock_key_gen.reset_mock()
             factory.create("test", 1)
             assert mock_key_gen.call_count == 1
-
-
-class TestDynamicLayoutEngine:
-    """Test dynamic layout strategy engine."""
-
-    def test_strategy_table_completeness(self):
-        """Test that strategy table covers all possible combinations."""
-        engine = DynamicLayoutEngine()
-
-        # Should have 16 entries (2^4 combinations)
-        assert len(engine.strategy_table) == 16
-
-        # Test strategy distribution
-        distribution = engine.get_strategy_distribution()
-        assert StrategyType.NONE in distribution
-        assert StrategyType.FONT_SCALE in distribution
-        assert StrategyType.TEXT_WRAP in distribution
-        assert StrategyType.HYBRID in distribution
-
-    def test_o1_strategy_lookup_performance(self):
-        """Test O(1) strategy lookup performance with percentile-based assertion."""
-        engine = DynamicLayoutEngine()
-
-        # Create test analysis
-        analysis = FitAnalysis(
-            length_ratio=1.5,
-            one_line_width=100.0,
-            max_lines=3,
-            lines_needed=2,
-            can_fit_without_changes=False,
-            required_scale_for_single_line=0.8,
-            can_scale_to_single_line=True,
-            can_wrap_within_height=True,
-        )
-
-        # Configurable threshold for different CI environments
-        threshold = float(os.getenv("TEST_O1_THRESHOLD_MS", "5.0"))
-
-        def measure_performance_sample() -> list[float]:
-            """Measure performance across multiple iterations and return per-iteration times."""
-            iterations = 1000
-            times_ms = []
-
-            for _ in range(PERFORMANCE_SAMPLE_COUNT):
-                start_time = time.perf_counter()
-
-                for _ in range(iterations):
-                    strategy = engine.determine_strategy_optimized(analysis)
-                    assert strategy is not None
-
-                duration = time.perf_counter() - start_time
-                avg_time_ms = (duration / iterations) * 1000
-                times_ms.append(avg_time_ms)
-
-            return times_ms
-
-        # Retry measurement if needed
-        for attempt in range(PERFORMANCE_MAX_RETRIES):
-            try:
-                sample_times = measure_performance_sample()
-                percentile_index = min(
-                    len(sample_times) - 1,
-                    int(len(sample_times) * PERFORMANCE_PERCENTILE / 100)
-                )
-                percentile_time = sorted(sample_times)[percentile_index]
-
-                # Assert percentile performance
-                assert percentile_time < threshold, (
-                    f"P{PERFORMANCE_PERCENTILE} performance {percentile_time:.3f}ms "
-                    f"exceeds threshold {threshold}ms (samples: {sample_times}, attempt {attempt + 1})"
-                )
-                break  # Success, exit retry loop
-
-            except AssertionError as e:
-                if attempt == PERFORMANCE_MAX_RETRIES - 1:
-                    # Last attempt failed, re-raise
-                    raise e
-                # Retry on failure (except last attempt)
-                continue
-
-    def test_strategy_key_generation(self):
-        """Test strategy key generation and uniqueness."""
-        key1 = StrategyKey(True, False, True, False)
-        key2 = StrategyKey(True, False, True, False)
-        key3 = StrategyKey(False, True, False, True)
-
-        assert key1 == key2
-        assert key1 != key3
-        assert hash(key1) == hash(key2)
-        assert hash(key1) != hash(key3)
-
-        # Test bit mask conversion
-        assert key1.to_int() == key2.to_int()
-        assert key1.to_int() != key3.to_int()
-
-    def test_backward_compatibility(self):
-        """Test backward compatibility wrapper."""
-        optimized_engine = OptimizedLayoutPreservationEngine()
-
-        # Test that all original methods are available
-        assert hasattr(optimized_engine, "analyze_text_fit")
-        assert hasattr(optimized_engine, "determine_layout_strategy")
-        assert hasattr(optimized_engine, "calculate_quality_score")
-        assert hasattr(optimized_engine, "apply_layout_adjustments")
-
-        # Test strategy determination works
-        analysis = FitAnalysis(
-            length_ratio=1.0,
-            one_line_width=50.0,
-            max_lines=2,
-            lines_needed=1,
-            can_fit_without_changes=True,
-            required_scale_for_single_line=1.0,
-            can_scale_to_single_line=True,
-            can_wrap_within_height=True,
-        )
-
-        strategy = optimized_engine.determine_layout_strategy(analysis)
-        assert strategy.type == StrategyType.NONE
 
 
 class TestDynamicLanguageEngine:
@@ -789,25 +659,6 @@ class TestIntegrationPerformance:
         # This would typically compare against baseline measurements
         # For now, we'll test that operations complete within reasonable time
 
-        # Layout engine
-        layout_engine = DynamicLayoutEngine()
-        analysis = FitAnalysis(
-            length_ratio=1.2,
-            one_line_width=80.0,
-            max_lines=2,
-            lines_needed=2,
-            can_fit_without_changes=False,
-            required_scale_for_single_line=0.9,
-            can_scale_to_single_line=True,
-            can_wrap_within_height=True,
-        )
-
-        start_time = time.perf_counter()
-        for _ in range(100):
-            strategy = layout_engine.determine_strategy_optimized(analysis)
-            assert strategy is not None
-        layout_duration = time.perf_counter() - start_time
-
         # Language detection
         language_detector = DynamicLanguageDetector()
         test_texts = [
@@ -823,43 +674,4 @@ class TestIntegrationPerformance:
         language_duration = time.perf_counter() - start_time
 
         # All operations should complete quickly
-        assert layout_duration < 1.0  # Less than 1 second for 100 operations
         assert language_duration < 5.0  # Less than 5 seconds for 30 texts
-
-    @pytest.mark.skipif(psutil is None, reason="psutil not installed")
-    def test_memory_efficiency(self):
-        """Test memory efficiency of caching systems."""
-
-        process = psutil.Process(os.getpid())
-        initial_memory = process.memory_info().rss
-
-        # Create multiple engines with caching
-        engines = []
-        for i in range(10):
-            engine = DynamicLayoutEngine()
-            engines.append(engine)
-
-            # Perform some operations to populate caches
-            analysis = FitAnalysis(
-                length_ratio=1.0 + i * 0.1,
-                one_line_width=50.0 + i * 10,
-                max_lines=2,
-                lines_needed=1,
-                can_fit_without_changes=i % 2 == 0,
-                required_scale_for_single_line=1.0,
-                can_scale_to_single_line=True,
-                can_wrap_within_height=True,
-            )
-
-            for _ in range(10):
-                engine.determine_strategy_optimized(analysis)
-
-        final_memory = process.memory_info().rss
-        memory_increase = final_memory - initial_memory
-
-        # Memory increase should be reasonable (less than 50MB)
-        assert memory_increase < 50 * 1024 * 1024
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

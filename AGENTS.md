@@ -106,7 +106,7 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 ---
 
 ## 3. Modal Labs Serverless Deployment Architecture
-* **Framework**: Deployable as a serverless ASGI web app (architectural deployment specification under `TASK-5.3` / `modal_app.py`, `@modal.asgi_app()`). `scripts/deploy_modal.py` is **legacy tooling** — its main-application deploy function is a stub (`"not yet implemented"`) and it references the deleted `services/dolphin_modal_service.py`; it must not be used as an active deployment path until TASK-5.3 is implemented.
+* **Framework**: Deployable as a serverless ASGI web app (architectural deployment specification under `TASK-5.3` / `modal_app.py`, `@modal.asgi_app()`).
 * **Compute Tier**: Must operate efficiently within Modal Labs' $30/month free compute tier by enforcing automatic scale-to-zero when idle (`scaledown_window=300`).
 * **Storage**: Persistent storage must utilize `modal.Volume` strictly for user metadata and terminology storage (`/data/`).
 
@@ -120,7 +120,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | :--- | :--- | :--- |
 | **Custom Canvas Reconstruction** (Legacy ReportLab canvas drawing; former *services/pdf_document_reconstructor.py* [deleted under ADR 0001]) | Heuristic font-scaling and box expansion broke tables and figures. | Rely on Google Cloud Document Translation, which natively generates complete, layout-preserved PDFs. |
 | **Dedicated GPU OCR Workers** (Modal Dolphin OCR instances; former *services/dolphin_client.py* [deleted under ADR 0001]) | High operational complexity and cost. | Outsource OCR and document layout parsing directly to Google Cloud. |
-| **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py`, `core/dynamic_programming.py`) | Fragile heuristics and technical debt. | Cloud Translation handles typography scaling and line wrapping natively. |
+| **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py` [deleted under ADR 0001]) | Fragile heuristics and technical debt. | Cloud Translation handles typography scaling and line wrapping natively. `core/dynamic_programming.py` is retained as a live dependency of the language, validation, choice, and middleware engines. |
 | **Third-Party Auth Middleware** (Auth0, Clerk, Firebase) | Unnecessary SaaS dependency, cost, and complexity. | Use native client-side Google Identity Services (GIS) OAuth with `drive.file` scope. |
 | **Storing Book PDFs on Host Disk** | Memory exhaustion and disk bloat on serverless instances. | Stream directly to/from user GCS bucket and Google Drive. |
 | **Absolute Local Worktree Links** (`file:///` absolute paths) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`.kiro/specs/gcp-migration/design.md`). |

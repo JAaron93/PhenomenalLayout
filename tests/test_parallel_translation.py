@@ -1,5 +1,5 @@
 """
-Tests for Dolphin OCR Translate parallel translation service functionality.
+Tests for PhenomenalLayout parallel translation service functionality.
 
 This module tests the parallel translation capabilities including
 rate limiting, error handling, and performance improvements.

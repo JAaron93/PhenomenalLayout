@@ -4,14 +4,14 @@
 This document describes the implementation of public accessor methods for the [StrategyRegistry](../core/dynamic_programming.py#L416-L480) class to replace direct access to private attributes, following the PhenomenalLayout project's emphasis on maintaining clean, maintainable APIs that preserve the integrity of the layout preservation system.
 
 ## Problem Statement
-The original code in [core/dynamic_layout_engine.py](../core/dynamic_layout_engine.py) at line 427 directly accessed the private attribute `_strategies`:
+The original code that motivated this change (a deleted consumer of `StrategyRegistry`) directly accessed the private attribute `_strategies`:
 
 ```python
 # Original problematic code
 "registry_strategies": len(self.strategy_registry._strategies),
 ```
 
-This direct access to private attributes violates encapsulation principles and creates tight coupling between the `DynamicLayoutEngine` and the internal implementation of `StrategyRegistry`.
+This direct access to private attributes violates encapsulation principles and creates tight coupling between `StrategyRegistry` consumers and its internal implementation.
 
 ### Issues with Private Attribute Access
 1. **Encapsulation Violation**: Breaks object-oriented design principles
@@ -69,7 +69,7 @@ def __len__(self) -> int:
 
 ### Location of Changes
 - **[core/dynamic_programming.py](../core/dynamic_programming.py#L479-L503)**: Added public accessor methods to `StrategyRegistry`
-- **[core/dynamic_layout_engine.py](../core/dynamic_layout_engine.py#L426)**: Updated to use public API
+- Consumer call sites updated to use the public API
 
 ### Before and After
 

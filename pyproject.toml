@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "PhenomenalLayout"
 version = "1.0.0"
-description = "Advanced layout preservation engine for document translation - orchestrating Lingo.dev translation services with Dolphin OCR for pixel-perfect formatting integrity"
+description = "Advanced layout preservation engine for document translation - orchestrating Lingo.dev translation services with Google Cloud Document Translation for pixel-perfect formatting integrity"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
 authors = [
@@ -32,7 +32,6 @@ dependencies = [
     "pydantic_core>=2.33.0",
     "Pygments>=2.19.0",
     "PyJWT[crypto]>=2.10.1",
-    # Legacy PDF engine removed: Dolphin OCR + pdf2image are used instead
 ]
 
 

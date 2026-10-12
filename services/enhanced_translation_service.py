@@ -1,4 +1,4 @@
-"""Enhanced translation service for Dolphin OCR Translate.
+"""Enhanced translation service for PhenomenalLayout.
 
 Integrating parallel-processing capabilities into the existing translation workflow.
 

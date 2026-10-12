@@ -47,7 +47,12 @@ from core.translation_handler import (
     process_advanced_translation_job,
     user_choice_manager,
 )
-from dolphin_ocr.errors import get_error_message
+from utils.document_errors import (
+    DOC_ENCRYPTED_PDF,
+    DOC_INVALID_FORMAT,
+    DOC_SERVICE_UNAVAILABLE,
+    get_error_message,
+)
 from models.neologism_models import (
     ConfidenceFactors,
     DetectedNeologism,
@@ -61,12 +66,6 @@ from models.user_choice_models import (
 )
 from utils import pdf_validator
 from utils.language_utils import extract_text_sample_for_language_detection
-
-# Default endpoints for legacy configuration compatibility (ADR 0001)
-DEFAULT_MODAL_ENDPOINT: str = (
-    "https://modal-labs--dolphin-ocr-service-dolphin-ocr-endpoint.modal.run"
-)
-DEFAULT_LOCAL_ENDPOINT: str = "http://localhost:8501/layout"
 
 # Import services for configuration endpoints
 from services.philosophy_enhanced_translation_service import (
@@ -126,75 +125,6 @@ async def philosophy_interface(request: Request) -> HTMLResponse:
         "philosophy_interface.html",
         {"request": request},
     )
-
-
-# Dolphin OCR Configuration Endpoints
-# Use a module-level dictionary to store runtime configuration instead of mutating os.environ
-_dolphin_config = {
-    "DOLPHIN_ENDPOINT_TYPE": "modal",
-    "DOLPHIN_LOCAL_ENDPOINT": DEFAULT_LOCAL_ENDPOINT,
-    "DOLPHIN_ENDPOINT": DEFAULT_MODAL_ENDPOINT,
-    "DOLPHIN_TIMEOUT_SECONDS": "300"
-}
-
-# Initialize with environment variables
-import os
-for key in _dolphin_config:
-    if os.getenv(key):
-        _dolphin_config[key] = os.getenv(key)
-
-
-@api_router.get("/config/dolphin")
-async def get_dolphin_configuration() -> dict[str, Any]:
-    """Get Dolphin OCR service configuration."""
-    endpoint_type = _dolphin_config["DOLPHIN_ENDPOINT_TYPE"].lower()
-    local_endpoint = _dolphin_config["DOLPHIN_LOCAL_ENDPOINT"]
-    modal_endpoint = _dolphin_config["DOLPHIN_ENDPOINT"]
-    timeout = _dolphin_config["DOLPHIN_TIMEOUT_SECONDS"]
-    
-    # Determine active endpoint
-    if endpoint_type == "local":
-        active_endpoint = local_endpoint
-    else:
-        active_endpoint = modal_endpoint
-    
-    return {
-        "endpoint_type": endpoint_type,
-        "local_endpoint": local_endpoint,
-        "modal_endpoint": modal_endpoint,
-        "active_endpoint": active_endpoint,
-        "timeout_seconds": timeout,
-        "available_endpoint_types": ["modal", "local"],
-    }
-
-
-@api_router.post("/config/dolphin")
-async def update_dolphin_configuration(config_data: dict[str, Any]) -> dict[str, Any]:
-    """Update Dolphin OCR service configuration.
-    
-    Note: This only updates the runtime configuration in memory. For persistent changes,
-    update the environment variables in your deployment configuration.
-    """
-    valid_keys = {"DOLPHIN_ENDPOINT_TYPE", "DOLPHIN_LOCAL_ENDPOINT", "DOLPHIN_TIMEOUT_SECONDS", "DOLPHIN_ENDPOINT"}
-    updated_keys = []
-    
-    for key, value in config_data.items():
-        if key in valid_keys:
-            _dolphin_config[key] = str(value)
-            updated_keys.append(key)
-    
-    if updated_keys:
-        return {
-            "success": True,
-            "message": f"Updated configuration: {', '.join(updated_keys)}",
-            "note": "Runtime changes will take effect on next request",
-        }
-    else:
-        return {
-            "success": False,
-            "message": "No valid configuration keys provided",
-            "valid_keys": list(valid_keys),
-        }
 
 
 # Philosophy Terminology Management Endpoints
@@ -594,7 +524,7 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "error_code": "DOLPHIN_005",
+                    "error_code": DOC_INVALID_FORMAT,
                     "message": "Only PDF format supported",
                     "timestamp": datetime.now(UTC).isoformat(),
                     "context": {"path": Path(file_path).name},
@@ -607,8 +537,8 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "error_code": "DOLPHIN_014",
-                    "message": get_error_message("DOLPHIN_014"),
+                    "error_code": DOC_ENCRYPTED_PDF,
+                    "message": get_error_message(DOC_ENCRYPTED_PDF),
                     "timestamp": datetime.now(UTC).isoformat(),
                     "context": {"path": Path(file_path).name},
                 },
@@ -713,8 +643,8 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
         raise HTTPException(
             status_code=500,
             detail={
-                "error_code": "DOLPHIN_002",
-                "message": get_error_message("DOLPHIN_002"),
+                "error_code": DOC_SERVICE_UNAVAILABLE,
+                "message": get_error_message(DOC_SERVICE_UNAVAILABLE),
                 "timestamp": datetime.now(UTC).isoformat(),
                 "filename": Path(file.filename).name
                 if getattr(file, "filename", None)

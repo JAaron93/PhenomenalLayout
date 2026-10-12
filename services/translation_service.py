@@ -1,4 +1,4 @@
-"""Translation service for Dolphin OCR Translate with Lingo.dev provider support."""
+"""Translation service for PhenomenalLayout with Lingo.dev provider support."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ TRANSLATION_DELAY: float = float(
 )  # Delay between batch requests in seconds
 
 # Configurable User-Agent header
-USER_AGENT: str = os.getenv("DOLPHIN_USER_AGENT", "Dolphin-OCR-Translate/2.0")
+USER_AGENT: str = os.getenv("TRANSLATION_USER_AGENT", "PhenomenalLayout-Translate/2.0")
 
 logger: logging.Logger = logging.getLogger(__name__)
 
