@@ -126,3 +126,19 @@ def test_translation_service_initializes_rest_provider_when_mcp_disabled(monkeyp
     provider = svc.providers["lingo"]
     assert isinstance(provider, LingoTranslator)
     assert provider.api_key == "unit_test_key"
+
+
+def test_user_agent_env_override_and_default(monkeypatch):
+    """USER_AGENT honors TRANSLATION_USER_AGENT and falls back to the product default."""
+    import importlib
+
+    import services.translation_service as ts
+
+    monkeypatch.setenv("TRANSLATION_USER_AGENT", "custom-agent/9.9")
+    sys.modules[ts.__name__] = ts
+    reloaded = importlib.reload(ts)
+    assert reloaded.USER_AGENT == "custom-agent/9.9"
+
+    monkeypatch.delenv("TRANSLATION_USER_AGENT", raising=False)
+    reloaded = importlib.reload(ts)
+    assert reloaded.USER_AGENT == "PhenomenalLayout-Translate/2.0"

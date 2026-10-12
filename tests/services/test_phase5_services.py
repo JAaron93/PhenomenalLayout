@@ -7,50 +7,6 @@ as part of Phase 5 of unused_code_report.md.
 import os
 import pytest
 
-
-class TestDolphinClientEndpointConfiguration:
-    """Tests for Dolphin client endpoint configuration."""
-
-    def test_default_modal_endpoint(self, monkeypatch):
-        """Test default Modal endpoint is used when endpoint_type is modal."""
-        # Clear any existing env vars
-        monkeypatch.delenv("DOLPHIN_ENDPOINT_TYPE", raising=False)
-        monkeypatch.delenv("DOLPHIN_ENDPOINT", raising=False)
-        monkeypatch.delenv("DOLPHIN_LOCAL_ENDPOINT", raising=False)
-        
-        
-        # The function should use Modal endpoint by default
-        # (This tests the logic that will be used when get_layout is called)
-        endpoint_type = os.getenv("DOLPHIN_ENDPOINT_TYPE", "modal").lower()
-        assert endpoint_type == "modal"
-
-    def test_local_endpoint_configuration(self, monkeypatch):
-        """Test local endpoint is used when endpoint_type is local."""
-        monkeypatch.setenv("DOLPHIN_ENDPOINT_TYPE", "local")
-        monkeypatch.setenv("DOLPHIN_LOCAL_ENDPOINT", "http://custom:9999/layout")
-        
-        endpoint_type = os.getenv("DOLPHIN_ENDPOINT_TYPE", "modal").lower()
-        local_endpoint = os.getenv("DOLPHIN_LOCAL_ENDPOINT", "http://localhost:8501/layout")
-        
-        assert endpoint_type == "local"
-        assert local_endpoint == "http://custom:9999/layout"
-
-    def test_settings_dolphin_config(self, monkeypatch):
-        """Test Settings class has Dolphin configuration."""
-        from config.settings import Settings
-        
-        # Override class attributes directly since they are evaluated at import time
-        monkeypatch.setattr(Settings, "DOLPHIN_ENDPOINT_TYPE", "local")
-        monkeypatch.setattr(Settings, "DOLPHIN_LOCAL_ENDPOINT", "http://test:8000/layout")
-        monkeypatch.setattr(Settings, "DOLPHIN_TIMEOUT_SECONDS", 120)
-        
-        settings = Settings()
-        
-        assert settings.DOLPHIN_ENDPOINT_TYPE == "local"
-        assert settings.DOLPHIN_LOCAL_ENDPOINT == "http://test:8000/layout"
-        assert settings.DOLPHIN_TIMEOUT_SECONDS == 120
-
-
 class TestPhilosophicalContextAnalyzerTerminology:
     """Tests for PhilosophicalContextAnalyzer terminology management."""
 
