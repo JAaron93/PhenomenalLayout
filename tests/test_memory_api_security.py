@@ -34,10 +34,6 @@ def auth_module():
         "MEMORY_API_KEY": "test-admin-key"
     }
 
-    # Store original module if it exists
-    original_auth_module = sys.modules.get('api.auth')
-    original_rate_limit_module = sys.modules.get('api.rate_limit')
-
     with patch.dict('os.environ', test_env):
         # Import and reload auth module to pick up patched environment
         import api.auth
@@ -60,21 +56,17 @@ def auth_module():
             api.rate_limit.get_client_ip
         )
 
-    # Restore original module state if it was previously loaded
-    if original_auth_module is not None:
-        sys.modules['api.auth'] = original_auth_module
-    elif 'api' in sys.modules and hasattr(sys.modules['api'], 'auth'):
-        sys.modules['api.auth'] = sys.modules['api'].auth
-
-    if original_rate_limit_module is not None:
-        sys.modules['api.rate_limit'] = original_rate_limit_module
-    elif 'api' in sys.modules and hasattr(sys.modules['api'], 'rate_limit'):
-        sys.modules['api.rate_limit'] = sys.modules['api'].rate_limit
+    # Reload after the patch context exits: importlib.reload mutates the
+    # module in place, so restoring sys.modules entries is a no-op — the
+    # reloaded state (including any env-derived constants) would leak to
+    # every later test in this worker. Re-executing against the
+    # session-default environment restores the constants tests expect.
 
 
 @pytest.fixture
 def mock_api_key(monkeypatch):
     """Pytest fixture that sets up test API key and reloads auth module."""
+    original_key = os.getenv("MEMORY_API_KEY")
     test_key = "test-api-key-12345"
     monkeypatch.setenv("MEMORY_API_KEY", test_key)
 
@@ -85,7 +77,13 @@ def mock_api_key(monkeypatch):
 
     yield test_key
 
-    # Reload auth module to pick up restored environment
+    # Reload with the pre-test key value restored: monkeypatch has not
+    # undone its setenv yet at fixture teardown, so an unqualified reload
+    # here would bake the test key into the module for later tests.
+    if original_key is None:
+        monkeypatch.delenv("MEMORY_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("MEMORY_API_KEY", original_key)
     importlib.reload(api.auth)
 
 
@@ -177,7 +175,9 @@ def test_client_ip_extraction():
     """Test client IP extraction from request."""
     print("Testing client IP extraction...")
 
-    # Set TRUST_FORWARDER_HEADERS to true for this test
+    # All scenarios run under one trusted-proxy reload: the X-Forwarded-For
+    # and X-Real-IP cases both require TRUST_FORWARDER_HEADERS=true, and the
+    # fallback case uses a client outside the trusted-proxy list.
     with patch.dict(os.environ, {"TRUST_FORWARDER_HEADERS": "true"}):
         sys.modules["api.rate_limit"] = api.rate_limit
         importlib.reload(api.rate_limit)
@@ -195,31 +195,36 @@ def test_client_ip_extraction():
         ip = api.rate_limit.get_client_ip(request)
         assert ip == "192.168.1.100", "Should extract IP from X-Forwarded-For"
 
-    # Mock request with X-Real-IP header
-    scope = {
-        "type": "http",
-        "method": "GET",
-        "path": "/test",
-        "headers": [(b"x-real-ip", b"192.168.1.200")],
-        "client": ("127.0.0.1", 8000),
-    }
-    request = Request(scope)
+        # Mock request with X-Real-IP header
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": [(b"x-real-ip", b"192.168.1.200")],
+            "client": ("127.0.0.1", 8000),
+        }
+        request = Request(scope)
 
-    ip = api.rate_limit.get_client_ip(request)
-    assert ip == "192.168.1.200", "Should extract IP from X-Real-IP"
+        ip = api.rate_limit.get_client_ip(request)
+        assert ip == "192.168.1.200", "Should extract IP from X-Real-IP"
 
-    # Mock request with no headers (fallback to client.host)
-    scope = {
-        "type": "http",
-        "method": "GET",
-        "path": "/test",
-        "headers": [],
-        "client": ("192.168.1.30", 8000),
-    }
-    request = Request(scope)
+        # Mock request with no headers (fallback to client.host)
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": [],
+            "client": ("192.168.1.30", 8000),
+        }
+        request = Request(scope)
 
-    ip = api.rate_limit.get_client_ip(request)
-    assert ip == "192.168.1.30", "Should fallback to client.host"
+        ip = api.rate_limit.get_client_ip(request)
+        assert ip == "192.168.1.30", "Should fallback to client.host"
+
+    # Restore default constants: the reload above baked
+    # TRUST_FORWARDER_HEADERS=true into the module; later tests expect the
+    # default (false) forwarded-header behavior.
+    importlib.reload(api.rate_limit)
 
     print("✓ Client IP extraction test passed")
 
@@ -318,6 +323,11 @@ def test_rate_limit_configuration():
         assert RATE_LIMITS_PER_SECOND["read"] == pytest.approx(2.0), "Read rate should be 2.0/sec"
         assert RATE_LIMITS_PER_SECOND["write"] == pytest.approx(20/60), "Write rate should be 0.33/sec"
         assert RATE_LIMITS_PER_SECOND["admin"] == pytest.approx(10/60), "Admin rate should be 0.17/sec"
+
+    # Restore default rate limits: the reload above baked the test values
+    # (120/20/10) into the module constants, and later tests — including the
+    # test_rate_limit.py decorator tests — assert the 60/10/5 defaults.
+    importlib.reload(api.rate_limit)
 
     print("✓ Rate limit configuration test passed")
 
