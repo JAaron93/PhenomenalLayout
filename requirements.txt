@@ -71,7 +71,7 @@ cymem==2.0.13
     #   preshed
     #   spacy
     #   thinc
-fastapi==0.141.1
+fastapi==0.143.0
     # via
     #   -r requirements.in
     #   gradio
@@ -229,7 +229,9 @@ numpy==2.4.6
     #   spacy
     #   thinc
 opentelemetry-api==1.44.0
-    # via mcp
+    # via
+    #   fastapi
+    #   mcp
 orjson==3.12.0
     # via gradio
 packaging==26.3
