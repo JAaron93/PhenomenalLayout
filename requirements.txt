@@ -21,6 +21,8 @@ anyio==4.14.2
     #   sse-starlette
     #   starlette
     #   watchfiles
+audioop-lts==0.2.2 ; python_version >= "3.13"
+    # via -r requirements.in
 attrs==26.1.0
     # via
     #   aiohttp
