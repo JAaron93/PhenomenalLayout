@@ -21,8 +21,6 @@ anyio==4.14.2
     #   sse-starlette
     #   starlette
     #   watchfiles
-audioop-lts==0.2.2 ; python_version >= "3.13"
-    # via -r requirements.in
 attrs==26.1.0
     # via
     #   aiohttp
@@ -303,7 +301,7 @@ pyjwt[crypto]==2.15.0
     #   pyjwt
 pyparsing==3.3.2
     # via httplib2
-pypdf==6.19.0
+pypdf==6.20.0
     # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via pandas
