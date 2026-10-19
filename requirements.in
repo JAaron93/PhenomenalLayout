@@ -36,7 +36,7 @@ httpx>=0.28,<1.0
 
 # Development Utilities
 rich>=14.1,<16.0
-tqdm>=4.67,<5.0
+tqdm>=4.70.1,<5.0
 psutil>=7.0,<8.0
 
 # pydub imports the stdlib `audioop` module, removed in Python 3.13 (PEP 594).
