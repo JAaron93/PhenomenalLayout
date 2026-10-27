@@ -126,9 +126,9 @@ googleapis-common-protos[grpc]==1.75.2
     #   google-api-core
     #   grpc-google-iam-v1
     #   grpcio-status
-gradio==6.26.0
+gradio==6.30.0
     # via -r requirements.in
-gradio-client==2.6.1
+gradio-client==2.7.2
     # via
     #   gradio
     #   hf-gradio
