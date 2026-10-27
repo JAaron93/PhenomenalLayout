@@ -7,7 +7,7 @@ uvicorn[standard]>=0.54.0,<1.0
 python-dotenv>=1.2.4,<2.0
 
 # UI Framework
-gradio>=6.0,<7.0
+gradio>=6.30.0,<7.0
 
 # PDF Processing & OCR
 pdf2image>=1.17,<2.0

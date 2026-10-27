@@ -2,6 +2,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import gradio as gr
 import pytest
@@ -16,7 +17,9 @@ def _launch_blocks() -> tuple[gr.blocks.Blocks, str]:
         os.environ.setdefault("GRADIO_SHARE", "true")
     demo = create_gradio_interface()
     # Launch in headless mode; request a share link as fallback
-    _app, local_url, share_url = demo.launch(prevent_thread_lock=True, share=True)
+    _app, local_url, share_url = demo.launch(
+        prevent_thread_lock=True, share=True, run_history=False
+    )
     # Prefer share_url if provided, otherwise local_url
     url = share_url or local_url or ""
     if not url:
@@ -33,6 +36,19 @@ def _teardown_blocks(demo: gr.blocks.Blocks) -> None:
     except Exception as err:  # pragma: no cover
         logging.error("Unexpected error while closing Blocks: %s", err, exc_info=True)
         raise
+
+
+def test_launch_blocks_disables_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    demo = Mock(spec=gr.Blocks)
+    demo.launch.return_value = (None, "http://127.0.0.1:7860", None)
+    monkeypatch.setattr(
+        "tests.test_ui_gradio.create_gradio_interface", lambda: demo
+    )
+
+    launched, _url = _launch_blocks()
+
+    assert launched is demo
+    assert demo.launch.call_args.kwargs.get("run_history") is False
 
 
 def test_ui_valid_pdf_upload(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

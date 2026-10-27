@@ -1,14 +1,18 @@
 """Tests for Gradio 6 interface, components, and FastAPI ASGI mounting."""
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import gradio as gr
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from gradio import history
 
-from app import create_app
 from tests.helpers import write_encrypted_pdf, write_minimal_pdf
 from ui.gradio_interface import (
     APP_TITLE,
@@ -17,6 +21,22 @@ from ui.gradio_interface import (
     render_metrics,
     start_translation_with_progress,
 )
+
+
+@pytest.fixture(params=[None, "true"], ids=["default-history", "env-enabled-history"])
+def mounted_gradio_app(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> FastAPI:
+    import app as app_module
+
+    if request.param is None:
+        monkeypatch.delenv("GRADIO_RUN_HISTORY", raising=False)
+    else:
+        monkeypatch.setenv("GRADIO_RUN_HISTORY", request.param)
+    run_server = Mock()
+    monkeypatch.setattr(app_module.uvicorn, "run", run_server)
+    app_module.main()
+    return run_server.call_args.args[0]
 
 
 class TestGradioMetricsRendering:
@@ -239,12 +259,8 @@ class TestGradioBlocksStructureAndFastAPIMount:
         assert demo.theme is not None
         assert isinstance(demo.css, str)
 
-    def test_fastapi_asgi_sub_mounting(self) -> None:
-        app = create_app()
-        gradio_app = create_gradio_interface()
-        app_with_gradio = gr.mount_gradio_app(app, gradio_app, path="/ui")
-
-        client = TestClient(app_with_gradio)
+    def test_fastapi_asgi_sub_mounting(self, mounted_gradio_app: FastAPI) -> None:
+        client = TestClient(mounted_gradio_app)
         # Test FastAPI native route
         resp_root = client.get("/")
         assert resp_root.status_code in {200, 404}  # App root route responds
@@ -257,3 +273,45 @@ class TestGradioBlocksStructureAndFastAPIMount:
         resp_ui_slash = client.get("/ui/")
         assert resp_ui_slash.status_code == 200
         assert "html" in resp_ui_slash.headers.get("content-type", "").lower()
+
+    def test_run_history_disabled(self, mounted_gradio_app: FastAPI) -> None:
+        client = TestClient(mounted_gradio_app)
+        config = client.get("/ui/config").json()
+
+        assert config["run_history"] is False
+        assert "runs" not in config["footer_links"]
+        assert client.get("/ui/gradio_api/runs").status_code == 404
+
+    async def test_byok_credentials_never_reach_history_persistence(
+        self, mounted_gradio_app: FastAPI, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        gradio_app = next(
+            route.app for route in mounted_gradio_app.routes
+            if getattr(route, "path", None) == "/ui"
+        )
+        callback = next(
+            fn for fn in gradio_app.get_blocks().fns.values()
+            if fn.api_name == "validate_byok_ui"
+        )
+        assert callback.api_visibility == "public"
+        monkeypatch.setenv("GRADIO_HISTORY_BUCKET", "audit/synthetic")
+        resolve_token = Mock(return_value="synthetic-hf-token")
+        save_record = Mock()
+        monkeypatch.setattr(history, "resolve_token", resolve_token)
+        monkeypatch.setattr(history, "save_record", save_record)
+        inputs = [
+            "audit-user", "audit-project", "audit-bucket",
+            "synthetic-service-account-json", "synthetic-auth-token",
+        ]
+
+        record = await history.record_run(
+            gradio_app,
+            request=None,
+            inputs=inputs,
+            outputs=["synthetic validation result"],
+            api_name=callback.api_name,
+        )
+
+        assert record is None
+        resolve_token.assert_not_called()
+        save_record.assert_not_called()

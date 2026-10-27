@@ -225,7 +225,9 @@ def main() -> None:
     gradio_app = create_gradio_interface()
 
     # Mount Gradio app to FastAPI
-    app_with_gradio = gr.mount_gradio_app(app, gradio_app, path="/ui")
+    app_with_gradio = gr.mount_gradio_app(
+        app, gradio_app, path="/ui", run_history=False
+    )
 
     # Start server with Uvicorn
     # Note: Default to localhost; override via HOST and PORT env vars
