@@ -307,7 +307,7 @@ pyjwt[crypto]==2.15.0
     #   pyjwt
 pyparsing==3.3.2
     # via httplib2
-pypdf==6.20.0
+pypdf==6.21.2
     # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via pandas
