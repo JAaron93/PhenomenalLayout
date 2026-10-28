@@ -2,7 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.helpers import write_minimal_pdf
+from tests.helpers import (
+    write_aes128_pdf_with_bit_length_crypt_filter,
+    write_minimal_pdf,
+)
 from utils.pdf_validator import (
     detect_pdf_encryption,
     validate_pdf,
@@ -46,6 +49,15 @@ def test_extension_and_header_invalid_nonpdf(tmp_path: Path) -> None:
 def test_detect_encryption_for_encrypted_pdf(tmp_path: Path) -> None:
     enc = tmp_path / "enc.pdf"
     _write_encrypted_pdf(enc)
+    res = detect_pdf_encryption(str(enc))
+    assert res.is_pdf is True
+    assert res.is_encrypted is True
+    assert any(issue.code == "DOC_ENCRYPTED_PDF" for issue in res.issues)
+
+
+def test_detect_encryption_for_bit_length_crypt_filter(tmp_path: Path) -> None:
+    enc = tmp_path / "aes128-bits.pdf"
+    write_aes128_pdf_with_bit_length_crypt_filter(enc)
     res = detect_pdf_encryption(str(enc))
     assert res.is_pdf is True
     assert res.is_encrypted is True
