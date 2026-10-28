@@ -1,5 +1,6 @@
 import importlib
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -75,5 +76,35 @@ def write_encrypted_pdf(path: Path) -> None:
         writer = PdfWriter()
         writer.add_blank_page(width=200, height=200)
         writer.encrypt("pwd")
+        with path.open("wb") as fh:
+            writer.write(fh)
+
+
+def write_aes128_pdf_with_bit_length_crypt_filter(path: Path) -> None:
+    """Write an AES-128 PDF whose crypt filter declares /Length in bits.
+
+    ISO 32000-1 Table 25 words that entry in bits, so real-world producers
+    emit 128 where Adobe writes 16 bytes. Read the issue at
+    https://github.com/py-pdf/pypdf/issues/4260 (fixed in 6.21.3).
+    """
+    try:
+        import pypdf
+        from pypdf.generic import (
+            DictionaryObject,
+            NameObject,
+            NumberObject,
+        )
+    except (ImportError, AttributeError):  # pragma: no cover - optional dep
+        pytest.skip("pypdf not available")
+    else:
+        writer = pypdf.PdfWriter()
+        writer.add_blank_page(width=200, height=200)
+        writer.encrypt("", owner_password="owner", algorithm="AES-128")
+        # The writer exposes the live encryption dictionary only privately.
+        encrypt_entry = cast(DictionaryObject, writer._encrypt_entry)
+        standard_filter = cast(
+            DictionaryObject, cast(DictionaryObject, encrypt_entry["/CF"])["/StdCF"]
+        )
+        standard_filter[NameObject("/Length")] = NumberObject(128)
         with path.open("wb") as fh:
             writer.write(fh)
