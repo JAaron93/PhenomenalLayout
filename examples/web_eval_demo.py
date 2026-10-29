@@ -6,6 +6,7 @@ evaluation.
 """
 
 import hashlib
+import hmac
 import json
 import os
 import time
@@ -42,8 +43,11 @@ def demonstrate_web_eval_agent() -> None:
     if not trimmed_key or trimmed_key == "[API_KEY_NOT_SET]":
         api_key_display = "not set"
     else:
-        # Compute SHA-256 fingerprint and show first 8 hex chars
-        fingerprint = hashlib.sha256(trimmed_key.encode()).hexdigest()[:8]
+        # Compute HMAC-SHA-256 fingerprint and show first 8 hex chars
+        fingerprint_key = b"web-eval-demo:fingerprint:v1"
+        fingerprint = hmac.new(
+            fingerprint_key, trimmed_key.encode("utf-8"), hashlib.sha256
+        ).hexdigest()[:8]
         api_key_display = f"set (fingerprint: {fingerprint})"
     print(f"  • API Key: {api_key_display}")
     print(
