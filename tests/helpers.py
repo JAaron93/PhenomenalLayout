@@ -1,8 +1,89 @@
 import importlib
+import sys
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import cast
+from typing import NamedTuple, cast
 
 import pytest
+
+# Modules whose identity (sys.modules entry + parent-package attribute) the
+# test suite must keep consistent. api/__init__.py imports no submodules, so
+# a re-imported `api` package object has none of these attributes until each
+# submodule is imported again — and importlib.reload raises ImportError when
+# the sys.modules entry and the package attribute point to different objects.
+API_MODULE_FAMILY: tuple[str, ...] = (
+    "api",
+    "api.auth",
+    "api.routes",
+    "api.rate_limit",
+    "api.memory_routes",
+    "app",
+)
+
+
+class ModuleSnapshot(NamedTuple):
+    entry: object | None
+    parent_attr: object | None
+    parent_name: str | None
+    leaf: str | None
+
+
+def snapshot_module_family(
+    names: Iterable[str] = API_MODULE_FAMILY,
+) -> dict[str, ModuleSnapshot]:
+    """Capture sys.modules entries and parent-package attributes for names."""
+    snapshot: dict[str, ModuleSnapshot] = {}
+    for name in names:
+        parent_name, _, leaf = name.rpartition(".")
+        parent = sys.modules.get(parent_name) if parent_name else None
+        snapshot[name] = ModuleSnapshot(
+            entry=sys.modules.get(name),
+            parent_attr=getattr(parent, leaf, None) if parent else None,
+            parent_name=parent_name or None,
+            leaf=leaf or None,
+        )
+    return snapshot
+
+
+def restore_module_family(
+    snapshot: dict[str, ModuleSnapshot],
+) -> list[str]:
+    """Restore what snapshot_module_family captured; return repaired names.
+
+    Restores sys.modules entries first so parent packages exist before their
+    submodule attributes are re-pointed, then re-binds each parent attribute
+    to its original object (or removes it when it did not exist before).
+    """
+    repaired: list[str] = []
+    for name, snap in snapshot.items():
+        if sys.modules.get(name) is not snap.entry:
+            if snap.entry is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = snap.entry
+            repaired.append(name)
+    for name, snap in snapshot.items():
+        if not (snap.parent_name and snap.leaf):
+            continue
+        parent = sys.modules.get(snap.parent_name)
+        if parent is None:
+            continue
+        if getattr(parent, snap.leaf, None) is snap.parent_attr:
+            continue
+        if snap.parent_attr is None:
+            delattr(parent, snap.leaf)
+        else:
+            setattr(parent, snap.leaf, snap.parent_attr)
+        repaired.append(name)
+    return repaired
+
+
+def module_family_guard(
+    names: Iterable[str] = API_MODULE_FAMILY,
+) -> Callable[[], list[str]]:
+    """Snapshot now; the returned callable restores and reports repairs."""
+    snapshot = snapshot_module_family(names)
+    return lambda: restore_module_family(snapshot)
 
 
 def write_minimal_pdf(path: Path) -> None:

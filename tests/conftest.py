@@ -5,6 +5,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.helpers import restore_module_family, snapshot_module_family
+
 pytest_plugins: tuple[str, ...] = ("pytest_asyncio",)
 
 logger = logging.getLogger(__name__)
@@ -17,6 +19,29 @@ _RELOAD_MODULE_NAMES = [
     "api.memory_routes",
     "app",
 ]
+
+
+@pytest.fixture(autouse=True)
+def _module_family_identity_guard():
+    """Restore api/app module identity after every test.
+
+    Several test files perform ad-hoc sys.modules surgery (pop/del/re-import)
+    to re-execute modules under patched environments. When the ``api``
+    package is popped, its next import creates a package object with no
+    submodule attributes (api/__init__.py imports none), so
+    ``monkeypatch.setattr("api.rate_limit.time", ...)`` raises AttributeError,
+    and ``importlib.reload(api.rate_limit)`` raises ImportError when the
+    sys.modules entry and the package attribute point to different module
+    objects. Restoring identity after each test makes those order-dependent
+    failures impossible regardless of fixture ordering or xdist scheduling.
+
+    This restores object identity only; in-place reload mutations are the
+    responsibility of each fixture's own reload-after-patch-exit teardown.
+    """
+    snapshot = snapshot_module_family()
+    yield
+    for name in restore_module_family(snapshot):
+        logger.debug("Restored module-family identity for %s", name)
 
 
 @pytest.fixture(autouse=True)
@@ -108,9 +133,7 @@ def test_client():
             try:
                 importlib.reload(sys.modules[name])
             except Exception:
-                logger.debug(
-                    "Failed to reload %s during teardown", name, exc_info=True
-                )
+                logger.debug("Failed to reload %s during teardown", name, exc_info=True)
 
 
 @pytest.fixture
