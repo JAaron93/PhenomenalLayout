@@ -41,7 +41,7 @@ catalogue==2.0.10
     #   thinc
 cbor2==6.1.4
     # via modal
-certifi==2026.7.22
+certifi==2026.10.18
     # via
     #   httpcore
     #   httpx
