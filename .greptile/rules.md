@@ -26,4 +26,5 @@
 
 ## 5. Evaluation, Mock Fixtures & Test Suite Invariants
 - **Parallel Test Execution**: The repository test suite leverages multi-core parallelism (`pytest -n auto`). Do NOT flag test isolation patterns designed for concurrent execution.
+- **Module-Family Identity Guard**: The conftest autouse `_module_family_identity_guard` restores `sys.modules` entries and parent-package attributes for the api/app family after every test. Do NOT flag it as redundant cleanup or request its removal because individual fixtures "already restore" — fixtures that pop/delete/re-import api-family modules desynchronize package attributes from `sys.modules` (api/__init__.py imports no submodules), which is the root cause of the historical parallel-suite flake family. Do not suggest bypassing it with raw `sys.modules` mutation that persists past a test.
 
