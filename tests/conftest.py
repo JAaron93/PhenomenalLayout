@@ -1,5 +1,6 @@
 import logging
 import os
+from collections.abc import Iterator
 from unittest.mock import patch
 
 import pytest
@@ -7,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from tests.helpers import restore_module_family, snapshot_module_family
 
-pytest_plugins: tuple[str, ...] = ("pytest_asyncio",)
+pytest_plugins: tuple[str, ...] = ("pytest_asyncio", "pytester")
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ _RELOAD_MODULE_NAMES = [
 
 
 @pytest.fixture(autouse=True)
-def _module_family_identity_guard():
+def _module_family_identity_guard() -> Iterator[None]:
     """Restore api/app module identity after every test.
 
     Several test files perform ad-hoc sys.modules surgery (pop/del/re-import)
