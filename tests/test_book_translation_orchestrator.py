@@ -17,6 +17,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 from unittest.mock import MagicMock
+from urllib.parse import urlparse
 
 import pytest
 from reportlab.lib.pagesizes import letter
@@ -514,7 +515,9 @@ class TestDeliveryActions:
 
         assert isinstance(result, DriveExportResult)
         assert result.file_id == "drive-123"
-        assert result.web_view_link.startswith("https://drive.google.com")
+        parsed_web_view_link = urlparse(result.web_view_link)
+        assert parsed_web_view_link.scheme == "https"
+        assert parsed_web_view_link.netloc == "drive.google.com"
         mock_batch_service.stream_translated_book.assert_called_once()
         mock_drive_exporter.export_stream_to_drive.assert_called_once()
 
