@@ -10,6 +10,7 @@ Traceability: FR-12, NFR-02, NFR-08
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -260,3 +261,25 @@ class TestUpdateAndCleanup:
         # resume_active_job for 'usr' attempting to access victim session raises JobNotFoundError
         with pytest.raises(JobNotFoundError):
             recovery_manager.resume_active_job("sess-vic-1", user_id="usr")
+
+
+class TestPathContainment:
+    """Job file paths derived from user/book ids must stay in the store."""
+
+    def test_job_file_path_preserves_legacy_name(
+        self, recovery_manager: BatchJobRecoveryManager
+    ) -> None:
+        job_path = recovery_manager._job_file_path("translator-01", "klages_1929")
+        assert job_path.name == "translator-01_klages_1929.json"
+
+    def test_job_file_path_rejects_traversal_ids(
+        self, recovery_manager: BatchJobRecoveryManager
+    ) -> None:
+        with pytest.raises(ValueError, match="Unsafe path component"):
+            recovery_manager._job_file_path("../../user", "../../book")
+
+    def test_job_file_path_rejects_separator_ids(
+        self, recovery_manager: BatchJobRecoveryManager
+    ) -> None:
+        with pytest.raises(ValueError, match="Unsafe path component"):
+            recovery_manager._job_file_path("a/b", "c/d")

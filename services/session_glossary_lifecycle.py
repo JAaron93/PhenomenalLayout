@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import threading
 import time
 from dataclasses import dataclass, field
@@ -29,6 +28,7 @@ from google.api_core import exceptions as gcp_exceptions
 
 from config.settings import gcp_settings
 from services.byok_credentials_manager import BYOKCredentialsManager
+from utils.path_safety import resolve_within, safe_component
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +108,7 @@ class SessionGlossaryLifecycleManager:
         logger.debug("SessionGlossaryLifecycleManager initialized at %s", self.storage_dir)
 
     def _get_meta_file(self, user_id: str) -> Path:
-        clean_user_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", user_id.strip())
-        return self.storage_dir / f"{clean_user_id}.json"
+        return resolve_within(self.storage_dir, f"{safe_component(user_id)}.json")
 
     def _load_user_sessions(self, user_id: str) -> dict[str, SessionGlossaryRecord]:
         with self._lock:

@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import re
 import sqlite3
 import threading
 import time
@@ -28,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import gcp_settings
+from utils.path_safety import resolve_within, safe_component
 
 logger = logging.getLogger(__name__)
 
@@ -119,10 +119,9 @@ class UserVocabularyStore:
 
     def _get_db_path(self, user_id: str) -> Path:
         """Sanitize user_id and return path to its SQLite database."""
-        clean_user_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", user_id.strip())
-        if not clean_user_id:
+        if not user_id or not user_id.strip():
             raise ValueError("user_id cannot be empty")
-        return self.storage_dir / f"{clean_user_id}.sqlite"
+        return resolve_within(self.storage_dir, f"{safe_component(user_id)}.sqlite")
 
     @contextlib.contextmanager
     def _connection(self, db_path: Path) -> Iterator[sqlite3.Connection]:
