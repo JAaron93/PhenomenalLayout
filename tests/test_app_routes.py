@@ -13,6 +13,7 @@ Traceability: FR-01 to FR-15
 from __future__ import annotations
 
 import io
+from urllib.parse import urlparse
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -322,7 +323,9 @@ class TestScholarlyDeliveryRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["file_id"] == "drive-doc-456"
-        assert "drive.google.com" in data["web_view_link"]
+        parsed = urlparse(data["web_view_link"])
+        assert parsed.hostname is not None
+        assert parsed.hostname == "drive.google.com"
 
     @patch("api.routes.get_book_orchestrator")
     def test_fallback_translation_route(
