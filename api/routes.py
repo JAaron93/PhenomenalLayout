@@ -66,6 +66,7 @@ from models.user_choice_models import (
 )
 from utils import pdf_validator
 from utils.language_utils import extract_text_sample_for_language_detection
+from utils.path_safety import resolve_managed_path
 
 # Import services for configuration endpoints
 from services.philosophy_enhanced_translation_service import (
@@ -766,7 +767,15 @@ async def validate_pdf_quality(
         min_layout_score = validation_data.get("min_layout_score", 0.7)
         require_font_preservation = validation_data.get("require_font_preservation", False)
         min_font_match_ratio = validation_data.get("min_font_match_ratio", 0.8)
-        
+
+        # Only files inside server-managed storage areas may be inspected;
+        # client-supplied paths must never be opened directly.
+        try:
+            original_pdf = str(resolve_managed_path(original_pdf))
+            reconstructed_pdf = str(resolve_managed_path(reconstructed_pdf))
+        except (ValueError, TypeError) as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
         # Initialize validator and run validation
         validator = PDFQualityValidator()
         

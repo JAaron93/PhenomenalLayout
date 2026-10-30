@@ -382,6 +382,27 @@ class TestStartBookTranslation:
                 source=pdf_bytes,
             )
 
+    def test_start_translation_rejects_unsafe_ids_before_cloud_work(
+        self,
+        orchestrator: BookTranslationOrchestrator,
+        mock_batch_service: MagicMock,
+        mock_glossary_sync: MagicMock,
+    ) -> None:
+        """Invalid ids must fail closed before uploads, glossary sync, or billable job submission."""
+        pdf_bytes = _create_sample_pdf(pages=1)
+
+        with pytest.raises(ValueError, match="Unsafe path component"):
+            orchestrator.start_book_translation(
+                user_id="user-1",
+                session_id="sess-101",
+                book_id="My Book",
+                source=pdf_bytes,
+            )
+
+        mock_batch_service.upload_book_to_gcs.assert_not_called()
+        mock_batch_service.submit_batch_job.assert_not_called()
+        mock_glossary_sync.sync_book_session_glossary.assert_not_called()
+
 
 class TestPollAndResumeJob:
     """Test progress polling and job recovery."""

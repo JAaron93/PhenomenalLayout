@@ -10,6 +10,7 @@ Verifies:
 
 from __future__ import annotations
 
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -294,3 +295,20 @@ class TestLifecycleErrorBranches:
     ) -> None:
         mgr = SessionGlossaryLifecycleManager(credentials_manager=mock_creds_mgr)
         assert mgr.storage_dir.exists()
+
+
+class TestPathContainment:
+    """User identifiers must never produce metadata paths outside the store."""
+
+    def test_get_meta_file_stays_within_storage_dir(
+        self,
+        lifecycle_mgr: SessionGlossaryLifecycleManager,
+        temp_meta_dir: Path,
+    ) -> None:
+        meta_file = lifecycle_mgr._get_meta_file("../../evil")
+        assert Path(os.path.realpath(temp_meta_dir)) in meta_file.parents
+
+    def test_get_meta_file_preserves_legacy_sanitization(
+        self, lifecycle_mgr: SessionGlossaryLifecycleManager
+    ) -> None:
+        assert lifecycle_mgr._get_meta_file("user@x.com").name == "user_x_com.json"

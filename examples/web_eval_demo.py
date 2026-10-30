@@ -5,7 +5,6 @@ This script shows how the web-eval-agent can be used for automated web
 evaluation.
 """
 
-import hashlib
 import json
 import os
 import time
@@ -28,7 +27,6 @@ class SampleReport(TypedDict):
 
 def demonstrate_web_eval_agent() -> None:
     """Demonstrate the web-eval-agent capabilities."""
-    api_key: str = os.getenv("OP_API_KEY", "[API_KEY_NOT_SET]")
     # Resolve demo URL from environment with sensible default
     demo_url: str = os.getenv("WEB_EVAL_DEMO_URL") or DEFAULT_DEMO_URL
     print("🚀 Web Eval Agent MCP Server Demonstration")
@@ -37,15 +35,8 @@ def demonstrate_web_eval_agent() -> None:
     # Simulate the web-eval-agent configuration
     print("\n📋 Configuration:")
     print("  • Server Name: github.com/Operative-Sh/web-eval-agent")
-    # Use non-reversible fingerprint to avoid leaking any key substring
-    trimmed_key = api_key.strip()
-    if not trimmed_key or trimmed_key == "[API_KEY_NOT_SET]":
-        api_key_display = "not set"
-    else:
-        # Compute SHA-256 fingerprint and show first 8 hex chars
-        fingerprint = hashlib.sha256(trimmed_key.encode()).hexdigest()[:8]
-        api_key_display = f"set (fingerprint: {fingerprint})"
-    print(f"  • API Key: {api_key_display}")
+    # Key material is never printed, hashed, or derived into output.
+    print("  • API Key: configured via the OP_API_KEY environment variable")
     print(
         "  • Command: "
         "uvx --refresh-package webEvalAgent --from "

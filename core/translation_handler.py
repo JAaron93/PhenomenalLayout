@@ -42,6 +42,7 @@ class ProcessFileUploadResult(TypedDict):
 from services.translation_service import TranslationService
 from utils.file_handler import FileHandler
 from utils.language_utils import extract_text_sample_for_language_detection
+from utils.path_safety import resolve_managed_path
 
 # PDF preprocessing constants
 PDF_PREPROCESSING_DPI: int = (
@@ -143,7 +144,7 @@ def extract_file_info(file: FileObject) -> tuple[str, str, int]:
 
     # Case 1: Newer Gradio returns a path string
     if isinstance(file, str):
-        file_path = file
+        file_path = str(resolve_managed_path(file))
         file_name = os.path.basename(file_path)
         try:
             file_size = os.path.getsize(file_path)

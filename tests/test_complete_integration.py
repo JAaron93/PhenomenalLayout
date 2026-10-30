@@ -443,8 +443,9 @@ class TestCompletePhilosophyEnhancedIntegration:
         service = PhilosophyEnhancedTranslationService()
         processor = PhilosophyEnhancedDocumentProcessor()
 
-        # Test with invalid file path
-        with pytest.raises(FileNotFoundError):
+        # Test with invalid file path. Paths outside the managed storage
+        # areas are rejected before any existence probing occurs.
+        with pytest.raises(ValueError, match="outside managed storage"):
             processor.extract_content("/nonexistent/file.pdf")
 
         # Test with invalid language codes

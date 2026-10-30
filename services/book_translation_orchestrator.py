@@ -58,6 +58,7 @@ from services.lro_progress_monitor import LROProgressMonitor, ProgressUpdate
 from services.neologism_detector import NeologismDetector
 from services.session_glossary_lifecycle import SessionGlossaryLifecycleManager
 from services.user_vocabulary_store import TermPreference, UserVocabularyStore
+from utils.path_safety import require_filename_component
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -332,6 +333,11 @@ class BookTranslationOrchestrator:
         RuntimeError:
             If 7-day staging lifecycle policy cannot be verified/patched on user bucket.
         """
+        # Fail fast, before any billable cloud work: recovery-state filenames
+        # are derived from these ids and would otherwise strand a submitted job.
+        require_filename_component(user_id)
+        require_filename_component(book_id)
+
         # Validate BYOK credentials exist
         if not self.credentials_manager.has_credentials(user_id):
             raise ValueError(f"No GCP credentials found for user '{user_id}'. Please configure BYOK.")

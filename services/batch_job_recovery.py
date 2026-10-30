@@ -21,6 +21,7 @@ from typing import Any
 
 from config.settings import gcp_settings
 from services.lro_progress_monitor import LROProgressMonitor
+from utils.path_safety import resolve_within
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -303,7 +304,7 @@ class BatchJobRecoveryManager:
 
     def _job_file_path(self, user_id: str, book_id: str) -> Path:
         """Derive standard file path for a user and book."""
-        return self._storage_dir / f"{user_id}_{book_id}.json"
+        return resolve_within(self._storage_dir, f"{user_id}_{book_id}.json")
 
     def _find_job_by_session(
         self, session_id: str, user_id: str | None = None

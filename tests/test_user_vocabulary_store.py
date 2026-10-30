@@ -15,6 +15,7 @@ Verifies:
 from __future__ import annotations
 
 import concurrent.futures
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -270,3 +271,18 @@ class TestValidationAndConcurrency:
             term_key = f"Term_{i:03d}"
             assert term_key in prefs
             assert prefs[term_key].preferred_translation == f"Translation_{i:03d}"
+
+
+class TestPathContainment:
+    """User identifiers must never produce database paths outside the store."""
+
+    def test_get_db_path_stays_within_storage_dir(
+        self, store: UserVocabularyStore, temp_store_dir: Path
+    ) -> None:
+        db_path = store._get_db_path("../../evil")
+        assert Path(os.path.realpath(temp_store_dir)) in db_path.parents
+
+    def test_get_db_path_preserves_legacy_sanitization(
+        self, store: UserVocabularyStore
+    ) -> None:
+        assert store._get_db_path("user@example.com").name == "user_example_com.sqlite"
