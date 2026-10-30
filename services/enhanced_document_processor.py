@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from utils.path_safety import resolve_managed_path
+
 warnings.warn(
     "services.enhanced_document_processor is deprecated and retired under ADR 0001 / Track 4. "
     "Use services.gcp_batch_translation_service.GCPBatchTranslationService instead.",
@@ -122,8 +124,10 @@ class EnhancedDocumentProcessor:
         Returns:
             Dictionary containing extracted content and metadata
         """
-        if not os.path.exists(file_path):
+        managed_path = resolve_managed_path(file_path)
+        if not os.path.exists(managed_path):
             raise FileNotFoundError(f"Document not found: {file_path}")
+        file_path = str(managed_path)
 
         file_ext = Path(file_path).suffix.lower()
         logger.info(

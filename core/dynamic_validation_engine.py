@@ -25,6 +25,7 @@ from core.dynamic_programming import (
     SmartCache,
     memoize,
 )
+from utils.path_safety import resolve_managed_path_or_none
 
 
 class ValidationResult(Enum):
@@ -594,8 +595,10 @@ class DynamicValidationEngine:
         file_path_obj = Path(file_path)
 
         file_size = kwargs.pop("file_size", 0)
-        if hasattr(file_path_obj, "exists") and not file_size and file_path_obj.exists():
-            file_size = file_path_obj.stat().st_size
+        if not file_size:
+            managed_path = resolve_managed_path_or_none(file_path)
+            if managed_path is not None and managed_path.exists():
+                file_size = managed_path.stat().st_size
             
         file_ext = kwargs.pop("file_ext", file_path_obj.suffix.lower() if hasattr(file_path_obj, "suffix") else "")
 

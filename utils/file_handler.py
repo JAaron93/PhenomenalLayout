@@ -14,6 +14,8 @@ from typing import Any
 
 from fastapi import UploadFile
 
+from utils.path_safety import MANAGED_FILE_DIRS, resolve_managed_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,12 +24,12 @@ class FileHandler:
 
     def __init__(self) -> None:
         """Initialize file handler with directory paths and create required directories."""
-        self.upload_dir: str = "uploads"
-        self.download_dir: str = "downloads"
-        self.temp_dir: str = "temp"
+        self.upload_dir: str = MANAGED_FILE_DIRS[0]
+        self.download_dir: str = MANAGED_FILE_DIRS[1]
+        self.temp_dir: str = MANAGED_FILE_DIRS[2]
 
         # Create directories
-        for directory in [self.upload_dir, self.download_dir, self.temp_dir]:
+        for directory in (self.upload_dir, self.download_dir, self.temp_dir):
             os.makedirs(directory, exist_ok=True)
 
     def save_uploaded_file(self, file: Any) -> str:
@@ -40,9 +42,9 @@ class FileHandler:
 
             # Generate unique filename
             file_id = str(uuid.uuid4())
-            file_ext = Path(original_name).suffix
-            # Sanitize file extension
-            file_ext = file_ext.lower()[:10]  # Limit extension length
+            # _is_valid_file_type admits only '.pdf'; store the validated
+            # extension so client-supplied name fragments never reach disk.
+            file_ext = ".pdf"
             filename = f"{file_id}{file_ext}"
 
             file_path = os.path.join(self.upload_dir, filename)
@@ -54,8 +56,9 @@ class FileHandler:
                     content = file.read()
                     f.write(content)
             else:
-                # Gradio file object
-                shutil.copy2(file, file_path)
+                # Gradio file object / path from Gradio's temp storage
+                source_path = resolve_managed_path(getattr(file, "name", file))
+                shutil.copy2(source_path, file_path)
 
             logger.info(f"File saved: {filename}")
             return file_path
