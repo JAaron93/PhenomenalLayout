@@ -76,7 +76,7 @@ dependencies: vanilla ES modules + `fetch`.
 | Module | Responsibility | API endpoints consumed |
 | --- | --- | --- |
 | `api-client.js` | `fetch` wrapper; attaches `Authorization: Bearer <token>` or `X-API-Key`; uniform error surfacing | all `/api/v1/*` |
-| `auth.js` | Token entry, `sessionStorage` persistence (cleared on tab close; never `localStorage`), logout | token validated implicitly by first authenticated call |
+| `auth.js` | Token **and User ID** entry, `sessionStorage` persistence (cleared on tab close; never `localStorage`), logout. `user_id` is required on every user-scoped route and injected in the shape each route demands — path, query, or form. API-key callers authenticate as administrators and must still send the intended `user_id` explicitly; JWT callers send the ID matching their token | first authenticated call validates both |
 | `cost-estimator.js` | PDF upload → itemized quote | `POST /api/v1/cost/estimate` |
 | `onboarding.js` | 6-step GCP walkthrough modal, copyable `gcloud` script | `GET /api/v1/byok/onboarding-guide` |
 | `byok.js` | Credential set/validate/clear panel | `POST /api/v1/byok/credentials`, `GET /api/v1/byok/validate`, `DELETE /api/v1/byok/credentials` |
@@ -112,10 +112,10 @@ dependencies: vanilla ES modules + `fetch`.
 | Package | Action | Reason |
 | --- | --- | --- |
 | `gradio`, `gradio-client`, `hf-gradio`, `groovy`, `safehttpx`, `tomlkit`, `orjson`, `pytz`, `pandas` | Remove (transitive of Gradio) | UI replaced |
-| `pydub`, `audioop-lts` | Remove | Only Gradio consumed pydub; the PEP 594 shim dies with it |
+| `pydub`, `audioop-lts` | Remove (audioop-lts is a direct markered requirement in `requirements.in`; pydub is transitive) | Only Gradio consumed pydub; the PEP 594 shim dies with it |
 | `reportlab` | Remove from runtime; **keep in `requirements-dev.txt`** | Runtime consumer was the fallback engine only; tests keep reportlab as a fixture generator (dev-tree Pillow does not produce runtime Dependabot alerts) |
 | `pdf2image` | Remove | Both consumers removed (§4.1) |
-| `Pillow` | Remove (implicit) | No runtime importer remains; all 41 open Dependabot alerts close by removal |
+| `Pillow` | Remove direct requirement (the `pillow>=12.0,<13.0` line in `requirements.in`) | No runtime importer remains once gradio, pdf2image, and reportlab are gone; all 41 open Dependabot alerts close by removal |
 | `pydantic`, `numpy`, `spacy`, `psutil`, `rich`, `mcp`, `modal`, GCP stack | Unchanged | Independent consumers |
 
 `requirements.txt` regenerated via `uv pip compile requirements.in -o requirements.txt`; the
@@ -126,9 +126,11 @@ ritual retired in the same change).
 
 `handle_job_completion` returns a summary with `failed_pages` intact but no `can_fallback` and no
 local healing. The frontend surfaces a warning banner when `failed_pages > 0` offering
-**Re-run translation** (a fresh `POST /book/translate` submission for the same book; the old
-session's partial output remains downloadable). GCP remains the sole translation engine; no
-locally synthesized pages exist at any point.
+**Re-run translation**: a fresh `POST /book/translate` submission whose `book_id` is suffixed
+per attempt (e.g. `{book_id}-r2`, `-r3`, …). Because `book_id` is client-supplied form data that
+determines the GCS output prefix, each attempt writes to its own prefix — the original
+session's partial output stays downloadable at its original location after the re-run completes.
+GCP remains the sole translation engine; no locally synthesized pages exist at any point.
 
 ## 5. Design Decisions and Trade-offs
 

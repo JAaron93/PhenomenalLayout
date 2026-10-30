@@ -34,9 +34,9 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 
 ### A2. Frontend skeleton + auth (FR-08, NFR-01)
 **Depends on:** A1.
-- [ ] TDD red: Playwright spec asserting token entry persists to `sessionStorage`, never `localStorage`, and that an unauthenticated `/api/v1/vocabulary/{id}` call surfaces the 401 prompt.
+- [ ] TDD red: Playwright spec asserting token **and User ID** entry persist to `sessionStorage`, never `localStorage`; that an unauthenticated `/api/v1/vocabulary/{id}` call surfaces the 401 prompt; and that authenticated requests inject `user_id` in the shape each route requires (path for `/vocabulary/{id}` and `/book/jobs/{id}`, query for `/book/status`/`/book/resume`/`/book/download`/`/book/dual-pane`, form for `/book/translate`/`/book/pre-scan`/`/byok/credentials`).
 - [ ] Implement `static/index.html`, `static/styles.css`, `static/app.js` entry, `static/js/api-client.js`, `static/js/auth.js` (D1, D5).
-- [ ] Green: Playwright auth spec passes; `api-client` attaches `Authorization: Bearer` / `X-API-Key` on every call.
+- [ ] Green: Playwright auth spec passes; `api-client` attaches `Authorization: Bearer` / `X-API-Key` and the required `user_id` on every call.
 
 ### A3. Cost estimator + onboarding (FR-01, FR-02, US-01, US-02)
 **Depends on:** A2.
@@ -58,7 +58,7 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 
 ### A6. Translation lifecycle (FR-05, FR-06, NFR-03, US-05)
 **Depends on:** A2, B1 (summary shape without `can_fallback`).
-- [ ] TDD red: Playwright spec (Gherkin "Translation lifecycle" + "Failed pages are surfaced" scenarios) against mocked `/api/v1/book/*` endpoints: start → progress → completion → download enabled; `failed_pages > 0` renders the warning banner with a working Re-run action; polling provably stops on done and on error.
+- [ ] TDD red: Playwright spec (Gherkin "Translation lifecycle" + "Failed pages are surfaced" scenarios) against mocked `/api/v1/book/*` endpoints: start → progress → completion → download enabled; `failed_pages > 0` renders the warning banner with a working Re-run action; the Re-run submission posts a fresh per-attempt `book_id` (e.g. `{book_id}-r2`) while the original session's download mock continues resolving its original output; polling provably stops on done and on error.
 - [ ] Implement `static/js/translate.js` and `static/js/polling.js` (D1; reconnection via `resume`).
 - [ ] Green: spec passes; no polling interval remains active after terminal states (NFR-03).
 
@@ -119,7 +119,7 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 
 ### C3. Dependency and lockfile removal (FR-12)
 **Depends on:** A1, A8, B1–B3, C1, C2 (join point).
-- [ ] Update `requirements.in`: remove `gradio`, `pdf2image`, `reportlab`; keep everything else; regenerate `requirements.txt` with `uv pip compile requirements.in -o requirements.txt` (Python 3.13).
+- [ ] Update `requirements.in`: remove the direct requirement lines for `gradio`, `pdf2image`, `reportlab`, **`pillow`, and `audioop-lts`**; keep everything else; regenerate `requirements.txt` with `uv pip compile requirements.in -o requirements.txt` (Python 3.13).
 - [ ] Verify `audioop-lts`, `pydub`, `pillow`, and the Gradio cluster are absent from the regenerated lockfile; `uv pip check` clean; resolver succeeds on `--python-platform x86_64-unknown-linux-gnu` too.
 - [ ] Move `reportlab>=5.0.1,<6.0` into `requirements-dev.txt` (already present — confirm) and delete the duplicate runtime line.
 - [ ] Hermetic install + `python -c "import app"` succeeds with Pillow absent (NFR-07, flips T0's red baseline to green).

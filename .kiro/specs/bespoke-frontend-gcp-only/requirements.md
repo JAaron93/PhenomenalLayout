@@ -31,14 +31,23 @@ Status: DRAFT · 2026-10-29 · Derived from `design.md` (v1). Traceability: FR/N
   /api/v1/book/download/{session_id}`; `GET /api/v1/book/jobs/{user_id}` lists resumable jobs;
   reconnection after browser close uses `GET /api/v1/book/resume/{session_id}`. *(US-05)*
 - **FR-06 Failed-pages surfacing**: when the completion summary reports `failed_pages > 0`, the
-  UI shows a warning banner with the count and a **Re-run translation** action that submits a
-  fresh batch for the same book. No fallback-translate affordance exists anywhere in the UI.
-  *(US-05)*
+  UI shows a warning banner with the count and a **Re-run translation** action. The Re-run
+  submission carries a new per-attempt `book_id` (e.g. `{book_id}-r{attempt}`) so each attempt
+  writes to a distinct GCS output prefix; after a re-run completes, the original session's
+  download still returns the original output. No fallback-translate affordance exists anywhere
+  in the UI. *(US-05)*
 - **FR-07 Dual-pane viewer**: `POST /api/v1/book/dual-pane/{session_id}` renders synchronized
   German/English text pairs with page navigation; text-only (no page thumbnails). *(US-06)*
-- **FR-08 Authentication**: a token entry field accepts an API key or JWT; every `/api/v1` call
-  attaches `Authorization: Bearer <token>` or `X-API-Key`; 401/403 responses surface a
-  re-authentication prompt. *(US-03–US-06)*
+- **FR-08 Authentication & identity**: a token entry field accepts an API key or JWT, and a
+  **User ID** field is captured alongside it (both persisted in `sessionStorage`). Every
+  user-scoped request carries `user_id` in the shape the route requires — path
+  (`/vocabulary/{user_id}`, `/book/jobs/{user_id}`), query (`/book/status`, `/book/resume`,
+  `/book/download`, `/book/dual-pane`), or form (`/book/translate`, `/book/pre-scan`,
+  `/byok/credentials`). API-key callers authenticate as administrators and must still send the
+  intended `user_id` explicitly; JWT callers send the ID matching their token. Every `/api/v1`
+  call attaches `Authorization: Bearer <token>` or `X-API-Key`; 401/403 responses surface a
+  re-authentication prompt. An authenticated request test asserts the required query, form, and
+  path values per route. *(US-03–US-06)*
 
 ### Removal requirements
 
@@ -53,9 +62,9 @@ Status: DRAFT · 2026-10-29 · Derived from `design.md` (v1). Traceability: FR/N
 - **FR-11 Rasterization deletion**: the pdf_quality_validator tesseract OCR recovery path and
   `dual_pane_viewer._render_page_image` are removed; `pdf2image` has no remaining importers.
 - **FR-12 Dependency removal**: `requirements.in`/`requirements.txt` drop `gradio` and all
-  Gradio-transitive packages listed in design §4.3, plus `reportlab`, `pdf2image`, `Pillow`,
-  `pydub`, and `audioop-lts`; the lockfile regenerates cleanly with `uv pip compile`;
-  `reportlab` moves to `requirements-dev.txt` (test fixtures only).
+  Gradio-transitive packages listed in design §4.3, plus `reportlab`, `pdf2image`, and the
+  **direct** `pillow` and `audioop-lts` requirement lines; the lockfile regenerates cleanly with
+  `uv pip compile`; `reportlab` moves to `requirements-dev.txt` (test fixtures only).
 
 ### Non-Functional Requirements
 
@@ -95,7 +104,8 @@ Feature: Bespoke frontend replaces Gradio UI
     Given a batch translation completed with failed_pages greater than 0
     When the completion summary is displayed
     Then a warning banner shows the failed-page count
-    And a "Re-run translation" action submits a fresh batch for the same book
+    And a "Re-run translation" action submits a fresh batch under a new per-attempt book_id
+    And the original session's download still returns the original output after the re-run finishes
     And no locally synthesized fallback page is offered or generated
 
   Scenario: Token handling (US-03, FR-08, NFR-01)
