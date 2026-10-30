@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from utils.path_safety import (
+    require_filename_component,
     resolve_managed_path,
     resolve_managed_path_or_none,
     resolve_within,
@@ -28,8 +29,20 @@ class TestSafeComponent:
         with pytest.raises(ValueError, match="path component"):
             safe_component("   ")
 
-    def test_truncates_long_identifiers(self) -> None:
-        assert len(safe_component("x" * 500)) == 128
+    def test_preserves_long_identifiers_unchanged(self) -> None:
+        long_id = "x" * 500
+        assert safe_component(long_id) == long_id
+
+
+class TestRequireFilenameComponent:
+    def test_accepts_safe_segments(self) -> None:
+        assert require_filename_component("user_1.json") == "user_1.json"
+        assert require_filename_component("translator-01_klages_1929.json")
+
+    def test_rejects_separators_and_dot_names(self) -> None:
+        for bad in ("a/b", "a\\b", "..", ".", "", "my book"):
+            with pytest.raises(ValueError, match="Unsafe path component"):
+                require_filename_component(bad)
 
 
 class TestResolveWithin:

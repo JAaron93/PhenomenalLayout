@@ -26,19 +26,31 @@ MANAGED_FILE_DIRS: Final[tuple[str, ...]] = ("uploads", "downloads", "temp")
 
 _NON_IDENTIFIER_CHARS_RE: Final = re.compile(r"[^A-Za-z0-9_-]")
 _FILENAME_COMPONENT_RE: Final = re.compile(r"[A-Za-z0-9._-]+")
-_MAX_COMPONENT_LENGTH: Final = 128
 
 
 def safe_component(name: str) -> str:
     """Sanitize *name* into a single identifier path component.
 
     Preserves the legacy ``[^A-Za-z0-9_-] -> _`` mapping used by the vocabulary
-    and glossary stores so previously persisted files stay reachable.
+    and glossary stores (without truncation) so previously persisted files
+    stay reachable and distinct identifiers remain distinct.
     """
-    cleaned = _NON_IDENTIFIER_CHARS_RE.sub("_", name.strip())[:_MAX_COMPONENT_LENGTH]
+    cleaned = _NON_IDENTIFIER_CHARS_RE.sub("_", name.strip())
     if not cleaned:
         raise ValueError(f"Identifier cannot be used as a path component: {name!r}")
     return cleaned
+
+
+def require_filename_component(name: str) -> str:
+    """Validate that *name* is a single safe filename segment and return it.
+
+    Raises:
+        ValueError: If *name* is empty, a dot-only name, or contains
+            characters outside ``[A-Za-z0-9._-]``.
+    """
+    if not name or name in {".", ".."} or not _FILENAME_COMPONENT_RE.fullmatch(name):
+        raise ValueError(f"Unsafe path component: {name!r}")
+    return name
 
 
 def _managed_roots() -> list[str]:
@@ -65,12 +77,7 @@ def resolve_within(base_dir: Path | str, *components: str) -> Path:
     if not components:
         raise ValueError("At least one path component is required")
     for component in components:
-        if (
-            not component
-            or component in {".", ".."}
-            or not _FILENAME_COMPONENT_RE.fullmatch(component)
-        ):
-            raise ValueError(f"Unsafe path component: {component!r}")
+        require_filename_component(component)
     base_real = os.path.realpath(base_dir)
     resolved = os.path.realpath(os.path.join(base_real, *components))
     if not resolved.startswith(base_real + os.sep):
