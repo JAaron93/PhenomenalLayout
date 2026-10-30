@@ -42,12 +42,13 @@ Status: DRAFT · 2026-10-29 · Derived from `design.md` (v1). Traceability: FR/N
   **User ID** field is captured alongside it (both persisted in `sessionStorage`). Every
   user-scoped request carries `user_id` in the shape the route requires — path
   (`/vocabulary/{user_id}`, `/book/jobs/{user_id}`), query (`/book/status`, `/book/resume`,
-  `/book/download`, `/book/dual-pane`), or form (`/book/translate`, `/book/pre-scan`,
-  `/byok/credentials`). API-key callers authenticate as administrators and must still send the
-  intended `user_id` explicitly; JWT callers send the ID matching their token. Every `/api/v1`
-  call attaches `Authorization: Bearer <token>` or `X-API-Key`; 401/403 responses surface a
-  re-authentication prompt. An authenticated request test asserts the required query, form, and
-  path values per route. *(US-03–US-06)*
+  `/book/download`, `/book/dual-pane`, `/byok/validate`, `DELETE /byok/credentials`), form data
+  (`/book/translate`, `/book/pre-scan`), or JSON body (`POST /byok/credentials` sends `user_id`,
+  `project_id`, `bucket_name`, and `sa_json`). API-key callers authenticate as administrators
+  and must still send the intended `user_id` explicitly; JWT callers send the ID matching their
+  token. Every `/api/v1` call attaches `Authorization: Bearer <token>` or `X-API-Key`;
+  401/403 responses surface a re-authentication prompt. An authenticated request test asserts
+  the required query, form, JSON, and path values per route. *(US-03–US-06)*
 
 ### Removal requirements
 

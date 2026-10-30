@@ -34,7 +34,7 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 
 ### A2. Frontend skeleton + auth (FR-08, NFR-01)
 **Depends on:** A1.
-- [ ] TDD red: Playwright spec asserting token **and User ID** entry persist to `sessionStorage`, never `localStorage`; that an unauthenticated `/api/v1/vocabulary/{id}` call surfaces the 401 prompt; and that authenticated requests inject `user_id` in the shape each route requires (path for `/vocabulary/{id}` and `/book/jobs/{id}`, query for `/book/status`/`/book/resume`/`/book/download`/`/book/dual-pane`, form for `/book/translate`/`/book/pre-scan`/`/byok/credentials`).
+- [ ] TDD red: Playwright spec asserting token **and User ID** entry persist to `sessionStorage`, never `localStorage`; that an unauthenticated `/api/v1/vocabulary/{id}` call surfaces the 401 prompt; and that authenticated requests inject `user_id` in the shape each route requires (path for `/vocabulary/{id}` and `/book/jobs/{id}`, query for `/book/status`/`/book/resume`/`/book/download`/`/book/dual-pane`/`/byok/validate`/`DELETE /byok/credentials`, form data for `/book/translate`/`/book/pre-scan`, JSON body for `POST /byok/credentials`).
 - [ ] Implement `static/index.html`, `static/styles.css`, `static/app.js` entry, `static/js/api-client.js`, `static/js/auth.js` (D1, D5).
 - [ ] Green: Playwright auth spec passes; `api-client` attaches `Authorization: Bearer` / `X-API-Key` and the required `user_id` on every call.
 
