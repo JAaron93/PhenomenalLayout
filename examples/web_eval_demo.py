@@ -27,7 +27,6 @@ class SampleReport(TypedDict):
 
 def demonstrate_web_eval_agent() -> None:
     """Demonstrate the web-eval-agent capabilities."""
-    api_key: str = os.getenv("OP_API_KEY", "[API_KEY_NOT_SET]")
     # Resolve demo URL from environment with sensible default
     demo_url: str = os.getenv("WEB_EVAL_DEMO_URL") or DEFAULT_DEMO_URL
     print("🚀 Web Eval Agent MCP Server Demonstration")
@@ -36,14 +35,8 @@ def demonstrate_web_eval_agent() -> None:
     # Simulate the web-eval-agent configuration
     print("\n📋 Configuration:")
     print("  • Server Name: github.com/Operative-Sh/web-eval-agent")
-    # Never print or hash key material; reveal only whether a key is present.
-    trimmed_key = api_key.strip()
-    api_key_display = (
-        "set"
-        if trimmed_key and trimmed_key != "[API_KEY_NOT_SET]"
-        else "not set"
-    )
-    print(f"  • API Key: {api_key_display}")
+    # Key material is never printed, hashed, or derived into output.
+    print("  • API Key: configured via the OP_API_KEY environment variable")
     print(
         "  • Command: "
         "uvx --refresh-package webEvalAgent --from "
