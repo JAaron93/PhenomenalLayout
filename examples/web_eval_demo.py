@@ -5,7 +5,6 @@ This script shows how the web-eval-agent can be used for automated web
 evaluation.
 """
 
-import hashlib
 import json
 import os
 import time
@@ -37,14 +36,13 @@ def demonstrate_web_eval_agent() -> None:
     # Simulate the web-eval-agent configuration
     print("\n📋 Configuration:")
     print("  • Server Name: github.com/Operative-Sh/web-eval-agent")
-    # Use non-reversible fingerprint to avoid leaking any key substring
+    # Never print or hash key material; reveal only whether a key is present.
     trimmed_key = api_key.strip()
-    if not trimmed_key or trimmed_key == "[API_KEY_NOT_SET]":
-        api_key_display = "not set"
-    else:
-        # Compute SHA-256 fingerprint and show first 8 hex chars
-        fingerprint = hashlib.sha256(trimmed_key.encode()).hexdigest()[:8]
-        api_key_display = f"set (fingerprint: {fingerprint})"
+    api_key_display = (
+        "set"
+        if trimmed_key and trimmed_key != "[API_KEY_NOT_SET]"
+        else "not set"
+    )
     print(f"  • API Key: {api_key_display}")
     print(
         "  • Command: "
