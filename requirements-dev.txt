@@ -16,3 +16,4 @@ black==26.10.1
 # Optional: richer output and sharding (dev-only)
 pytest-xdist==3.8.0
 pytest-rerunfailures==16.7
+pytest-playwright==0.10.0

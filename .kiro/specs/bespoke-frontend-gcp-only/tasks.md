@@ -22,58 +22,60 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 
 ### T0. Branch and harness
 **Depends on:** nothing.
-- [ ] Create feature branch `feat/bespoke-frontend-gcp-only` from `origin/main` in an isolated worktree.
-- [ ] Create a Pillow-free baseline proof: `python -c "import app"` currently FAILS (documents the pre-change coupling; flipped by C3).
-- [ ] Add `pytest-playwright` to `requirements-dev.txt` and install Chromium for the sandbox (`playwright install chromium`).
+- [x] Create feature branch `feat/bespoke-frontend-gcp-only` from `origin/main` in an isolated worktree.
+- [x] Create a Pillow-free baseline proof: `python -c "import app"` currently FAILS (documents the pre-change coupling; flipped by C3).
+- [x] Add `pytest-playwright` to `requirements-dev.txt` and install Chromium for the sandbox (`playwright install chromium`).
 
 ### A1. App rewiring (FR-09 first half)
 **Depends on:** T0.
-- [ ] TDD red: rewrite the mount test to assert `/` serves the SPA shell and `/ui` returns 404.
-- [ ] Remove `import gradio as gr`, `create_gradio_interface`, and the `/ui` mount from `app.py`; `main()` serves `static/index.html` at `/` via the existing `StaticFiles` mount (`html=True`).
-- [ ] Green: mount test passes; repository-wide grep shows zero `gradio` imports outside deleted files.
+- [x] TDD red: rewrite the mount test to assert `/` serves the SPA shell and `/ui` returns 404.
+- [x] Remove `import gradio as gr`, `create_gradio_interface`, and the `/ui` mount from `app.py`; `main()` serves `static/index.html` at `/` via the existing `StaticFiles` mount (`html=True`).
+- [x] Green: mount test passes; repository-wide grep shows zero `gradio` imports outside deleted files.
 
 ### A2. Frontend skeleton + auth (FR-08, NFR-01)
 **Depends on:** A1.
-- [ ] TDD red: Playwright spec asserting token **and User ID** entry persist to `sessionStorage`, never `localStorage`; that an unauthenticated `/api/v1/vocabulary/{id}` call surfaces the 401 prompt; and that authenticated requests inject `user_id` in the shape each route requires (path for `/vocabulary/{id}` and `/book/jobs/{id}`, query for `/book/status`/`/book/resume`/`/book/download`/`/book/dual-pane`/`/byok/validate`/`DELETE /byok/credentials`, form data for `/book/translate`/`/book/pre-scan`, JSON body for `POST /byok/credentials`).
-- [ ] Implement `static/index.html`, `static/styles.css`, `static/app.js` entry, `static/js/api-client.js`, `static/js/auth.js` (D1, D5).
-- [ ] Green: Playwright auth spec passes; `api-client` attaches `Authorization: Bearer` / `X-API-Key` and the required `user_id` on every call.
+- [x] TDD red: Playwright spec asserting token **and User ID** entry persist to `sessionStorage`, never `localStorage`; that an unauthenticated `/api/v1/vocabulary/{id}` call surfaces the 401 prompt; and that authenticated requests inject `user_id` in the shape each route requires (path for `/vocabulary/{id}` and `/book/jobs/{id}`, query for `/book/status`/`/book/resume`/`/book/download`/`/book/dual-pane`/`/byok/validate`/`DELETE /byok/credentials`, form data for `/book/translate`/`/book/pre-scan`, JSON body for `POST /byok/credentials`).
+- [x] Implement `static/index.html`, `static/styles.css`, `static/app.js` entry, `static/js/api-client.js`, `static/js/auth.js` (D1, D5).
+- [x] Green: Playwright auth spec passes; `api-client` attaches `Authorization: Bearer` / `X-API-Key` and the required `user_id` on every call.
 
 ### A3. Cost estimator + onboarding (FR-01, FR-02, US-01, US-02)
 **Depends on:** A2.
-- [ ] TDD red: Playwright spec uploads a fixture PDF and asserts the itemized quote (per-page rate, staging, retention, tolerance) renders without authentication; onboarding modal renders six steps with a copyable `gcloud` script.
-- [ ] Implement `static/js/cost-estimator.js` and `static/js/onboarding.js`.
-- [ ] Green: both specs pass; client-side `.pdf` filter present (NFR-02).
+- [x] TDD red: Playwright spec uploads a fixture PDF and asserts the itemized quote (per-page rate, staging, retention, tolerance) renders without authentication; onboarding modal renders six steps with a copyable `gcloud` script.
+- [x] Implement `static/js/cost-estimator.js` and `static/js/onboarding.js`.
+- [x] Green: both specs pass; client-side `.pdf` filter present (NFR-02).
 
 ### A4. BYOK panel (FR-03, US-03)
 **Depends on:** A2.
-- [ ] TDD red: Playwright spec sets credentials, observes dual-validation result, clears credentials, and asserts no credential value persists in browser storage (NFR-01).
-- [ ] Implement `static/js/byok.js`.
-- [ ] Green: spec passes; cross-user 403 responses surface the re-auth/denied prompt (FR-08).
+- [x] TDD red: Playwright spec sets credentials, observes dual-validation result, clears credentials, and asserts no credential value persists in browser storage (NFR-01).
+- [x] Implement `static/js/byok.js`.
+- [x] Green: spec passes; cross-user 403 responses surface the re-auth/denied prompt (FR-08).
 
 ### A5. Pre-scan & terminology (FR-04, US-04)
 **Depends on:** A2.
-- [ ] TDD red: Playwright spec runs a pre-scan on a fixture PDF, asserts the Fraktur badge, neologism list, and pre-filled terms render; asserts vocabulary save/bulk/import/export round-trips against the mocked store.
-- [ ] Implement `static/js/prescan.js`.
-- [ ] Green: spec passes.
+- [x] TDD red: Playwright spec runs a pre-scan on a fixture PDF, asserts the Fraktur badge, neologism list, and pre-filled terms render; asserts vocabulary save/bulk/import/export round-trips against the mocked store.
+- [x] Implement `static/js/prescan.js`.
+- [x] Green: spec passes.
 
 ### A6. Translation lifecycle (FR-05, FR-06, NFR-03, US-05)
 **Depends on:** A2, B1 (summary shape without `can_fallback`).
-- [ ] TDD red: Playwright spec (Gherkin "Translation lifecycle" + "Failed pages are surfaced" scenarios) against mocked `/api/v1/book/*` endpoints: start → progress → completion → download enabled; `failed_pages > 0` renders the warning banner with a working Re-run action; the Re-run submission posts a fresh per-attempt `book_id` (e.g. `{book_id}-r2`) while the original session's download mock continues resolving its original output; polling provably stops on done and on error.
-- [ ] Implement `static/js/translate.js` and `static/js/polling.js` (D1; reconnection via `resume`).
-- [ ] Green: spec passes; no polling interval remains active after terminal states (NFR-03).
+- [x] TDD red: Playwright spec (Gherkin "Translation lifecycle" + "Failed pages are surfaced" scenarios) against mocked `/api/v1/book/*` endpoints: start → progress → completion → download enabled; `failed_pages > 0` renders the warning banner with a working Re-run action; the Re-run submission posts a fresh per-attempt `book_id` (e.g. `{book_id}-r2`) while the original session's download mock continues resolving its original output; polling provably stops on done and on error.
+- [x] Implement `static/js/translate.js` and `static/js/polling.js` (D1; reconnection via `resume`).
+- [x] Green: spec passes; no polling interval remains active after terminal states (NFR-03).
 
 ### A7. Dual-pane viewer (FR-07, US-06)
 **Depends on:** A2, C2 (text-only pairs).
-- [ ] TDD red: Playwright spec renders German/English pairs with page navigation from the dual-pane route.
-- [ ] Implement `static/js/dualpane.js`.
-- [ ] Green: spec passes; no image/thumbnail affordance exists.
+- [x] TDD red: Playwright spec renders German/English pairs with page navigation from the dual-pane route.
+- [x] Implement `static/js/dualpane.js`.
+- [x] Green: spec passes; no image/thumbnail affordance exists.
 
 ### A8. Delete Gradio UI code
 **Depends on:** A2–A7 all green (feature parity established).
-- [ ] Delete `ui/gradio_interface.py`, `tests/test_gradio_interface.py`, `tests/test_ui_gradio.py`; update `pyproject.toml` package discovery if it references `ui*`.
-- [ ] Repository grep: zero `gradio` imports; `/ui` route test asserted 404 (from A1).
+- [x] Delete `ui/gradio_interface.py`, `tests/test_gradio_interface.py`, `tests/test_ui_gradio.py`; update `pyproject.toml` package discovery if it references `ui*`.
+- [x] Repository grep: zero `gradio` imports; `/ui` route test asserted 404 (from A1).
 
 ---
+
+> Track A validation record (2026-10-30): default suite `pytest -n auto` — 777 passed, 13 skipped, coverage 70.90% (gate green) — across three consecutive runs after fixing a latent stale-`api.routes` binding in `tests/test_memory_api_integration.py` (added `api.routes` to its reload set; stale router bindings served default rate-limit constants instead of the patched ones). Browser specs run via `pytest -m frontend tests/frontend` (green twice) and are excluded from default runs via the `frontend` marker because pytest-playwright and pytest-asyncio cannot share one process.
 
 ## Track B — Fallback engine removal (FR-10, D2)
 
@@ -92,7 +94,7 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 ### B3. Fallback service + docs
 **Depends on:** B1.
 - [ ] Delete `services/fallback_translator.py` and `tests/test_fallback_translator.py`; delete `docs/FALLBACK_TRANSLATION_LIMITATIONS.md`.
-- [ ] Update `pyproject.toml` discovery excludes if needed.
+- [x] Update `pyproject.toml` discovery excludes if needed.
 - [ ] Grep: zero references to `fallback_translator`/`FallbackPageTranslator` outside this spec.
 
 ### B4. Rules, ADR, and AGENTS.md (same-change rule curation)
