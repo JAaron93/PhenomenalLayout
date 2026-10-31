@@ -37,7 +37,6 @@ from services.book_translation_orchestrator import (
     BookScanResult,
     BookTranslationOrchestrator,
     CompletionSummary,
-    FallbackResult,
 )
 
 from api.memory_routes import router as memory_router
@@ -1752,55 +1751,6 @@ async def download_translated_book_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Download failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@api_router.post("/book/fallback-translate")
-async def fallback_translate_endpoint(
-    user_id: str = Form(...),
-    session_id: str = Form(...),
-    failed_page_indices: str | None = Form(None),
-    source_lang: str = Form("de"),
-    target_lang: str = Form("en"),
-    file: UploadFile = File(...),
-    current_user: dict[str, Any] = Depends(get_current_user_dependency),
-) -> dict[str, Any]:
-    """Trigger plaintext fallback extraction, translation, and splicing for failed layout pages."""
-    _verify_resource_ownership(user_id, current_user)
-    try:
-        contents = await file.read()
-        indices: list[int] | None = None
-        if failed_page_indices:
-            indices = [
-                int(p.strip())
-                for p in failed_page_indices.split(",")
-                if p.strip().isdigit()
-            ]
-
-        orch = get_book_orchestrator()
-        _verify_job_ownership(session_id, user_id, orch)
-        res = orch.trigger_fallback_page_translation(
-            user_id=user_id,
-            session_id=session_id,
-            source_pdf=contents,
-            failed_page_indices=indices,
-            source_lang=source_lang,
-            target_lang=target_lang,
-        )
-        return {
-            "session_id": res.session_id,
-            "failed_pages_count": res.failed_pages_count,
-            "spliced_output_gcs_uri": res.spliced_output_gcs_uri,
-            "success": res.success,
-        }
-    except HTTPException:
-        raise
-    except PermissionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
-    except Exception as exc:
-        logger.error("Fallback translation failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 

@@ -81,27 +81,27 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 
 ### B1. Orchestrator completion flow
 **Depends on:** T0.
-- [ ] TDD red: rewrite `handle_job_completion` tests — summary carries `failed_pages`, no `can_fallback` attribute (assert `not hasattr`); delete fallback-workflow tests.
-- [ ] Remove the fallback branch from `services/book_translation_orchestrator.py`, `trigger_fallback_page_translation`, and the `FallbackPageTranslator` construction/parameter.
-- [ ] Green: orchestrator suite passes without any fallback symbol.
+- [x] TDD red: rewrite `handle_job_completion` tests — summary carries `failed_pages`, no `can_fallback` attribute (assert `not hasattr`); delete fallback-workflow tests.
+- [x] Remove the fallback branch from `services/book_translation_orchestrator.py`, `trigger_fallback_page_translation`, and the `FallbackPageTranslator` construction/parameter.
+- [x] Green: orchestrator suite passes without any fallback symbol.
 
 ### B2. API route + registry
 **Depends on:** B1.
-- [ ] TDD red: route-inventory test asserts `POST /api/v1/book/fallback-translate` returns 404; `services/__init__.py` exports assert the fallback symbols are gone.
-- [ ] Delete the route handler, `FallbackResult` import usage in `api/routes.py`, and the availability-registry exports in `services/__init__.py` (§2.10 symmetry upheld by removal).
-- [ ] Green: app imports cleanly; route inventory and registry tests pass.
+- [x] TDD red: route-inventory test asserts `POST /api/v1/book/fallback-translate` returns 404; `services/__init__.py` exports assert the fallback symbols are gone.
+- [x] Delete the route handler, `FallbackResult` import usage in `api/routes.py`, and the availability-registry exports in `services/__init__.py` (§2.10 symmetry upheld by removal).
+- [x] Green: app imports cleanly; route inventory and registry tests pass.
 
 ### B3. Fallback service + docs
 **Depends on:** B1.
-- [ ] Delete `services/fallback_translator.py` and `tests/test_fallback_translator.py`; delete `docs/FALLBACK_TRANSLATION_LIMITATIONS.md`.
+- [x] Delete `services/fallback_translator.py` and `tests/test_fallback_translator.py`; delete `docs/FALLBACK_TRANSLATION_LIMITATIONS.md`.
 - [x] Update `pyproject.toml` discovery excludes if needed.
-- [ ] Grep: zero references to `fallback_translator`/`FallbackPageTranslator` outside this spec.
+- [x] Grep: zero references to `fallback_translator`/`FallbackPageTranslator` outside this spec.
 
 ### B4. Rules, ADR, and AGENTS.md (same-change rule curation)
 **Depends on:** B1–B3.
-- [ ] Add `docs/adr/0002-bespoke-frontend-gcp-only-translation.md` recording D1–D6 with the #14018/#14005 upstream context.
-- [ ] Rewrite AGENTS.md §2.12 → "GCP-Only Translation" (no local fallback; failed pages surfaced with re-run); delete the Unicode CID invariant rows that only governed the fallback; remove §6.4 Gradio timer contracts and add the frontend polling-hygiene equivalent (NFR-03); add Gradio to the §4 deny list as a prohibited reintroduction.
-- [ ] Rewrite `.greptile/rules.md` §3 (Gradio section) and add "do not request Gradio/fallback restoration" guardrails; update the README migration table and remove the UI screenshots/sections describing `/ui`.
+- [x] Add `docs/adr/0002-bespoke-frontend-gcp-only-translation.md` recording D1–D6 with the #14018/#14005 upstream context.
+- [x] Rewrite AGENTS.md §2.12 → "GCP-Only Translation" (no local fallback; failed pages surfaced with re-run); delete the Unicode CID invariant rows that only governed the fallback; remove §6.4 Gradio timer contracts and add the frontend polling-hygiene equivalent (NFR-03); add Gradio to the §4 deny list as a prohibited reintroduction.
+- [x] Rewrite `.greptile/rules.md` §3 (Gradio section) and add "do not request Gradio/fallback restoration" guardrails; update the README migration table and remove the UI screenshots/sections describing `/ui`.
 
 ---
 

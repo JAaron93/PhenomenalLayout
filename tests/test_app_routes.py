@@ -28,7 +28,6 @@ from services.batch_job_recovery import ActiveJobState
 from services.book_translation_orchestrator import (
     BookScanResult,
     CompletionSummary,
-    FallbackResult,
 )
 from services.byok_credentials_manager import ValidationResult
 from services.cost_estimator import CostQuote
@@ -327,32 +326,32 @@ class TestScholarlyDeliveryRoutes:
         assert parsed.hostname is not None
         assert parsed.hostname == "drive.google.com"
 
-    @patch("api.routes.get_book_orchestrator")
-    def test_fallback_translation_route(
-        self, mock_get_orch: MagicMock, client: TestClient
-    ) -> None:
-        mock_orch = MagicMock()
-        mock_orch.trigger_fallback_page_translation.return_value = FallbackResult(
-            session_id="sess-xyz",
-            failed_pages_count=2,
-            translated_pages=[],
-            spliced_output_gcs_uri="gs://bucket/outputs/book/spliced.pdf",
-            success=True,
-        )
-        mock_get_orch.return_value = mock_orch
-
-        pdf_bytes = _create_minimal_pdf_bytes(pages=2)
+    def test_fallback_translation_route_removed(self, client: TestClient) -> None:
+        """Assert POST /api/v1/book/fallback-translate is deleted and returns 404 (FR-10, D2)."""
+        pdf_bytes = _create_minimal_pdf_bytes(pages=1)
         response = client.post(
             "/api/v1/book/fallback-translate",
             data={
                 "user_id": "user-123",
                 "session_id": "sess-xyz",
-                "failed_page_indices": "1,2",
             },
             files={"file": ("book.pdf", pdf_bytes, "application/pdf")},
         )
-        assert response.status_code == 200
-        assert response.json()["success"] is True
+        assert response.status_code == 404
+
+    def test_services_registry_pruned_of_fallback_symbols(self) -> None:
+        """Assert services export registry has pruned fallback symbols (§2.10 symmetry)."""
+        import services
+
+        removed_symbols = [
+            "FallbackPageTranslator",
+            "PageText",
+            "TranslatedPage",
+            "FallbackResult",
+        ]
+        for symbol in removed_symbols:
+            assert symbol not in services.__all__
+            assert not hasattr(services, symbol)
 
     @patch("api.routes.get_book_orchestrator")
     def test_dual_pane_view_route(
@@ -434,7 +433,6 @@ class TestScholarlyDeliveryRoutes:
             translated_pages=10,
             failed_pages=0,
             is_done=True,
-            can_fallback=False,
             output_gcs_uri="gs://b/outputs/sess-done/translated.pdf",
         )
         mock_orch.download_translated_book.return_value = (
@@ -447,6 +445,7 @@ class TestScholarlyDeliveryRoutes:
         res = client.post("/api/v1/book/complete/sess-done?user_id=user-123")
         assert res.status_code == 200
         assert res.json()["is_done"] is True
+        assert "can_fallback" not in res.json()
 
         # Download
         res = client.get("/api/v1/book/download/sess-done?user_id=user-123")

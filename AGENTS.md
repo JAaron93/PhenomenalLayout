@@ -78,15 +78,10 @@ The application runs serverless on **Modal Labs** under a **Bring Your Own Key (
 * **Versioned GCS Staging & Rollback Preservation**: Staged session TSVs in GCS MUST use versioned object names (`.../{slot}_{version}.tsv`) so that uploading replacement terminology NEVER overwrites the older known-good TSV in GCS. If replacement creation fails, the system MUST execute automated rollback restoration using the preserved previous GCS input URI.
 * **Cryptographic Token Session Isolation**: Session prefix matching MUST incorporate a deterministic 16-character SHA-256 token (`sess-{slug}-{token}-a`) to prevent false prefix matches between sibling sessions (e.g., preventing `book-101` from deleting `book-101-extra`).
 
-### 2.12 Fallback Plaintext Translation & Unicode Typography Invariants
-* **100% Content Completeness (Plaintext Scope)**: When Google Cloud Document Translation encounters layout parsing failures (`failed_pages > 0`), the secondary fallback engine (`FallbackPageTranslator`) is invoked strictly to guarantee 100% translation completeness so the scholar misses no translated text. The fallback page MUST be synthesized as clean, readable plaintext. It is explicitly exempted from attempting complex multi-column geometric replication or vector diagram reconstruction, which was deprecated under §4.
-* **Strict 1-to-1 Physical Page Alignment**: Each failed source page MUST be replaced by exactly one synthesized fallback page. Dynamic page height expansion MUST be used if needed to accommodate large text blocks with proper leading ($\ge 11.0\text{pt}$), ensuring physical page numbering matches the original German edition for synchronized side-by-side verification in `DualPaneViewerController`.
-* **Zero Transliteration / Substitution (Unicode Fidelity)**: Fallback rendering MUST preserve all Unicode characters (Greek, Cyrillic, Hebrew, Arabic, German umlauts, Fraktur ligatures, mathematical symbols, and CJK ideographs) verbatim. Transliterating non-Latin text into ASCII approximations (e.g. `бытие` $\rightarrow$ `bytie`) or placeholder tokens (`[CJK UNIFIED IDEOGRAPH...]`) is strictly prohibited.
-* **Dynamic Sequential 16-Bit CID Allocation & Format 12 TrueType CMap Parsing**: When generating PDF composite Type 0 fonts (`/CIDFontType2`) via `pypdf`:
-  1. The engine MUST parse both format 4 (BMP) and format 12 (32-bit supplementary planes) `cmap` subtables from embedded font programs.
-  2. The engine MUST dynamically allocate unique 16-bit sequential CIDs ($1 \dots N$) to all unique characters on the page. Emitting raw UTF-16 code units directly into `/Identity-H` content streams is strictly prohibited because it fragments supplementary Unicode characters ($> \text{U+FFFF}$) into two separate surrogate CIDs.
-  3. The engine MUST generate dynamic big-endian `/CIDToGIDMap` stream objects mapping each dynamic CID to its TrueType glyph ID, and `/W` arrays with exact advance widths.
-* **Fallback Limitations Documentation**: Any modification to the fallback translation engine MUST keep `docs/FALLBACK_TRANSLATION_LIMITATIONS.md` up to date, documenting font glyph coverage limits, lack of vector diagram reproduction, and table line-wrapping behaviors.
+### 2.12 GCP-Only Translation & Failed Page Re-run Invariant
+* **Sole Translation Pipeline (GCP-Only, D2)**: Google Cloud Document Translation Advanced (v3) is the exclusive translation engine for PhenomenalLayout. The legacy local plaintext fallback engine (`services/fallback_translator.py`) has been permanently retired under ADR 0002.
+* **Transparent Failed Page Surfacing**: When batch document translation reports partial layout parsing failures (`failed_pages > 0`), the system MUST NOT attempt local plaintext synthesis, character approximation, or composite font slicing. Instead, the completion summary carries `failed_pages` directly to the scholar.
+* **Isolated Re-Run Submissions**: The frontend surfaces an explicit warning banner offering a 1-click **Re-run translation** action. Re-runs submit a fresh `POST /book/translate` request whose `book_id` is suffixed per attempt (e.g. `{book_id}-r2`, `-r3`). Each attempt writes to its own isolated GCS output prefix (`outputs/{book_id}-r2/`), ensuring partial outputs from earlier sessions remain independently downloadable.
 
 ### 2.13 Canonical Helper Routing & DRY Invariants
 * **No Bespoke Infrastructure Duplication**: Code across all services MUST NOT introduce inlined or bespoke implementations of core cloud, storage, TSV, or descriptor algorithms. All components must route through the canonical modules:
@@ -123,14 +118,14 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py` [deleted under ADR 0001]) | Fragile heuristics and technical debt. | Cloud Translation handles typography scaling and line wrapping natively. `core/dynamic_programming.py` is retained as a live dependency of the language, validation, choice, and middleware engines. |
 | **Third-Party Auth Middleware** (Auth0, Clerk, Firebase) | Unnecessary SaaS dependency, cost, and complexity. | Use native client-side Google Identity Services (GIS) OAuth with `drive.file` scope. |
 | **Storing Book PDFs on Host Disk** | Memory exhaustion and disk bloat on serverless instances. | Stream directly to/from user GCS bucket and Google Drive. |
-| **Absolute Local Worktree Links** (`file:///` absolute paths) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`.kiro/specs/gcp-migration/design.md`). |
+| **Absolute Local Worktree Links & External URL Formatting** (`file:///` paths, absolute GitHub URLs) | Breaks portability across machines and GitHub UI; triggers reviewer link linting. | All internal documentation links must be repository-relative (`.kiro/specs/...`, `docs/adr/...`). External issues and PR references MUST be formatted as plain text tokens (e.g. `gradio-app/gradio#14005`, `#14018`), NEVER absolute hyperlinks. |
 | **Blocking Sync I/O in Async Paths** | Degrades throughput on multi-chapter books. | Use `asyncio` and non-blocking streaming I/O for GCS uploads and LRO polling. |
 | **Hardcoded Credentials or `.env` Commits** | Security vulnerability. | Use session-scoped BYOK vaults or Google Cloud Application Default Credentials (ADC). |
 | **Premature Glossary Deletion** (Deleting working glossary before replacement is READY) | Leaves translations without a glossary during creation windows or upon creation failures. | Zero-downtime Blue-Green replacement: provision alternating slot (`-a` / `-b`), verify `READY`, then retire old slot. |
 | **Unbounded UUID Overflow Slots** (`sess-{token}-{uuid}`) | Exhausts the regional 1,000 glossary quota in `us-central1` during repeated failures. | Strict 2-slot bound: identify and retire the older superseded slot via `submit_time` before provisioning replacement. |
 | **Overwriting Unversioned Staged TSVs in GCS** | Overwrites known-good terminology before the replacement is verified live, breaking rollback restoration. | Versioned GCS object paths (`.../{slot}_{version}.tsv`) preserving the prior input URI until cleanup. |
-| **Lossy Transliteration of Non-Latin Characters in Fallbacks** | Alters translated text and misrepresents scholarly and philosophical terminology. | Dynamic 16-bit CID allocation with embedded TrueType font programs and `/ToUnicode` CMaps. |
-| **Raw UTF-16BE Content Streams with `/Identity` CIDToGIDMap** | Treats Unicode code points as glyph IDs and splits supplementary plane characters ($> \text{U+FFFF}$) into unrenderable surrogate CIDs. | Dynamic sequential CID allocation with format 4/12 `cmap` parsing and dynamic `/CIDToGIDMap` stream objects. |
+| **Gradio Web Interface** (`ui/gradio_interface.py` [deleted under ADR 0002 / Track A]) | Upstream Pillow pinning (`pillow<13.0`) caused 41 open Dependabot alerts; duplicated API functionality. | Bespoke zero-build vanilla ES modules SPA (`static/`) served directly by FastAPI. |
+| **Local Fallback Translation Engine** (`services/fallback_translator.py` [deleted under ADR 0002 / Track B]) | High complexity TrueType font parsing, CMap unpacking, and ReportLab canvas drawing. | Google Cloud Document Translation is the sole translation pipeline; failed pages surfaced with re-run under `{book_id}-r2`. |
 
 ---
 
@@ -142,6 +137,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
   2. `requirements.md`: User Stories, Functional/Non-Functional Requirements with Gherkin BDD scenarios.
   3. `tasks.md`: Test-driven implementation plan with explicit execution tracks and TDD criteria.
 * **Architecture Decision Records (ADRs)**: Major architectural shifts must be documented in `docs/adr/XXXX-<title>.md`.
+* **Live Filesystem Path Verification**: When authoring ADRs, documentation, task plans, or project rules based on design specs, agents MUST verify actual directory and file locations on the live filesystem (e.g., verifying `static/` rather than blindly adopting draft spec placeholders like `public/`).
 
 ---
 
@@ -167,9 +163,9 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 * **Inner-Loop Targeted Runs**: During rapid TDD red-green cycles, run targeted test files with `--no-cov` to verify individual behaviors quickly (< 1s) before triggering full multi-module coverage runs (`--cov=services --cov=utils --cov=models`).
 * **Parallel-Failure Triage**: Under `-n auto` (xdist `dist=load`), worker scheduling is nondeterministic and failure sets rotate between runs. Before diagnosing a failure, rerun the failing test serially and diff the failure set against previous runs — a signature that appears once and moves between runs is environmental, not a regression. For state-leak repro, order node IDs in a single invocation (e.g., suspected polluter test first, victim test second): pytest runs node IDs in the order given.
 
-### 6.4 Gradio 6 UI Contracts & Timer Lifecycle Invariants
-* **Typed Component Returns**: Event handlers in `ui/gradio_interface.py` MUST return typed component instances (e.g., `gr.Button(interactive=...)`, `gr.Timer(active=...)`) rather than deprecated `gr.update(...)` dictionaries.
-* **Bounded Polling & Idle Deactivation**: Status polling timers (`gr.Timer(value=1.0, active=False)`) MUST be dynamically stopped (`active=False`) upon translation completion, startup errors (`"❌"`), or when returning to an idle state (`"ready for advanced translation"`). Timers MUST NEVER poll indefinitely during idle or error states.
+### 6.4 Frontend Polling Hygiene & Idle Deactivation Invariant (NFR-03)
+* **Bounded Polling**: Progress polling routines in the bespoke frontend (`static/js/polling.js`, `static/js/translate.js`) MUST use bounded intervals with exponential backoff on transient errors.
+* **Mandatory Deactivation**: Polling MUST be dynamically cancelled and deactivated upon translation completion (`is_done == true`), unrecoverable errors, or when the user navigates back to an idle state. Polling loops MUST NEVER run indefinitely during idle or completed states.
 
 ### 6.5 Developer Tooling Scope vs. Runtime Application Architecture
 > [!NOTE]
