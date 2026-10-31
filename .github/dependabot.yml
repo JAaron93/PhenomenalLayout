@@ -22,12 +22,6 @@ updates:
           - "ruff*"
           # Optionally add if you use typing stubs:
           # - "types-*"
-      gradio-majors:
-        patterns:
-          - "gradio"
-        update-types:
-          - "major"
-    # Policy: Track all Gradio updates (including majors) to stay consistent with upstream.
 
   - package-ecosystem: "github-actions"
     directory: "/"

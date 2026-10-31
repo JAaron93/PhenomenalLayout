@@ -14,7 +14,6 @@ annotated-types==0.8.0
     # via pydantic
 anyio==4.14.2
     # via
-    #   gradio
     #   httpx
     #   httpx2
     #   mcp
@@ -26,14 +25,8 @@ attrs==26.1.0
     #   aiohttp
     #   jsonschema
     #   referencing
-audioop-lts==0.2.2 ; python_version >= "3.13"
-    # via
-    #   -r requirements.in
-    #   gradio
 blis==1.3.3
     # via thinc
-brotli==1.2.1
-    # via gradio
 catalogue==2.0.10
     # via
     #   spacy
@@ -50,12 +43,9 @@ certifi==2026.10.18
 cffi==2.1.1
     # via cryptography
 charset-normalizer==3.5.1
-    # via
-    #   reportlab
-    #   requests
+    # via requests
 click==8.5.0
     # via
-    #   huggingface-hub
     #   modal
     #   spacy
     #   uvicorn
@@ -76,20 +66,12 @@ cymem==2.0.13
     #   spacy
     #   thinc
 fastapi==0.143.0
-    # via
-    #   -r requirements.in
-    #   gradio
-filelock==4.2.1
-    # via huggingface-hub
+    # via -r requirements.in
 frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-fsspec==2026.7.0
-    # via
-    #   gradio-client
-    #   huggingface-hub
-google-api-core[grpc]==2.34.0
+google-api-core==2.34.0
     # via
     #   google-api-python-client
     #   google-cloud-core
@@ -121,19 +103,11 @@ google-crc32c==1.8.0
     #   google-resumable-media
 google-resumable-media==2.10.2
     # via google-cloud-storage
-googleapis-common-protos[grpc]==1.75.2
+googleapis-common-protos==1.75.2
     # via
     #   google-api-core
     #   grpc-google-iam-v1
     #   grpcio-status
-gradio==6.30.0
-    # via -r requirements.in
-gradio-client==2.7.2
-    # via
-    #   gradio
-    #   hf-gradio
-groovy==0.1.2
-    # via gradio
 grpc-google-iam-v1==0.14.5
     # via google-cloud-translate
 grpcio==1.83.1
@@ -154,10 +128,6 @@ h11==0.16.0
     #   uvicorn
 h2==4.4.1
     # via grpclib
-hf-gradio==0.4.1
-    # via gradio
-hf-xet==1.6.0
-    # via huggingface-hub
 hpack==4.2.0
     # via h2
 httpcore==1.0.9
@@ -173,17 +143,9 @@ httptools==0.8.0
 httpx==0.28.1
     # via
     #   -r requirements.in
-    #   gradio
-    #   gradio-client
-    #   huggingface-hub
-    #   safehttpx
     #   weasel
 httpx2==2.13.1
     # via mcp
-huggingface-hub==1.29.0
-    # via
-    #   gradio
-    #   gradio-client
 hyperframe==6.1.0
     # via h2
 idna==3.19
@@ -194,9 +156,7 @@ idna==3.19
     #   requests
     #   yarl
 jinja2==3.1.6
-    # via
-    #   gradio
-    #   spacy
+    # via spacy
 jsonschema==4.26.0
     # via mcp
 jsonschema-specifications==2025.9.1
@@ -204,9 +164,7 @@ jsonschema-specifications==2025.9.1
 markdown-it-py==4.2.0
     # via rich
 markupsafe==3.0.3
-    # via
-    #   gradio
-    #   jinja2
+    # via jinja2
 mcp==2.2.0
     # via -r requirements.in
 mcp-types==2.2.0
@@ -228,34 +186,17 @@ murmurhash==1.0.15
 numpy==2.4.6
     # via
     #   blis
-    #   gradio
-    #   pandas
     #   spacy
     #   thinc
 opentelemetry-api==1.45.1
     # via
     #   fastapi
     #   mcp
-orjson==3.12.0
-    # via gradio
 packaging==26.3
     # via
-    #   gradio
-    #   gradio-client
-    #   huggingface-hub
     #   spacy
     #   thinc
     #   weasel
-pandas==3.0.5
-    # via gradio
-pdf2image==1.17.0
-    # via -r requirements.in
-pillow==12.3.0
-    # via
-    #   -r requirements.in
-    #   gradio
-    #   pdf2image
-    #   reportlab
 preshed==3.0.13
     # via
     #   spacy
@@ -288,7 +229,6 @@ pycparser==3.0
 pydantic==2.13.5
     # via
     #   fastapi
-    #   gradio
     #   mcp
     #   mcp-types
     #   spacy
@@ -296,42 +236,28 @@ pydantic==2.13.5
     #   weasel
 pydantic-core==2.46.5
     # via pydantic
-pydub==0.25.1
-    # via gradio
 pygments==2.21.0
     # via rich
-pyjwt[crypto]==2.15.0
+pyjwt==2.15.0
     # via
     #   -r requirements.in
     #   mcp
-    #   pyjwt
 pyparsing==3.3.2
     # via httplib2
 pypdf==6.21.3
     # via -r requirements.in
-python-dateutil==2.9.0.post0
-    # via pandas
 python-dotenv==1.2.4
     # via
     #   -r requirements.in
     #   uvicorn
 python-multipart==0.0.32
-    # via
-    #   gradio
-    #   mcp
-pytz==2026.3.post1
-    # via gradio
+    # via mcp
 pyyaml==6.0.3
-    # via
-    #   gradio
-    #   huggingface-hub
-    #   uvicorn
+    # via uvicorn
 referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-reportlab==5.0.1
-    # via -r requirements.in
 requests==2.34.2
     # via
     #   -r requirements.in
@@ -347,14 +273,12 @@ rpds-py==2026.6.3
     # via
     #   jsonschema
     #   referencing
-safehttpx==0.1.7
-    # via gradio
-semantic-version==2.10.0
-    # via gradio
+setuptools==84.2.1
+    # via
+    #   spacy
+    #   thinc
 shellingham==1.5.4
     # via typer
-six==1.17.0
-    # via python-dateutil
 smart-open==8.0.1
     # via weasel
 spacy==3.8.16
@@ -373,7 +297,6 @@ sse-starlette==3.4.8
 starlette==1.6.0
     # via
     #   fastapi
-    #   gradio
     #   mcp
     #   sse-starlette
 synchronicity==0.12.5
@@ -382,12 +305,9 @@ thinc==8.3.13
     # via spacy
 toml==0.10.2
     # via modal
-tomlkit==0.14.0
-    # via gradio
 tqdm==4.70.1
     # via
     #   -r requirements.in
-    #   huggingface-hub
     #   spacy
 truststore==0.10.4
     # via
@@ -395,8 +315,6 @@ truststore==0.10.4
     #   httpx2
 typer==0.27.2
     # via
-    #   gradio
-    #   hf-gradio
     #   spacy
     #   weasel
 types-certifi==2021.10.8.3
@@ -406,10 +324,7 @@ types-toml==0.10.8.20260518
 typing-extensions==4.16.0
     # via
     #   fastapi
-    #   gradio
-    #   gradio-client
     #   grpcio
-    #   huggingface-hub
     #   mcp
     #   mcp-types
     #   modal
@@ -427,10 +342,9 @@ uritemplate==4.2.0
     # via google-api-python-client
 urllib3==2.8.0
     # via requests
-uvicorn[standard]==0.54.0
+uvicorn==0.54.0
     # via
     #   -r requirements.in
-    #   gradio
     #   mcp
 uvloop==0.22.1
     # via uvicorn

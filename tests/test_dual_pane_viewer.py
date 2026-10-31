@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from reportlab.lib.pagesizes import letter
@@ -108,80 +108,25 @@ class TestGetBilingualPagePair:
                 german_pdf_bytes, english_pdf_bytes, page_number=5
             )
 
-    def test_graceful_fallback_when_rendering_fails(
+    def test_get_bilingual_page_pair_text_only(
         self,
         viewer: DualPaneViewerController,
         german_pdf_bytes: bytes,
         english_pdf_bytes: bytes,
     ) -> None:
-        """When pdf2image or poppler is unavailable, gracefully fall back to text-only."""
-        with patch.object(
-            DualPaneViewerController, "_render_page_image", return_value=None
-        ):
-            pair = viewer.get_bilingual_page_pair(
-                german_source=german_pdf_bytes,
-                english_source=english_pdf_bytes,
-                page_number=1,
-                render_images=True,
-            )
-
+        """Dual-pane viewer returns text-only pairs; raster image payload is always None/False."""
+        pair = viewer.get_bilingual_page_pair(
+            german_source=german_pdf_bytes,
+            english_source=english_pdf_bytes,
+            page_number=1,
+            render_images=True,
+        )
         assert pair.german_page_image_base64 is None
+        assert pair.english_page_image_base64 is None
         assert pair.has_images is False
         assert "Schauung" in pair.german_text
-
-    def test_render_images_success(
-        self,
-        viewer: DualPaneViewerController,
-        german_pdf_bytes: bytes,
-        english_pdf_bytes: bytes,
-    ) -> None:
-        fake_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-        with patch.object(
-            DualPaneViewerController, "_render_page_image", return_value=fake_b64
-        ):
-            pair = viewer.get_bilingual_page_pair(
-                german_source=german_pdf_bytes,
-                english_source=english_pdf_bytes,
-                page_number=1,
-                render_images=True,
-            )
-
-        assert pair.has_images is True
-        assert pair.german_page_image_base64 == fake_b64
-        assert pair.english_page_image_base64 == fake_b64
-
-    def test_render_images_with_open_binary_stream_rewound(
-        self,
-        viewer: DualPaneViewerController,
-        german_pdf_bytes: bytes,
-        english_pdf_bytes: bytes,
-    ) -> None:
-        """Verify that open BinaryIO stream is rewound so pdf2image receives the complete PDF."""
-        de_stream = io.BytesIO(german_pdf_bytes)
-        en_stream = io.BytesIO(english_pdf_bytes)
-
-        captured_bytes: list[bytes] = []
-
-        mock_image = MagicMock()
-        mock_image.save = lambda buf, *_args, **_kwargs: buf.write(b"fake-png-bytes")
-
-        def capture_convert(data, **_kwargs):
-            captured_bytes.append(data)
-            return [mock_image]
-
-        with patch("pdf2image.convert_from_bytes", side_effect=capture_convert):
-            pair = viewer.get_bilingual_page_pair(
-                german_source=de_stream,
-                english_source=en_stream,
-                page_number=1,
-                render_images=True,
-            )
-
-        assert pair.has_images is True
-        assert len(captured_bytes) == 2
-        # Verify that pdf2image received the full PDF content, not empty bytes
-        assert captured_bytes[0] == german_pdf_bytes
-        assert captured_bytes[1] == english_pdf_bytes
+        assert "Vision" in pair.english_text
+        assert not hasattr(viewer, "_render_page_image")
 
 
 class TestSearchTermAcrossPanes:
@@ -371,36 +316,6 @@ class TestDualPaneViewerCoverageBranches:
             assert len(coords.german_matches) >= 1
             assert coords.german_matches[0].text == "Schauung"
 
-    def test_render_page_image_internal_execution(
-        self,
-        viewer: DualPaneViewerController,
-        german_pdf_bytes: bytes,
-    ) -> None:
-        """Exercise internal _render_page_image path by mocking convert_from_bytes."""
-        mock_image = MagicMock()
-        mock_image.save = lambda buf, *_args, **_kwargs: buf.write(b"fake-png-bytes")
-
-        with patch("pdf2image.convert_from_bytes", return_value=[mock_image]):
-            b64 = viewer._render_page_image(german_pdf_bytes, page_number=1, dpi=150)
-            assert b64 is not None
-            assert b64.startswith("data:image/png;base64,")
-
-        # Empty image list from convert_from_bytes
-        with patch("pdf2image.convert_from_bytes", return_value=[]):
-            b64_empty = viewer._render_page_image(
-                german_pdf_bytes, page_number=1, dpi=150
-            )
-            assert b64_empty is None
-
-        # Exception from convert_from_bytes
-        with patch(
-            "pdf2image.convert_from_bytes", side_effect=RuntimeError("Poppler error")
-        ):
-            b64_err = viewer._render_page_image(
-                german_pdf_bytes, page_number=1, dpi=150
-            )
-            assert b64_err is None
-
     def test_missing_file_in_open_source(
         self, viewer: DualPaneViewerController, tmp_path: Path
     ) -> None:
@@ -454,13 +369,13 @@ class TestDualPaneViewerCoverageBranches:
         assert len(coords.german_matches) > 0
         assert len(coords.english_matches) > 0
 
-    def test_non_seekable_stream_with_image_rendering(
+    def test_non_seekable_stream_text_extraction(
         self,
         viewer: DualPaneViewerController,
         german_pdf_bytes: bytes,
         english_pdf_bytes: bytes,
     ) -> None:
-        """Verify non-seekable streams are not drained before raster image rendering."""
+        """Verify non-seekable streams are read cleanly for text extraction without image rendering."""
         class NonSeekableStream(io.BytesIO):
             def seek(self, _offset: int, _whence: int = 0) -> int:
                 raise OSError("Stream not seekable")
@@ -468,24 +383,16 @@ class TestDualPaneViewerCoverageBranches:
         de_stream = NonSeekableStream(german_pdf_bytes)
         en_stream = NonSeekableStream(english_pdf_bytes)
 
-        mock_img = MagicMock()
-        mock_img.save.side_effect = (
-            lambda buf, _format=None, **_kwargs: buf.write(b"fake-png-bytes")
+        pair = viewer.get_bilingual_page_pair(
+            german_source=de_stream,
+            english_source=en_stream,
+            page_number=1,
+            render_images=True,
         )
-
-        with patch("pdf2image.convert_from_bytes", return_value=[mock_img]) as mock_convert:
-            pair = viewer.get_bilingual_page_pair(
-                german_source=de_stream,
-                english_source=en_stream,
-                page_number=1,
-                render_images=True,
-            )
-            assert pair.has_images is True
-            assert pair.german_page_image_base64 is not None
-            assert pair.english_page_image_base64 is not None
-            # Both calls must receive non-empty byte payloads
-            assert len(mock_convert.call_args_list) == 2
-            assert len(mock_convert.call_args_list[0][0][0]) > 0
-            assert len(mock_convert.call_args_list[1][0][0]) > 0
+        assert pair.has_images is False
+        assert pair.german_page_image_base64 is None
+        assert pair.english_page_image_base64 is None
+        assert "Schauung" in pair.german_text
+        assert "Vision" in pair.english_text
 
 

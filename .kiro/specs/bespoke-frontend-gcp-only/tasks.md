@@ -109,27 +109,27 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 
 ### C1. pdf_quality_validator OCR recovery path
 **Depends on:** T0.
-- [ ] TDD red: update pdf_quality_validator tests — pages lacking extractable text yield an explicit `text_missing` result/warning instead of invoking OCR; no `pdf2image`/`tesseract` references remain in the module.
-- [ ] Remove the poppler/tesseract rasterize-and-OCR path (D3); keep pypdf-computable metrics.
-- [ ] Green: suite passes; module imports without `pdf2image`.
+- [x] TDD red: update pdf_quality_validator tests — pages lacking extractable text yield an explicit `text_missing` result/warning instead of invoking OCR; no `pdf2image`/`tesseract` references remain in the module.
+- [x] Remove the poppler/tesseract rasterize-and-OCR path (D3); keep pypdf-computable metrics.
+- [x] Green: suite passes; module imports without `pdf2image`.
 
 ### C2. Dual-pane page thumbnails
 **Depends on:** T0.
-- [ ] TDD red: `BilingualPagePair` tests assert text-only fields (no image payload).
-- [ ] Remove `_render_page_image` and its call sites from `services/dual_pane_viewer.py`.
-- [ ] Green: dual-pane suite passes.
+- [x] TDD red: `BilingualPagePair` tests assert text-only fields (no image payload).
+- [x] Remove `_render_page_image` and its call sites from `services/dual_pane_viewer.py`.
+- [x] Green: dual-pane suite passes.
 
 ### C3. Dependency and lockfile removal (FR-12)
 **Depends on:** A1, A8, B1–B3, C1, C2 (join point).
-- [ ] Update `requirements.in`: remove the direct requirement lines for `gradio`, `pdf2image`, `reportlab`, **`pillow`, and `audioop-lts`**; keep everything else; regenerate `requirements.txt` with `uv pip compile requirements.in -o requirements.txt` (Python 3.13).
-- [ ] Verify `audioop-lts`, `pydub`, `pillow`, and the Gradio cluster are absent from the regenerated lockfile; `uv pip check` clean; resolver succeeds on `--python-platform x86_64-unknown-linux-gnu` too.
-- [ ] Move `reportlab>=5.0.1,<6.0` into `requirements-dev.txt` (already present — confirm) and delete the duplicate runtime line.
-- [ ] Hermetic install + `python -c "import app"` succeeds with Pillow absent (NFR-07, flips T0's red baseline to green).
-- [ ] Remove the `gradio-majors` group from `.github/dependabot.yml`.
+- [x] Update `requirements.in`: remove the direct requirement lines for `gradio`, `pdf2image`, `reportlab`, **`pillow`, and `audioop-lts`**; keep everything else; regenerate `requirements.txt` with `uv pip compile requirements.in -o requirements.txt` (Python 3.13).
+- [x] Verify `audioop-lts`, `pydub`, `pillow`, and the Gradio cluster are absent from the regenerated lockfile; `uv pip check` clean; resolver succeeds on `--python-platform x86_64-unknown-linux-gnu` too.
+- [x] Move `reportlab>=5.0.1,<6.0` into `requirements-dev.txt` (already present — confirm) and delete the duplicate runtime line.
+- [x] Hermetic install + `python -c "import app"` succeeds with Pillow absent (NFR-07, flips T0's red baseline to green).
+- [x] Remove the `gradio-majors` group from `.github/dependabot.yml`.
 
 ### C4. Coverage re-baseline (NFR-06, D6)
 **Depends on:** C3.
-- [ ] Run the full suite with the 70% gate; if removals shift measured coverage, document the delta in the PR and adjust test placement — never weaken the gate silently.
+- [x] Run the full suite with the 70% gate; if removals shift measured coverage, document the delta in the PR and adjust test placement — never weaken the gate silently.
 
 ---
 
@@ -137,9 +137,9 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 
 ### D1. Full validation
 **Depends on:** A8, B4, C3, C4.
-- [ ] Full parallel suite (`pytest -n auto --timeout=30`, coverage gate) green, twice consecutively.
-- [ ] Manual browser sweep (10.2 checklist in requirements.md): upload → quote → BYOK validate → pre-scan → translate → download → dual-pane → reconnection.
-- [ ] Playwright specs green in a single run.
+- [x] Full parallel suite (`pytest -n auto --timeout=30`, coverage gate) green, twice consecutively.
+- [x] Manual browser sweep (10.2 checklist in requirements.md): upload → quote → BYOK validate → pre-scan → translate → download → dual-pane → reconnection.
+- [x] Playwright specs green in a single run.
 
 ### D2. Dependabot alert closure (NFR-05)
 **Depends on:** D1 (post-merge).
