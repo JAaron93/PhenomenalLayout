@@ -25,7 +25,11 @@ from fastapi.templating import Jinja2Templates
 
 from api.auth import UserRole, get_current_user_dependency, is_auth_enabled
 
-from services.byok_credentials_manager import BYOKCredentialsManager, GuideStep, ValidationResult
+from services.byok_credentials_manager import (
+    BYOKCredentialsManager,
+    GuideStep,
+    ValidationResult,
+)
 from services.cost_estimator import CostQuote, GCPCostEstimator
 from services.user_vocabulary_store import TermPreference, UserVocabularyStore
 from services.book_translation_orchestrator import (
@@ -100,25 +104,6 @@ ProgressResponse = dict[str, Any]
 TerminologyResponse = dict[str, str]
 
 
-@app_router.get("/")
-async def root() -> dict[str, Any]:
-    """Root endpoint."""
-    return {
-        "message": "Advanced Document Translator API",
-        "ui_url": "/ui",
-        "philosophy_ui_url": "/philosophy",
-        "version": "2.0.0",
-        "features": [
-            "Advanced PDF processing",
-            "Image-text overlay preservation",
-            "High-resolution rendering",
-            "Comprehensive format support",
-            "Philosophy-enhanced neologism detection",
-            "User choice management for translations",
-        ],
-    }
-
-
 @app_router.get("/philosophy", response_class=HTMLResponse)
 async def philosophy_interface(request: Request) -> HTMLResponse:
     """Philosophy-enhanced translation interface."""
@@ -136,7 +121,7 @@ async def get_terminology_map() -> dict[str, Any]:
         # Access the philosophical context analyzer from neologism_detector
         analyzer = neologism_detector.philosophical_context_analyzer
         terminology_map = analyzer.terminology_map
-        
+
         return {
             "terminology_map": terminology_map,
             "term_count": len(terminology_map),
@@ -149,24 +134,24 @@ async def get_terminology_map() -> dict[str, Any]:
 @api_router.post("/philosophy/terminology")
 async def update_terminology_map(terminology_data: dict[str, Any]) -> dict[str, Any]:
     """Update the philosophical terminology map with new terms.
-    
+
     This enables runtime terminology management for philosophy-aware translation.
     """
     try:
         new_terms = terminology_data.get("terminology", {})
-        
+
         if not isinstance(new_terms, dict):
             raise HTTPException(
-                status_code=400, 
-                detail="Terminology must be a dictionary mapping terms to translations"
+                status_code=400,
+                detail="Terminology must be a dictionary mapping terms to translations",
             )
-        
+
         # Access the philosophical context analyzer from neologism_detector
         analyzer = neologism_detector.philosophical_context_analyzer
-        
+
         # Update the terminology map
         analyzer.update_terminology_map(new_terms)
-        
+
         return {
             "success": True,
             "message": f"Updated terminology map with {len(new_terms)} new terms",
@@ -184,11 +169,17 @@ async def update_terminology_map(terminology_data: dict[str, Any]) -> dict[str, 
 async def get_philosophy_translation_config() -> dict[str, Any]:
     """Get philosophy-enhanced translation service configuration."""
     try:
-        config = philosophy_translation_service.get_statistics().get("configuration", {})
-        
+        config = philosophy_translation_service.get_statistics().get(
+            "configuration", {}
+        )
+
         return {
-            "preserve_neologisms_by_default": config.get("preserve_neologisms_by_default", True),
-            "neologism_confidence_threshold": config.get("neologism_confidence_threshold", 0.5),
+            "preserve_neologisms_by_default": config.get(
+                "preserve_neologisms_by_default", True
+            ),
+            "neologism_confidence_threshold": config.get(
+                "neologism_confidence_threshold", 0.5
+            ),
             "chunk_size": config.get("chunk_size", 2000),
             "available_providers": philosophy_translation_service.get_available_providers(),
         }
@@ -198,7 +189,9 @@ async def get_philosophy_translation_config() -> dict[str, Any]:
 
 
 @api_router.post("/philosophy/config")
-async def update_philosophy_translation_config(config_data: dict[str, Any]) -> dict[str, Any]:
+async def update_philosophy_translation_config(
+    config_data: dict[str, Any],
+) -> dict[str, Any]:
     """Update philosophy-enhanced translation service configuration."""
     try:
         # Map API keys to service parameter names
@@ -207,13 +200,13 @@ async def update_philosophy_translation_config(config_data: dict[str, Any]) -> d
             "neologism_confidence_threshold": "neologism_confidence_threshold",
             "chunk_size": "chunk_size",
         }
-        
+
         # Build kwargs for update_configuration
         kwargs = {}
         for api_key, param_name in param_mapping.items():
             if api_key in config_data:
                 kwargs[param_name] = config_data[api_key]
-        
+
         if kwargs:
             philosophy_translation_service.update_configuration(**kwargs)
             return {
@@ -236,7 +229,7 @@ async def translate_with_philosophy(
     translation_data: dict[str, Any],
 ) -> dict[str, Any]:
     """Translate text with philosophy awareness.
-    
+
     This endpoint uses the philosophy-enhanced translation service to detect
     and preserve neologisms while applying user choices.
     """
@@ -246,13 +239,12 @@ async def translate_with_philosophy(
         target_lang = translation_data.get("target_language", "en")
         provider = translation_data.get("provider", "auto")
         session_id = translation_data.get("session_id")
-        
+
         if not text:
             raise HTTPException(
-                status_code=400,
-                detail="Text is required for translation"
+                status_code=400, detail="Text is required for translation"
             )
-        
+
         result = await translate_with_philosophy_awareness(
             text=text,
             source_lang=source_lang,
@@ -261,7 +253,7 @@ async def translate_with_philosophy(
             session_id=session_id,
             service=philosophy_translation_service,
         )
-        
+
         return result
     except HTTPException:
         raise
@@ -276,30 +268,28 @@ async def merge_neologism_analyses_endpoint(
     merge_data: dict[str, Any],
 ) -> dict[str, Any]:
     """Merge multiple neologism analyses into a single comprehensive analysis.
-    
+
     This is useful for batch processing or combining results from different
     detection passes.
     """
     try:
         analyses = merge_data.get("analyses", [])
-        
+
         if not analyses:
             raise HTTPException(
-                status_code=400,
-                detail="No analyses provided for merging"
+                status_code=400, detail="No analyses provided for merging"
             )
-        
+
         if not isinstance(analyses, list):
-            raise HTTPException(
-                status_code=400,
-                detail="Analyses must be a list"
-            )
-        
+            raise HTTPException(status_code=400, detail="Analyses must be a list")
+
         merged = merge_neologism_analyses(analyses)
-        
+
         return {
             "success": True,
-            "merged_analysis": merged.to_dict() if hasattr(merged, 'to_dict') else merged,
+            "merged_analysis": merged.to_dict()
+            if hasattr(merged, "to_dict")
+            else merged,
         }
     except HTTPException:
         raise
@@ -447,7 +437,9 @@ async def export_user_choices(
         session_id: str | None = export_data.get("session_id")
 
         if session_id:
-            export_file_path: str | None = user_choice_manager.export_session_choices(session_id)
+            export_file_path: str | None = user_choice_manager.export_session_choices(
+                session_id
+            )
         else:
             export_file_path: str | None = user_choice_manager.export_all_choices()
 
@@ -742,30 +734,28 @@ async def validate_pdf_quality(
     validation_data: dict[str, Any],
 ) -> dict[str, Any]:
     """Validate PDF reconstruction quality.
-    
+
     This endpoint checks how well a reconstructed PDF matches the original
     in terms of text preservation, layout, and optionally font preservation.
     """
     try:
         original_pdf = validation_data.get("original_pdf")
         reconstructed_pdf = validation_data.get("reconstructed_pdf")
-        
+
         if not original_pdf:
-            raise HTTPException(
-                status_code=400,
-                detail="original_pdf path is required"
-            )
-        
+            raise HTTPException(status_code=400, detail="original_pdf path is required")
+
         if not reconstructed_pdf:
             raise HTTPException(
-                status_code=400,
-                detail="reconstructed_pdf path is required"
+                status_code=400, detail="reconstructed_pdf path is required"
             )
-        
+
         # Optional validation parameters
         min_text_length_score = validation_data.get("min_text_length_score", 0.9)
         min_layout_score = validation_data.get("min_layout_score", 0.7)
-        require_font_preservation = validation_data.get("require_font_preservation", False)
+        require_font_preservation = validation_data.get(
+            "require_font_preservation", False
+        )
         min_font_match_ratio = validation_data.get("min_font_match_ratio", 0.8)
 
         # Only files inside server-managed storage areas may be inspected;
@@ -778,7 +768,7 @@ async def validate_pdf_quality(
 
         # Initialize validator and run validation
         validator = PDFQualityValidator()
-        
+
         result = validator.validate_pdf_reconstruction_quality(
             original_pdf=original_pdf,
             reconstructed_pdf=reconstructed_pdf,
@@ -787,7 +777,7 @@ async def validate_pdf_quality(
             require_font_preservation=require_font_preservation,
             min_font_match_ratio=min_font_match_ratio,
         )
-        
+
         return {
             "success": True,
             "validation_result": result,
@@ -805,7 +795,7 @@ async def get_confidence_scorer_info() -> dict[str, Any]:
     """Get information about the confidence scorer and its configuration."""
     try:
         scorer = ConfidenceScorer()
-        
+
         return {
             "confidence_threshold": scorer.confidence_threshold,
             "philosophical_indicators_count": len(scorer.philosophical_indicators),
@@ -823,30 +813,30 @@ async def update_confidence_scorer_config(
     """Update confidence scorer configuration."""
     try:
         scorer = ConfidenceScorer()
-        
+
         updated = []
-        
+
         # Update threshold if provided
         if "confidence_threshold" in config_data:
             threshold = config_data["confidence_threshold"]
             if isinstance(threshold, (int, float)):
                 scorer.set_confidence_threshold(threshold)
                 updated.append("confidence_threshold")
-        
+
         # Update patterns if provided
         if "patterns" in config_data:
             patterns = config_data["patterns"]
             if isinstance(patterns, dict):
                 scorer.update_patterns(patterns)
                 updated.append("patterns")
-        
+
         # Update philosophical indicators if provided
         if "philosophical_indicators" in config_data:
             indicators = config_data["philosophical_indicators"]
             if isinstance(indicators, (list, set)):
                 scorer.update_philosophical_indicators(set(indicators))
                 updated.append("philosophical_indicators")
-        
+
         if updated:
             return {
                 "success": True,
@@ -856,7 +846,11 @@ async def update_confidence_scorer_config(
             return {
                 "success": False,
                 "message": "No valid configuration keys provided",
-                "valid_keys": ["confidence_threshold", "patterns", "philosophical_indicators"],
+                "valid_keys": [
+                    "confidence_threshold",
+                    "patterns",
+                    "philosophical_indicators",
+                ],
             }
     except Exception as e:
         logger.error("Error updating confidence scorer config: %s", e)
@@ -870,36 +864,43 @@ async def calculate_confidence(
     """Calculate confidence factors for a term."""
     try:
         term = confidence_data.get("term", "")
-        
+
         if not term:
-            raise HTTPException(
-                status_code=400,
-                detail="term is required"
-            )
-        
+            raise HTTPException(status_code=400, detail="term is required")
+
         scorer = ConfidenceScorer()
-        
+
         # Calculate confidence factors
         morph_data = confidence_data.get("morphological", {})
         phil_data = confidence_data.get("philosophical", {})
         try:
-            morph = MorphologicalAnalysis(**morph_data) if morph_data else MorphologicalAnalysis()
-            phil = PhilosophicalContext(**phil_data) if phil_data else PhilosophicalContext()
+            morph = (
+                MorphologicalAnalysis(**morph_data)
+                if morph_data
+                else MorphologicalAnalysis()
+            )
+            phil = (
+                PhilosophicalContext(**phil_data)
+                if phil_data
+                else PhilosophicalContext()
+            )
         except (TypeError, ValueError) as e:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid morphological or philosophical data: {e}"
+                detail=f"Invalid morphological or philosophical data: {e}",
             )
         factors = scorer.calculate_confidence_factors(term, morph, phil)
-        
+
         # Get final confidence and breakdown
         final_confidence = scorer.calculate_final_confidence(factors)
         breakdown = scorer.get_confidence_breakdown(factors)
-        
+
         return {
             "term": term,
             "final_confidence": final_confidence,
-            "confidence_factors": factors.__dict__ if hasattr(factors, '__dict__') else {},
+            "confidence_factors": factors.__dict__
+            if hasattr(factors, "__dict__")
+            else {},
             "confidence_breakdown": breakdown,
         }
     except HTTPException:
@@ -907,6 +908,7 @@ async def calculate_confidence(
     except Exception as e:
         logger.error("Error calculating confidence: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # ===========================================================================
 # Track 5: GCP Migration Endpoints (TASK-5.2)
@@ -960,7 +962,9 @@ async def estimate_cost(
 ) -> dict[str, Any]:
     """Zero-auth GCP translation and storage budget estimator."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported for cost estimation")
+        raise HTTPException(
+            status_code=400, detail="Only PDF files are supported for cost estimation"
+        )
     try:
         contents = await file.read()
         if not contents:
@@ -999,8 +1003,12 @@ async def get_onboarding_guide() -> dict[str, Any]:
                 "title": s.title,
                 "description": s.description,
                 "console_link": s.console_link,
-                "gcloud_snippet": getattr(s, "gcloud_command", getattr(s, "gcloud_snippet", "")),
-                "gcloud_command": getattr(s, "gcloud_command", getattr(s, "gcloud_snippet", "")),
+                "gcloud_snippet": getattr(
+                    s, "gcloud_command", getattr(s, "gcloud_snippet", "")
+                ),
+                "gcloud_command": getattr(
+                    s, "gcloud_command", getattr(s, "gcloud_snippet", "")
+                ),
             }
             for s in steps
         ]
@@ -1100,7 +1108,10 @@ async def set_byok_credentials(
     sa_json = payload.get("sa_json") or payload.get("service_account_json")
 
     if not user_id or not project_id or not bucket_name or not sa_json:
-        raise HTTPException(status_code=400, detail="user_id, project_id, bucket_name, and sa_json are required")
+        raise HTTPException(
+            status_code=400,
+            detail="user_id, project_id, bucket_name, and sa_json are required",
+        )
 
     _verify_resource_ownership(user_id, current_user)
 
@@ -1114,9 +1125,17 @@ async def set_byok_credentials(
         )
         val = mgr.validate_credentials(user_id)
         is_valid = getattr(val, "is_valid", getattr(val, "status", "") == "VALID")
-        trans_ok = getattr(val, "translation_api_ok", getattr(val, "translation_check_passed", False))
-        stor_ok = getattr(val, "storage_bucket_ok", getattr(val, "storage_check_passed", False))
-        details = getattr(val, "details", getattr(val, "error_details", "OK" if is_valid else "Validation failed"))
+        trans_ok = getattr(
+            val, "translation_api_ok", getattr(val, "translation_check_passed", False)
+        )
+        stor_ok = getattr(
+            val, "storage_bucket_ok", getattr(val, "storage_check_passed", False)
+        )
+        details = getattr(
+            val,
+            "details",
+            getattr(val, "error_details", "OK" if is_valid else "Validation failed"),
+        )
         proj = getattr(val, "project_id", project_id)
         bkt = getattr(val, "bucket_name", bucket_name)
         return {
@@ -1148,11 +1167,31 @@ async def validate_byok_credentials(
         mgr = get_byok_credentials_manager()
         val = mgr.validate_credentials(user_id)
         is_valid = getattr(val, "is_valid", getattr(val, "status", "") == "VALID")
-        trans_ok = getattr(val, "translation_api_ok", getattr(val, "translation_check_passed", False))
-        stor_ok = getattr(val, "storage_bucket_ok", getattr(val, "storage_check_passed", False))
-        details = getattr(val, "details", getattr(val, "error_details", "OK" if is_valid else "Validation failed"))
-        proj = getattr(val, "project_id", getattr(mgr, "get_project_id", lambda u: "")(user_id) if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id) else "")
-        bkt = getattr(val, "bucket_name", getattr(mgr, "get_bucket_name", lambda u: "")(user_id) if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id) else "")
+        trans_ok = getattr(
+            val, "translation_api_ok", getattr(val, "translation_check_passed", False)
+        )
+        stor_ok = getattr(
+            val, "storage_bucket_ok", getattr(val, "storage_check_passed", False)
+        )
+        details = getattr(
+            val,
+            "details",
+            getattr(val, "error_details", "OK" if is_valid else "Validation failed"),
+        )
+        proj = getattr(
+            val,
+            "project_id",
+            getattr(mgr, "get_project_id", lambda u: "")(user_id)
+            if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
+            else "",
+        )
+        bkt = getattr(
+            val,
+            "bucket_name",
+            getattr(mgr, "get_bucket_name", lambda u: "")(user_id)
+            if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
+            else "",
+        )
         return {
             "is_valid": is_valid,
             "status": "VALID" if is_valid else "INVALID",
@@ -1207,10 +1246,15 @@ async def pre_scan_book_endpoint(
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
         orch = get_book_orchestrator()
-        result = orch.pre_scan_book(user_id=user_id, source=contents, max_pages=max_pages)
+        result = orch.pre_scan_book(
+            user_id=user_id, source=contents, max_pages=max_pages
+        )
 
         # Convert dataclasses to dicts
-        prefilled = {k: v.to_dict() if hasattr(v, "to_dict") else v.__dict__ for k, v in result.prefilled_terms.items()}
+        prefilled = {
+            k: v.to_dict() if hasattr(v, "to_dict") else v.__dict__
+            for k, v in result.prefilled_terms.items()
+        }
         quote_dict = {
             "total_pages": result.cost_quote.total_pages,
             "file_size_mb": result.cost_quote.file_size_mb,
@@ -1230,7 +1274,9 @@ async def pre_scan_book_endpoint(
             "preview_recommended": result.ocr_confidence.preview_recommended,
         }
         script_dict = {
-            "script_type": result.script_analysis.script_type.value if hasattr(result.script_analysis.script_type, "value") else str(result.script_analysis.script_type),
+            "script_type": result.script_analysis.script_type.value
+            if hasattr(result.script_analysis.script_type, "value")
+            else str(result.script_analysis.script_type),
             "ocr_confidence_score": result.script_analysis.ocr_confidence_score,
             "fraktur_ratio": result.script_analysis.fraktur_ratio,
             "recommended_action": result.script_analysis.recommended_action,
@@ -1243,7 +1289,11 @@ async def pre_scan_book_endpoint(
             "script_analysis": script_dict,
             "ocr_confidence": ocr_conf_dict,
             "detected_neologisms": [
-                getattr(n, "to_dict", lambda: n.__dict__ if hasattr(n, "__dict__") else str(n))()
+                getattr(
+                    n,
+                    "to_dict",
+                    lambda: n.__dict__ if hasattr(n, "__dict__") else str(n),
+                )()
                 for n in result.detected_neologisms
             ],
             "prefilled_terms": prefilled,
@@ -1268,8 +1318,15 @@ async def get_user_vocabulary_endpoint(
     _verify_resource_ownership(user_id, current_user)
     try:
         store = get_user_vocabulary_store()
-        prefs = store.get_user_preferences(user_id) if hasattr(store, "get_user_preferences") else store.get_preferences(user_id)
-        return {k: v.to_dict() if hasattr(v, "to_dict") else v.__dict__ for k, v in prefs.items()}
+        prefs = (
+            store.get_user_preferences(user_id)
+            if hasattr(store, "get_user_preferences")
+            else store.get_preferences(user_id)
+        )
+        return {
+            k: v.to_dict() if hasattr(v, "to_dict") else v.__dict__
+            for k, v in prefs.items()
+        }
     except HTTPException:
         raise
     except Exception as exc:
@@ -1292,7 +1349,9 @@ async def save_user_vocabulary_endpoint(
     confidence = float(payload.get("confidence", 1.0))
 
     if not german_term or not preferred_translation:
-        raise HTTPException(status_code=400, detail="german_term and preferred_translation are required")
+        raise HTTPException(
+            status_code=400, detail="german_term and preferred_translation are required"
+        )
 
     try:
         store = get_user_vocabulary_store()
@@ -1369,7 +1428,11 @@ async def import_vocabulary_tsv_endpoint(
             imported = store.import_tsv(user_id, tsv_content)
         else:
             imported = 0
-        count = len(imported) if isinstance(imported, (list, dict, set)) else int(imported or 0)
+        count = (
+            len(imported)
+            if isinstance(imported, (list, dict, set))
+            else int(imported or 0)
+        )
         return {"imported_count": count}
     except HTTPException:
         raise
@@ -1396,7 +1459,9 @@ async def export_vocabulary_tsv_endpoint(
         return Response(
             content=tsv_content,
             media_type="text/tab-separated-values",
-            headers={"Content-Disposition": f"attachment; filename={user_id}_vocabulary.tsv"},
+            headers={
+                "Content-Disposition": f"attachment; filename={user_id}_vocabulary.tsv"
+            },
         )
     except HTTPException:
         raise
@@ -1500,7 +1565,9 @@ async def get_book_status_endpoint(
     except HTTPException:
         raise
     except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+        ) from exc
     except Exception as exc:
         logger.error("Error polling progress for %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1532,7 +1599,9 @@ async def resume_book_job_endpoint(
     except HTTPException:
         raise
     except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+        ) from exc
     except Exception as exc:
         logger.error("Error resuming job %s for user %s: %s", session_id, user_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1551,7 +1620,12 @@ async def list_user_jobs_endpoint(
             jobs = orch.list_user_jobs(user_id)
         else:
             jobs = orch.recovery_manager.list_active_jobs(user_id)
-        return [j.to_dict() if hasattr(j, "to_dict") else (j.__dict__ if hasattr(j, "__dict__") else dict(j)) for j in jobs]
+        return [
+            j.to_dict()
+            if hasattr(j, "to_dict")
+            else (j.__dict__ if hasattr(j, "__dict__") else dict(j))
+            for j in jobs
+        ]
     except HTTPException:
         raise
     except Exception as exc:
@@ -1575,7 +1649,9 @@ async def complete_job_endpoint(
     except HTTPException:
         raise
     except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+        ) from exc
     except Exception as exc:
         logger.error("Error handling completion for %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1593,7 +1669,9 @@ async def export_to_drive_endpoint(
     filename = payload.get("filename")
 
     if not user_id or not session_id or not access_token:
-        raise HTTPException(status_code=400, detail="user_id, session_id, and access_token are required")
+        raise HTTPException(
+            status_code=400, detail="user_id, session_id, and access_token are required"
+        )
 
     _verify_resource_ownership(user_id, current_user)
 
@@ -1616,7 +1694,9 @@ async def export_to_drive_endpoint(
     except HTTPException:
         raise
     except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+        ) from exc
     except Exception as exc:
         logger.error("Drive export failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1643,7 +1723,9 @@ async def download_translated_book_endpoint(
                 return Response(
                     content=bytes(stream_or_bytes),
                     media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+                    headers={
+                        "Content-Disposition": f'attachment; filename="{filename}"'
+                    },
                 )
             return StreamingResponse(
                 stream_or_bytes,
@@ -1651,17 +1733,23 @@ async def download_translated_book_endpoint(
                 headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
         state = orch.recovery_manager.resume_active_job(session_id, user_id=user_id)
-        gcs_output_uri = f"{state.gcs_output_uri.rstrip('/')}/{state.book_id}_translated.pdf"
+        gcs_output_uri = (
+            f"{state.gcs_output_uri.rstrip('/')}/{state.book_id}_translated.pdf"
+        )
         stream = orch.batch_service.stream_translated_book(user_id, gcs_output_uri)
         return StreamingResponse(
             stream,
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{state.book_id}_translated.pdf"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="{state.book_id}_translated.pdf"'
+            },
         )
     except HTTPException:
         raise
     except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+        ) from exc
     except Exception as exc:
         logger.error("Download failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1683,7 +1771,11 @@ async def fallback_translate_endpoint(
         contents = await file.read()
         indices: list[int] | None = None
         if failed_page_indices:
-            indices = [int(p.strip()) for p in failed_page_indices.split(",") if p.strip().isdigit()]
+            indices = [
+                int(p.strip())
+                for p in failed_page_indices.split(",")
+                if p.strip().isdigit()
+            ]
 
         orch = get_book_orchestrator()
         _verify_job_ownership(session_id, user_id, orch)
@@ -1704,7 +1796,9 @@ async def fallback_translate_endpoint(
     except HTTPException:
         raise
     except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+        ) from exc
     except Exception as exc:
         logger.error("Fallback translation failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1739,13 +1833,17 @@ async def dual_pane_endpoint(
             "german_text": pair.german_text,
             "english_text": pair.english_text,
             "german_page_image_base64": getattr(pair, "german_page_image_base64", None),
-            "english_page_image_base64": getattr(pair, "english_page_image_base64", None),
+            "english_page_image_base64": getattr(
+                pair, "english_page_image_base64", None
+            ),
             "has_images": getattr(pair, "has_images", False),
         }
     except HTTPException:
         raise
     except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+        ) from exc
     except Exception as exc:
         logger.error("Dual-pane view error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

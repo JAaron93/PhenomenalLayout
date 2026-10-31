@@ -11,7 +11,6 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-import gradio as gr
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -24,9 +23,6 @@ load_dotenv()
 from api.routes import api_router, app_router
 from core.state_manager import state
 from core.translation_handler import translation_service
-
-# Import refactored components
-from ui.gradio_interface import create_gradio_interface
 
 # Ensure required directories exist BEFORE configuring logging so file handlers
 # don't fail due to missing paths.
@@ -211,6 +207,9 @@ def create_app(config: dict | None = None):
     # Static files mount
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
+    # SPA shell at "/" — mounted last so API routes take precedence
+    app.mount("/", StaticFiles(directory="static", html=True), name="spa")
+
     return app
 
 
@@ -221,19 +220,11 @@ def main() -> None:
     # Create app using factory for current environment
     app = create_app()
 
-    # Create Gradio interface
-    gradio_app = create_gradio_interface()
-
-    # Mount Gradio app to FastAPI
-    app_with_gradio = gr.mount_gradio_app(
-        app, gradio_app, path="/ui", run_history=False
-    )
-
     # Start server with Uvicorn
     # Note: Default to localhost; override via HOST and PORT env vars
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app_with_gradio, host=host, port=port, log_level="info")
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":
