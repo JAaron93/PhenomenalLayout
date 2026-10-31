@@ -20,10 +20,20 @@ export function withQuery(path, query = {}) {
   return qs ? `${path}?${qs}` : path;
 }
 
-export function createApiClient({ getToken, getUserId, onAuthRequired }) {
+export function createApiClient({ getToken, getTokenType, getUserId, onAuthRequired }) {
   function authHeaders(extra = {}) {
     const token = getToken();
-    return token ? { Authorization: `Bearer ${token}`, ...extra } : { ...extra };
+    if (!token) {
+      return { ...extra };
+    }
+    const type = getTokenType ? getTokenType() : null;
+    const isApiKey =
+      type === "api-key" ||
+      (!type && !token.includes(".") && !token.startsWith("ey"));
+    if (isApiKey) {
+      return { "X-API-Key": token, ...extra };
+    }
+    return { Authorization: `Bearer ${token}`, ...extra };
   }
 
   function requireIdentity() {

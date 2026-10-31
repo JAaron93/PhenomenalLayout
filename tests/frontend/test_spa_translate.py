@@ -93,6 +93,11 @@ def test_lifecycle_polls_then_stops_and_downloads(
     spa_page.wait_for_selector("#translate-download:not([disabled])")
     assert "$" not in (spa_page.locator("#translate-status").inner_text() or "")
 
+    translate_req = wait_for_request(
+        captured, lambda r: "/api/v1/book/translate" in r.url
+    )
+    assert form_field(translate_req, "target_lang") == "en-US"
+
     # NFR-03: polling deactivates after completion.
     count_at_done = status_calls["n"]
     time.sleep(_POLL_MS / 1000 * 3)
@@ -209,3 +214,69 @@ def test_error_state_stops_polling_and_disables_download(
     time.sleep(_POLL_MS / 1000 * 3)
     assert status_calls["n"] == count_at_error
     assert spa_page.locator("#translate-download").is_disabled()
+
+
+def test_jobs_list_and_resume_reconnects_job(
+    spa_page: Any, spa_base_url: str
+) -> None:
+    captured = mock_api(
+        spa_page,
+        [
+            (
+                "GET",
+                "/api/v1/book/jobs/",
+                lambda r: fulfill_json(
+                    r,
+                    [
+                        {
+                            "session_id": "sess-resume-1",
+                            "user_id": "scholar-01",
+                            "book_id": "resumed-book",
+                            "total_pages": 10,
+                            "translated_pages": 10,
+                            "failed_pages": 0,
+                            "status": "SUCCEEDED",
+                        }
+                    ],
+                ),
+            ),
+            (
+                "GET",
+                "/api/v1/book/resume/",
+                lambda r: fulfill_json(
+                    r,
+                    {
+                        "session_id": "sess-resume-1",
+                        "user_id": "scholar-01",
+                        "book_id": "resumed-book",
+                        "total_pages": 10,
+                        "translated_pages": 10,
+                        "failed_pages": 0,
+                        "status": "SUCCEEDED",
+                    },
+                ),
+            ),
+            (
+                "POST",
+                "/api/v1/book/complete/",
+                lambda r: fulfill_json(r, _summary("sess-resume-1")),
+            ),
+            ("GET", "/api/v1/book/download/", fulfill_pdf),
+        ],
+    )
+
+    spa_page.goto(f"{spa_base_url}/")
+    spa_page.fill("#auth-token", "test-token")
+    spa_page.fill("#auth-user", "scholar-01")
+    spa_page.click("#auth-save")
+
+    spa_page.click("#jobs-refresh")
+    resume_btn = spa_page.locator('.resume-job-btn[data-session="sess-resume-1"]')
+    expect(resume_btn).to_be_visible()
+    resume_btn.click()
+
+    spa_page.wait_for_selector("#translate-download:not([disabled])")
+    complete_call = wait_for_request(
+        captured, lambda r: "/api/v1/book/complete/" in r.url
+    )
+    assert "sess-resume-1" in complete_call.url

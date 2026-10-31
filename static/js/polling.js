@@ -3,12 +3,17 @@
 export class Poller {
   #timer = null;
 
-  start(fn, intervalMs = 1000) {
+  start(fn, intervalMs = 1000, onError = null) {
     this.stop();
     this.#timer = setInterval(() => {
       Promise.resolve()
         .then(fn)
-        .catch(() => this.stop());
+        .catch((err) => {
+          this.stop();
+          if (onError) {
+            onError(err);
+          }
+        });
     }, intervalMs);
   }
 

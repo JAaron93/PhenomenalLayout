@@ -48,9 +48,13 @@ export function initPrescan(root, api) {
     showResult("Pre-scanning…");
     try {
       const scan = await api.upload("/api/v1/book/pre-scan", file, { user_id: userId });
+      const rawNeologisms = scan.detected_neologisms ?? [];
+      const neologismList = rawNeologisms
+        .map((n) => (typeof n === "string" ? n : n.term ?? n.german_term ?? JSON.stringify(n)))
+        .filter(Boolean);
       const lines = [
         `Badge: ${scan.ocr_confidence?.script_type ?? "?"} — confidence ${scan.ocr_confidence?.confidence_score ?? "?"}`,
-        `Neologisms: ${(scan.detected_neologisms ?? []).join(", ") || "none"}`,
+        `Neologisms: ${neologismList.join(", ") || "none"}`,
         "Pre-filled terms:",
       ];
       for (const [term, preference] of Object.entries(scan.prefilled_terms ?? {})) {

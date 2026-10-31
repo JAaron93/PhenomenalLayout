@@ -13,6 +13,7 @@ const auth = initAuth(document.getElementById("auth-panel"));
 
 const api = createApiClient({
   getToken: () => auth.token,
+  getTokenType: () => auth.tokenType,
   getUserId: () => auth.userId,
   onAuthRequired: (status) => {
     auth.prompt(

@@ -18,7 +18,10 @@ def _scan_payload() -> dict[str, Any]:
             "recommended_action": "Direct batch translation",
         },
         "ocr_confidence": {"confidence_score": 0.95, "script_type": "Antiqua"},
-        "detected_neologisms": ["Dasein", "Geworfenheit"],
+        "detected_neologisms": [
+            {"term": "Dasein"},
+            {"term": "Geworfenheit"},
+        ],
         "prefilled_terms": {
             "Dasein": {"german_term": "Dasein", "preferred_translation": "Being-there"}
         },
