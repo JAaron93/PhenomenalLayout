@@ -306,7 +306,7 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Core Application
 
-- `app.py` - Main FastAPI application serving the bespoke vanilla ES single-page interface (`public/`)
+- `app.py` - Main FastAPI application serving the bespoke vanilla ES single-page interface (`static/`)
 - `services/enhanced_document_processor.py` - PDF-only document handler
 
 ### Translation & Cloud Document Services
@@ -682,7 +682,7 @@ PhenomenalLayout has evolved through three major architectural eras:
 | `core/dynamic_layout_engine.py` | Deprecated (ADR 0001) | Cloud Translation handles typography scaling natively |
 | `services/enhanced_document_processor.py` | Deprecated (ADR 0001) | `services/gcp_batch_translation_service.py` |
 | `services/fallback_translator.py` | Permanently deleted (ADR 0002) | Google Cloud Document Translation sole pipeline; transparent failed-page re-run |
-| `ui/gradio_interface.py` | Permanently deleted (ADR 0002) | Bespoke zero-build vanilla ES modules SPA (`public/`) |
+| `ui/gradio_interface.py` | Permanently deleted (ADR 0002) | Bespoke zero-build vanilla ES modules SPA (`static/`) |
 | `reportlab` (runtime) | Retained as dev-only test fixture dependency (ADR 0002) | Google Cloud Document Translation native layout preservation |
 
 ### 🚀 Parallel Translation

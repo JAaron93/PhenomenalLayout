@@ -10,7 +10,7 @@
 - **Shared Namespaces**: In all modes, shared static namespaces (`default_user`, `anonymous`, `local_user`) must be rejected (`400 Bad Request` / `PermissionError`) to ensure user state isolation.
 
 ## 3. Bespoke Frontend & GCP-Only Architecture (ADR 0002)
-- **Gradio Retirement**: The Gradio web interface (`ui/gradio_interface.py`) has been permanently deleted in favor of a bespoke vanilla ES modules SPA (`public/`) served directly by FastAPI. Reviewers MUST NOT demand the restoration of Gradio, `gradio_client`, or Gradio UI callbacks.
+- **Gradio Retirement**: The Gradio web interface (`ui/gradio_interface.py`) has been permanently deleted in favor of a bespoke vanilla ES modules SPA (`static/`) served directly by FastAPI. Reviewers MUST NOT demand the restoration of Gradio, `gradio_client`, or Gradio UI callbacks.
 - **Fallback Engine Retirement**: The local fallback translation engine (`services/fallback_translator.py`, `POST /book/fallback-translate`) has been permanently deleted. Google Cloud Document Translation is the exclusive translation engine (Decision D2). When batch jobs report `failed_pages > 0`, failed pages are surfaced transparently in the UI for re-run under isolated prefixes (`{book_id}-r2`). Reviewers MUST NEVER flag the absence of local fallback synthesis or request restoring fallback translation.
 
 ## 4. Architectural Constitution (AGENTS.md, ADR 0001 & ADR 0002)

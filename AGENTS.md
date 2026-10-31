@@ -124,7 +124,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | **Premature Glossary Deletion** (Deleting working glossary before replacement is READY) | Leaves translations without a glossary during creation windows or upon creation failures. | Zero-downtime Blue-Green replacement: provision alternating slot (`-a` / `-b`), verify `READY`, then retire old slot. |
 | **Unbounded UUID Overflow Slots** (`sess-{token}-{uuid}`) | Exhausts the regional 1,000 glossary quota in `us-central1` during repeated failures. | Strict 2-slot bound: identify and retire the older superseded slot via `submit_time` before provisioning replacement. |
 | **Overwriting Unversioned Staged TSVs in GCS** | Overwrites known-good terminology before the replacement is verified live, breaking rollback restoration. | Versioned GCS object paths (`.../{slot}_{version}.tsv`) preserving the prior input URI until cleanup. |
-| **Gradio Web Interface** (`ui/gradio_interface.py` [deleted under ADR 0002 / Track A]) | Upstream Pillow pinning (`pillow<13.0`) caused 41 open Dependabot alerts; duplicated API functionality. | Bespoke zero-build vanilla ES modules SPA (`public/`) served directly by FastAPI. |
+| **Gradio Web Interface** (`ui/gradio_interface.py` [deleted under ADR 0002 / Track A]) | Upstream Pillow pinning (`pillow<13.0`) caused 41 open Dependabot alerts; duplicated API functionality. | Bespoke zero-build vanilla ES modules SPA (`static/`) served directly by FastAPI. |
 | **Local Fallback Translation Engine** (`services/fallback_translator.py` [deleted under ADR 0002 / Track B]) | High complexity TrueType font parsing, CMap unpacking, and ReportLab canvas drawing. | Google Cloud Document Translation is the sole translation pipeline; failed pages surfaced with re-run under `{book_id}-r2`. |
 
 ---
@@ -163,7 +163,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 * **Parallel-Failure Triage**: Under `-n auto` (xdist `dist=load`), worker scheduling is nondeterministic and failure sets rotate between runs. Before diagnosing a failure, rerun the failing test serially and diff the failure set against previous runs — a signature that appears once and moves between runs is environmental, not a regression. For state-leak repro, order node IDs in a single invocation (e.g., suspected polluter test first, victim test second): pytest runs node IDs in the order given.
 
 ### 6.4 Frontend Polling Hygiene & Idle Deactivation Invariant (NFR-03)
-* **Bounded Polling**: Progress polling routines in the bespoke frontend (`public/js/polling.js`, `public/js/translate.js`) MUST use bounded intervals with exponential backoff on transient errors.
+* **Bounded Polling**: Progress polling routines in the bespoke frontend (`static/js/polling.js`, `static/js/translate.js`) MUST use bounded intervals with exponential backoff on transient errors.
 * **Mandatory Deactivation**: Polling MUST be dynamically cancelled and deactivated upon translation completion (`is_done == true`), unrecoverable errors, or when the user navigates back to an idle state. Polling loops MUST NEVER run indefinitely during idle or completed states.
 
 ### 6.5 Developer Tooling Scope vs. Runtime Application Architecture

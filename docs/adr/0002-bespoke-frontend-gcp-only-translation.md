@@ -13,7 +13,7 @@ PhenomenalLayout previously maintained two parallel controllers over the core se
 2. A comprehensive FastAPI REST API ([`api/routes.py`](../../api/routes.py)).
 
 While Gradio accelerated rapid UI prototyping in early 2025, its presence in the production dependency tree created severe operational burdens:
-* **41 Open Dependabot Security Alerts**: Gradio 6.x pinned `pillow<13.0`. Critical vulnerabilities in Pillow 12.3.0 were fixable only in Pillow 13.0.0. While Gradio merged the `pillow>=13.0` allowance for 7.0-dev ([gradio-app/gradio#14005](https://github.com/gradio-app/gradio/pull/14005)), the 6.x backport request ([#14018](https://github.com/gradio-app/gradio/pull/14018)) remained unmerged, blocking Dependabot from resolving security alerts and generating update PRs.
+* **41 Open Dependabot Security Alerts**: Gradio 6.x pinned `pillow<13.0`. Critical vulnerabilities in Pillow 12.3.0 were fixable only in Pillow 13.0.0. While Gradio merged the `pillow>=13.0` allowance for 7.0-dev (`gradio-app/gradio#14005`), the 6.x backport request (`#14018`) remained unmerged, blocking Dependabot from resolving security alerts and generating update PRs.
 * **PEP 594 Compatibility Friction (`audioop-lts`)**: Gradio depended transitively on `pydub`, which in Python 3.13 requires the `audioop-lts` shim. Every automated lockfile regeneration stripped or conflicted with this marker, requiring recurring manual intervention (PR #125).
 * **Controller Redundancy**: Gradio UI callbacks duplicated authentication verification, form submission, and polling logic already implemented and tested in the REST API.
 * **Secondary Fallback Engine Complexity**: Under ADR 0001, a secondary fallback engine (`services/fallback_translator.py`) was introduced to synthesize plaintext pages when Google Cloud Document Translation encountered layout-parsing failures on complex diagram pages (`failed_pages > 0`). This required dynamic sequential 16-bit CID allocation, format 4/12 TrueType CMap parsing, composite font synthesis, and runtime `reportlab` canvas drawing, introducing substantial complexity and font-metric overhead.
@@ -27,7 +27,7 @@ We adopt a **Bespoke Zero-Build Frontend** and establish **Google Cloud Document
 ### Architectural Decisions (D1–D6)
 
 * **D1 — Zero-Build Vanilla ES Modules**:
-  The new frontend is implemented as static vanilla ES modules (`public/`) served directly by FastAPI's `StaticFiles` mount at root (`/`). No Node.js build step, bundler, or npm toolchain is required.
+  The new frontend is implemented as static vanilla ES modules (`static/`) served directly by FastAPI's `StaticFiles` mount at root (`/`). No Node.js build step, bundler, or npm toolchain is required.
 
 * **D2 — GCP-Only Translation; Fallback Deleted, Not Disabled**:
   The secondary fallback engine (`services/fallback_translator.py`), route (`POST /book/fallback-translate`), and orchestrator methods are permanently deleted. Google Cloud Document Translation is the exclusive translation engine. When batch translation reports `failed_pages > 0`, the UI surfaces an explicit warning banner with a 1-click **Re-run translation** option under a per-attempt suffixed `book_id` (`{book_id}-r2`). Each attempt writes to its own isolated GCS prefix, ensuring partial outputs remain downloadable.
