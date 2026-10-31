@@ -100,7 +100,7 @@ export function initTranslate(root, api) {
     );
   }
 
-  async function start() {
+  async function start({ isRerun = false } = {}) {
     if (sessionState.running) {
       showStatus("A translation job is already in progress.");
       return;
@@ -109,14 +109,14 @@ export function initTranslate(root, api) {
     const file = root.querySelector("#translate-file").files[0];
     if (!file) {
       showStatus(
-        sessionState.baseBookId
+        isRerun && sessionState.baseBookId
           ? `Select the source PDF for '${sessionState.baseBookId}' first.`
           : "Select a PDF first."
       );
       return;
     }
     const selectedBaseName = file.name.replace(/\.pdf$/i, "");
-    if (sessionState.baseBookId && selectedBaseName !== sessionState.baseBookId) {
+    if (isRerun && sessionState.baseBookId && selectedBaseName !== sessionState.baseBookId) {
       showStatus(
         `Selected file '${file.name}' does not match book '${sessionState.baseBookId}'. Please choose the matching PDF.`
       );
@@ -125,13 +125,13 @@ export function initTranslate(root, api) {
     const targetLang = root.querySelector("#translate-target")?.value || "en-US";
 
     let attempt = 1;
-    if (sessionState.fileName === file.name && sessionState.baseBookId) {
-      attempt = sessionState.attempt;
+    let baseBookId = selectedBaseName;
+
+    if (isRerun) {
+      baseBookId = sessionState.baseBookId || selectedBaseName;
+      attempt = (sessionState.attempt || 1) + 1;
     }
-    const baseBookId =
-      sessionState.fileName === file.name && sessionState.baseBookId
-        ? sessionState.baseBookId
-        : file.name.replace(/\.pdf$/i, "");
+
     const bookId = attempt === 1 ? baseBookId : `${baseBookId}-r${attempt}`;
     const sessionId = crypto.randomUUID();
 
@@ -231,10 +231,13 @@ export function initTranslate(root, api) {
       );
       const activeSessionId = state.session_id || sessionId;
       const activeBookId = state.book_id || bookId || "book";
+      const match = activeBookId.match(/-r(\d+)$/);
+      const currentAttempt = match ? parseInt(match[1], 10) : 1;
 
       sessionState.sessionId = activeSessionId;
       sessionState.bookId = activeBookId;
       sessionState.baseBookId = activeBookId.replace(/-r\d+$/, "");
+      sessionState.attempt = currentAttempt;
       sessionState.file = null;
       sessionState.fileName = null;
       const fileInput = root.querySelector("#translate-file");
@@ -263,8 +266,7 @@ export function initTranslate(root, api) {
   }
 
   root.querySelector("#translate-start").addEventListener("click", () => {
-    sessionState.attempt = 1;
-    start().catch((error) => {
+    start({ isRerun: false }).catch((error) => {
       poller.stop();
       setRunningState(false);
       showStatus(`Start failed: ${error.message}`);
@@ -272,8 +274,7 @@ export function initTranslate(root, api) {
   });
 
   root.querySelector("#translate-rerun").addEventListener("click", () => {
-    sessionState.attempt = (sessionState.attempt || 1) + 1;
-    start().catch((error) => {
+    start({ isRerun: true }).catch((error) => {
       poller.stop();
       setRunningState(false);
       showStatus(`Re-run failed: ${error.message}`);
