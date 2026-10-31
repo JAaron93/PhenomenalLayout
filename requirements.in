@@ -10,7 +10,7 @@ python-dotenv>=1.2.4,<2.0
 pypdf>=6.21.3,<7.0
 
 # Translation & NLP
-spacy>=3.8,<4.0
+spacy>=3.8.18,<4.0
 requests>=2.32,<3.0
 
 # Cloud Services & Deployment

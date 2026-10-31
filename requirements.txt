@@ -49,9 +49,10 @@ click==8.5.0
     #   modal
     #   spacy
     #   uvicorn
+    #   weasel
 cloudpathlib==0.25.0
     # via weasel
-confection==1.3.3
+confection==1.3.4
     # via
     #   spacy
     #   thinc
@@ -71,7 +72,7 @@ frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-google-api-core==2.34.0
+google-api-core[grpc]==2.34.0
     # via
     #   google-api-python-client
     #   google-cloud-core
@@ -103,7 +104,7 @@ google-crc32c==1.8.0
     #   google-resumable-media
 google-resumable-media==2.10.2
     # via google-cloud-storage
-googleapis-common-protos==1.75.2
+googleapis-common-protos[grpc]==1.75.2
     # via
     #   google-api-core
     #   grpc-google-iam-v1
@@ -238,10 +239,11 @@ pydantic-core==2.46.5
     # via pydantic
 pygments==2.21.0
     # via rich
-pyjwt==2.15.0
+pyjwt[crypto]==2.15.0
     # via
     #   -r requirements.in
     #   mcp
+    #   pyjwt
 pyparsing==3.3.2
     # via httplib2
 pypdf==6.21.3
@@ -263,6 +265,7 @@ requests==2.34.2
     #   -r requirements.in
     #   google-api-core
     #   google-cloud-storage
+    #   smart-open
     #   spacy
 rich==15.0.0
     # via
@@ -273,15 +276,11 @@ rpds-py==2026.6.3
     # via
     #   jsonschema
     #   referencing
-setuptools==84.2.1
-    # via
-    #   spacy
-    #   thinc
 shellingham==1.5.4
     # via typer
-smart-open==8.0.1
+smart-open[http]==8.0.1
     # via weasel
-spacy==3.8.16
+spacy==3.8.18
     # via -r requirements.in
 spacy-legacy==3.0.12
     # via spacy
@@ -342,7 +341,7 @@ uritemplate==4.2.0
     # via google-api-python-client
 urllib3==2.8.0
     # via requests
-uvicorn==0.54.0
+uvicorn[standard]==0.54.0
     # via
     #   -r requirements.in
     #   mcp
@@ -357,7 +356,7 @@ watchfiles==1.2.0
     # via
     #   modal
     #   uvicorn
-weasel==1.0.0
+weasel==1.0.1
     # via spacy
 websockets==17.1
     # via uvicorn
