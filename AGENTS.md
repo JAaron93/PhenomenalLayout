@@ -173,3 +173,27 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 
 ### 6.6 API Test Authentication Bypass & Custom Router Caveat
 * **Dependency Overrides Do Not Reach Memory Routes**: `/api/v1/memory/*` routes are served through custom `_IncludedRouter` wrappers whose captured auth dependency predates sibling tests' module reloads — `app.dependency_overrides` silently never engages for them (verified by instrumentation in PR #116). Tests that need unauthenticated access to these routes MUST patch `MEMORY_API_ENABLE_AUTH=false` via `patch.dict(os.environ, ...)` instead; `AuthConfig.enable_auth` re-reads the live environment on every request, so this bypasses stale module instances and router wrappers alike. Do not "fix" such fixtures by re-keying `dependency_overrides` — that approach was attempted and empirically disproven.
+
+### 6.7 Dependency Pruning Completeness — Setup Script Sweep
+When removing a runtime dependency from `requirements.in`, `pyproject.toml`, or any package manifest:
+1. **Grep setup and CI scripts** for stale import probes referencing the removed package before staging the manifest change:
+   ```bash
+   grep -rn "import <retired_pkg>\|python -c.*import <retired_pkg>" \
+     scripts/ Makefile justfile .github/workflows/ tests/conftest.py 2>/dev/null
+   ```
+2. For each match, replace the stale probe with the closest surviving peer from the same install tier (e.g., replace a retired UI dep with a core runtime dep such as `pypdf`).
+3. This sweep is **mandatory before running `uv pip compile` or staging the pruning commit** — a broken setup-script health check is indistinguishable from a broken install.
+4. Scope: `scripts/*.sh`, `Makefile`, `justfile`, `.github/workflows/*.yml`, `tests/conftest.py`, any `python -c "import <pkg>"` one-liners in CI steps.
+
+### 6.8 Backward-Compat No-Op Deprecations — Mandatory Docstring Update
+When a method's active behavior is removed but its public signature is intentionally preserved for backward compatibility (silenced via `_ = (arg1, arg2)`):
+1. The **docstring MUST be updated in the same commit** that introduces the no-op silencing.
+2. The updated docstring must:
+   - State the new actual behavior (e.g., `"Returns text only. Image rendering has been removed under ADR 0002."`).
+   - Mark each no-op argument as deprecated, for example:
+     ```
+     render_images (bool): Deprecated no-op. Retained for backward
+         compatibility only. Has no effect; images are no longer rendered.
+     dpi (int): Deprecated no-op. Retained for backward compatibility only.
+     ```
+3. This invariant applies to public and private methods alike. Docstring drift on a `_ = (...)` change is a Greptile P1 (misleading API contract) — verified in PR #146 review.
