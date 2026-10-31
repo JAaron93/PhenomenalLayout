@@ -6,7 +6,7 @@ Traceability: FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-10 to FR-14
 - Dispatching asynchronous batch document translation to user's GCS bucket
 - Enforcing 7-day staging lifecycle policy with fail-fast RuntimeError (§2.9)
 - Tracking LRO progress and integrating with BatchJobRecoveryManager
-- Triggering FallbackPageTranslator for failed pages to achieve 100% translation
+- Evaluating job completion and surfacing failed pages for user re-run
 - Pruning transient Tier 2 session glossaries upon job completion
 - Google Drive GIS export streaming directly from GCS
 - Synchronized side-by-side bilingual reading view
@@ -28,15 +28,9 @@ from services.book_translation_orchestrator import (
     BookScanResult,
     BookTranslationOrchestrator,
     CompletionSummary,
-    FallbackResult,
 )
 from services.byok_credentials_manager import BYOKCredentialsManager
 from services.dual_pane_viewer import BilingualPagePair, DualPaneViewerController
-from services.fallback_translator import (
-    FallbackPageTranslator,
-    PageText,
-    TranslatedPage,
-)
 from services.fraktur_classifier import (
     FrakturClassifier,
     OCRConfidence,
@@ -189,30 +183,6 @@ def mock_fraktur_classifier() -> MagicMock:
 
 
 @pytest.fixture
-def mock_fallback_translator() -> MagicMock:
-    fb = MagicMock(spec=FallbackPageTranslator)
-    fb.extract_failed_pages_text.return_value = [
-        PageText(
-            page_index=1,
-            page_number=2,
-            raw_text="Complex diagram text",
-            extracted_successfully=True,
-        )
-    ]
-    fb.translate_failed_pages.return_value = [
-        TranslatedPage(
-            page_index=1,
-            page_number=2,
-            translated_text="Translated diagram text",
-            source_text="Complex diagram text",
-            success=True,
-        )
-    ]
-    fb.splice_fallback_pages.return_value = io.BytesIO(b"%PDF-1.4 spliced output")
-    return fb
-
-
-@pytest.fixture
 def mock_drive_exporter() -> MagicMock:
     exp = MagicMock(spec=GoogleDriveExporter)
     exp.export_stream_to_drive.return_value = DriveExportResult(
@@ -248,7 +218,6 @@ def orchestrator(
     mock_glossary_sync: MagicMock,
     mock_lifecycle_mgr: MagicMock,
     mock_fraktur_classifier: MagicMock,
-    mock_fallback_translator: MagicMock,
     mock_drive_exporter: MagicMock,
     mock_viewer_controller: MagicMock,
 ) -> BookTranslationOrchestrator:
@@ -261,7 +230,6 @@ def orchestrator(
         glossary_sync_manager=mock_glossary_sync,
         lifecycle_manager=mock_lifecycle_mgr,
         fraktur_classifier=mock_fraktur_classifier,
-        fallback_translator=mock_fallback_translator,
         drive_exporter=mock_drive_exporter,
         viewer_controller=mock_viewer_controller,
     )
@@ -457,7 +425,7 @@ class TestHandleJobCompletion:
 
         assert isinstance(summary, CompletionSummary)
         assert summary.status == "SUCCEEDED"
-        assert summary.can_fallback is False
+        assert not hasattr(summary, "can_fallback")
         assert summary.failed_pages == 0
         mock_lifecycle_mgr.cleanup_session_glossary.assert_called_once_with("user-1", "sess-01")
 
@@ -482,39 +450,9 @@ class TestHandleJobCompletion:
 
         assert isinstance(summary, CompletionSummary)
         assert summary.status == "SUCCEEDED"
-        assert summary.can_fallback is True
+        assert not hasattr(summary, "can_fallback")
         assert summary.failed_pages == 1
-        # Glossary must NOT be cleaned up yet because fallback translation requires it
-        mock_lifecycle_mgr.cleanup_session_glossary.assert_not_called()
-
-
-class TestTriggerFallbackPageTranslation:
-    """Test trigger_fallback_page_translation workflow."""
-
-    @pytest.mark.usefixtures("mock_recovery_mgr")
-    def test_trigger_fallback_successful(
-        self,
-        orchestrator: BookTranslationOrchestrator,
-        mock_fallback_translator: MagicMock,
-        mock_batch_service: MagicMock,
-        mock_lifecycle_mgr: MagicMock,
-    ) -> None:
-        pdf_bytes = _create_sample_pdf(pages=2)
-        result = orchestrator.trigger_fallback_page_translation(
-            user_id="user-1",
-            session_id="sess-01",
-            source_pdf=pdf_bytes,
-            failed_page_indices=[1],
-        )
-
-        assert isinstance(result, FallbackResult)
-        assert result.failed_pages_count == 1
-        assert result.spliced_output_gcs_uri.startswith("gs://")
-
-        mock_fallback_translator.extract_failed_pages_text.assert_called_once()
-        mock_fallback_translator.translate_failed_pages.assert_called_once()
-        mock_fallback_translator.splice_fallback_pages.assert_called_once()
-        mock_batch_service.upload_book_to_gcs.assert_called_once()
+        # Session glossary is cleaned up immediately upon batch job completion
         mock_lifecycle_mgr.cleanup_session_glossary.assert_called_once_with("user-1", "sess-01")
 
 

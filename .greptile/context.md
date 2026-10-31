@@ -17,7 +17,6 @@ PhenomenalLayout translates full-length philosophical treatises (e.g. Ludwig Kla
 * **Scholarly Resilience Modules**:
   - `services/fraktur_classifier.py`: Fraktur/Blackletter OCR confidence rating for historical printings.
   - `services/batch_job_recovery.py`: Preserves active LRO tracking across browser disconnects and container scale-downs.
-  - `services/fallback_translator.py`: Extracts raw text and translates complex skipped pages to deliver a 98% layout-preserved, 100% translated book.
   - `services/session_glossary_lifecycle.py`: Automatic cleanup of Tier 2 session glossaries to respect the 1,000 regional quota.
   - `services/dual_pane_viewer.py`: Synchronized bilingual side-by-side German/English reading mode.
 * **Linguistics & Neologism Engine**:

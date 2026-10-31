@@ -61,7 +61,7 @@ When reviewing new code or refactors, verify compliance with these components:
 ### 3.4 Scholarly Resilience Architecture
 * **Fraktur Script Assessment**: `FrakturClassifier` must analyze font properties and return OCR script confidence ratings for pre-1945 editions.
 * **Batch Job Resumption**: `BatchJobRecoveryManager` must persist active LRO states in `/data/sessions/` so translators can reconnect without job abandonment.
-* **Partial Page Failure Fallback**: `FallbackPageTranslator` must handle `metadata.failed_pages > 0` by extracting and translating raw text to deliver a 98% layout + 100% translated book.
+* **GCP-Only Batch Translation**: Google Cloud Document Translation Advanced (v3) is the sole translation pipeline (ADR 0002). Partial page layout parsing failures (`metadata.failed_pages > 0`) are surfaced transparently in the UI with a re-run action under an isolated prefix (`{book_id}-r2`). Local fallback synthesis is retired.
 * **Glossary Lifecycle**: `SessionGlossaryLifecycleManager` must prune transient Tier 2 session glossaries upon job completion.
 * **Dual-Pane Viewer**: `DualPaneViewerController` must serve synchronized German/English page pairs for reading and verification.
 

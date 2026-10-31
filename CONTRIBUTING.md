@@ -53,7 +53,7 @@ pytest -o addopts="" tests/test_dry_helpers.py tests/test_gcp_settings.py \
   tests/test_google_drive_exporter.py tests/test_user_vocabulary_store.py \
   tests/test_glossary_compiler.py tests/test_glossary_sync_manager.py \
   tests/test_session_glossary_lifecycle.py tests/test_fraktur_classifier.py \
-  tests/test_batch_job_recovery.py tests/test_fallback_translator.py \
+  tests/test_batch_job_recovery.py \
   tests/test_dual_pane_viewer.py tests/test_dynamic_programming.py \
   tests/test_enum_hash.py tests/test_memory_api_security.py \
   tests/test_memory_api_integration.py tests/test_memory_gc_endpoint.py \

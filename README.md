@@ -13,7 +13,7 @@ Domain-specific **German Philosophical Book Translation & Neologism Orchestratio
 - **German Philosophical Neologism Detector**: Morphological analysis and compound decomposition tailored for 19th- and 20th-century German philosophical texts.
 - **Bring Your Own Key (BYOK) Billing Isolation**: All translation compute and storage are billed directly to the user's GCP project with zero translation host costs.
 - **Zero Host PDF Storage Invariant**: Full-length book PDFs stream directly between user GCS buckets and personal Google Drive; zero book PDFs are stored on host disk.
-- **Scholarly Resilience**: Fraktur OCR script assessment, atomic LRO session resumption, dynamic sequential 16-bit CID fallback page translation, and synchronized dual-pane reading.
+- **Scholarly Resilience**: Fraktur OCR script assessment, atomic LRO session resumption, transparent failed-page surfacing with 1-click re-run, and synchronized dual-pane reading.
 
 ## 🚀 Features
 
@@ -151,11 +151,9 @@ flowchart TD
     - Atomic persistence of active LRO session state to Modal Volume storage (`/data/sessions/{user_id}_{book_id}.json`)
     - Seamless reconnection and sub-second (< 1.0s) job resumption across browser closes and serverless container scale-downs
 
-15. **Fallback Plaintext Translation & Splicing Engine** (`services/fallback_translator.py`)
-    - Secondary fallback for failed layout pages (`failed_pages > 0`), guaranteeing a 98% layout-preserved, 100% translated book
-    - Strict 1-to-1 physical page correspondence with dynamic height expansion preventing line overlap or text clipping
-    - Dynamic sequential 16-bit CID allocation per page with TrueType format 4 and format 12 (32-bit Unicode) `cmap` parsing and dynamic `/CIDToGIDMap` streams
-    - 100% faithful preservation of Greek, Cyrillic, Hebrew, Arabic, German umlauts, Fraktur ligatures, and mathematical symbols without transliteration (documented in [`docs/FALLBACK_TRANSLATION_LIMITATIONS.md`](docs/FALLBACK_TRANSLATION_LIMITATIONS.md))
+15. **Transparent Failed-Page Surfacing & Re-run Isolation** (`services/book_translation_orchestrator.py`)
+    - Native Google Cloud Document Translation Advanced (v3) batch processing without local synthesis (ADR 0002)
+    - Transparent reporting of layout-parsing failures (`failed_pages > 0`) with 1-click re-run action under isolated GCS output prefixes (`{book_id}-r2`)
 
 16. **Synchronized Dual-Pane Viewer Controller** (`services/dual_pane_viewer.py`)
     - Synchronized bilingual page retrieval (`BilingualPagePair`) mapping German original page $N$ directly to English translated page $N$
@@ -215,7 +213,7 @@ quality_score = (
 - **Bridges the gap** between cloud translation scale and nuanced philosophical vocabulary
 - **Interactive Neologism Resolution**: Empowers scholars to define or preserve coined compounds
 - **Scholarly Verification**: Synchronized dual-pane bilingual verification and 1-click Google Drive export
-- **Production Resilience**: Atomic LRO reconnection across container scale-downs and 100% translation completeness via fallback page synthesis
+- **Production Resilience**: Atomic LRO reconnection across container scale-downs and isolated re-run workflows for partial failures (ADR 0002)
 
 ## 🛠️ Installation
 
@@ -308,7 +306,7 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Core Application
 
-- `app.py` - Main application with advanced Gradio interface
+- `app.py` - Main FastAPI application serving the bespoke vanilla ES single-page interface (`public/`)
 - `services/enhanced_document_processor.py` - PDF-only document handler
 
 ### Translation & Cloud Document Services
@@ -345,28 +343,6 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 - `examples/parallel_translation_demo.py` - Working demonstration of parallel capabilities
 - `simple_test_runner.py` - Basic functionality tests
 
-#### UI testing notes
-
-- **GRADIO_SCHEMA_PATCH**
-  - **Purpose**: Enables a test-only monkeypatch that tolerates boolean JSON Schema fragments emitted by some `gradio_client` versions. Prevents failures in API schema parsing without pinning Gradio.
-  - **Accepted truthy values**: `"1"`, `"true"`, `"yes"`, `"on"` (case-insensitive).
-  - **When to set**: Only during tests. Automatically enabled in CI by default; set locally if you encounter schema parsing errors.
-  - **Default**: Off locally; On in CI.
-
-- **GRADIO_SHARE**
-  - **Purpose**: Forces use of a public share URL when localhost isn't reachable (e.g., headless/CI). Stabilizes Gradio UI tests that use `gradio_client`.
-  - **Accepted truthy values**: `"1"`, `"true"`, `"yes"`, `"on"` (case-insensitive).
-  - **When to set**: Headless environments or CI where `http://127.0.0.1` cannot be accessed.
-  - **Default**: Off locally; typically On in CI via test helpers.
-
-- **Pytest markers**
-  - Use `-m "not slow"` to skip slower-running integration tests.
-
-Example command:
-
-```bash
-GRADIO_SCHEMA_PATCH=true GRADIO_SHARE=true pytest -q -m "not slow" tests/test_ui_gradio.py
-```
 
 ## ☁️ Cloud Architecture & Serverless Deployment (Modal Labs)
 
@@ -700,12 +676,14 @@ PhenomenalLayout has evolved through three major architectural eras:
 
 | Legacy Component | Deprecation Status | Modern Replacement |
 | :--- | :--- | :--- |
-| `services/pdf_document_reconstructor.py` | Permanently deleted | Google Cloud Document Translation Advanced (v3) |
-| `services/dolphin_client.py` | Permanently deleted | Google Cloud Document Translation Advanced (v3) |
-| `services/dolphin_modal_service.py` | Permanently deleted | Serverless ASGI app on Modal (`modal_app.py`) + GCP Translation |
+| `services/pdf_document_reconstructor.py` | Permanently deleted (ADR 0001) | Google Cloud Document Translation Advanced (v3) |
+| `services/dolphin_client.py` | Permanently deleted (ADR 0001) | Google Cloud Document Translation Advanced (v3) |
+| `services/dolphin_modal_service.py` | Permanently deleted (ADR 0001) | Serverless ASGI app on Modal (`modal_app.py`) + GCP Translation |
 | `core/dynamic_layout_engine.py` | Deprecated (ADR 0001) | Cloud Translation handles typography scaling natively |
 | `services/enhanced_document_processor.py` | Deprecated (ADR 0001) | `services/gcp_batch_translation_service.py` |
-| `reportlab` (runtime) | Removed from `requirements.txt` | Cloud Translation + `pypdf` TrueType fallback renderer |
+| `services/fallback_translator.py` | Permanently deleted (ADR 0002) | Google Cloud Document Translation sole pipeline; transparent failed-page re-run |
+| `ui/gradio_interface.py` | Permanently deleted (ADR 0002) | Bespoke zero-build vanilla ES modules SPA (`public/`) |
+| `reportlab` (runtime) | Retained as dev-only test fixture dependency (ADR 0002) | Google Cloud Document Translation native layout preservation |
 
 ### 🚀 Parallel Translation
 - **API Key Required**: Valid Lingo.dev API key is mandatory for translation functionality

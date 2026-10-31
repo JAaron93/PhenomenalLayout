@@ -105,7 +105,6 @@ This reference document catalogs all centralized, reusable helper functions acro
 All domain services consuming PDF documents have been normalized to route through `open_pdf_stream`:
 * `services/cost_estimator.py`: `GCPCostEstimator.estimate_book_cost`
 * `services/fraktur_classifier.py`: `FrakturClassifier.classify_script`
-* `services/fallback_translator.py`: `FallbackPageTranslator.extract_failed_pages_text`, `synthesize_repaired_document`
 * `services/dual_pane_viewer.py`: `DualPaneViewerController.get_bilingual_page_pair`, `_find_term_boxes_on_page`, `_render_page_image`
 
 Each service retains `_open_source` as a deprecated delegating shim to preserve backward-compatibility with legacy unit tests and third-party callers.
@@ -172,19 +171,9 @@ Each service retains `_open_source` as a deprecated delegating shim to preserve 
 
 ---
 
-## 7. TrueType Font Metrics Caching (`services/fallback_translator.py`)
+## 7. Fraktur Typography & Script Analysis Optimization (`services/fraktur_classifier.py`)
 
-### 7.1 `_parse_ttf_metrics_and_cmap`
-* **Location**: [`services/fallback_translator.py`](../services/fallback_translator.py)
-* **Optimization**: Decorated with `@functools.lru_cache(maxsize=4)`.
-* **Purpose**: Prevents repeatedly unpacking 65 KB TrueType binary tables (`head`, `hhea`, `hmtx`, `cmap` format 4 & 12) for each failed layout page.
-* **Complexity**: First call: $O(\text{TTF\_size})$. Subsequent calls: $O(1)$ memory lookup, amortizing table parsing across all pages.
-
----
-
-## 8. Fraktur Typography & Script Analysis Optimization (`services/fraktur_classifier.py`)
-
-### 8.1 `_FRAKTUR_FONT_RE` & Allocation-Free Ligature Counting
+### 7.1 `_FRAKTUR_FONT_RE` & Allocation-Free Ligature Counting
 * **Location**: [`services/fraktur_classifier.py`](../services/fraktur_classifier.py)
 * **Optimizations**:
   1. **Pre-compiled Regex**:

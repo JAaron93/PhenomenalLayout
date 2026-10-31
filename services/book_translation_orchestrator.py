@@ -9,7 +9,7 @@ Coordinates the full end-to-end German philosophical book translation pipeline:
 3. Pre-auth GCP cost and storage retention estimation.
 4. Asynchronous batch translation submission via GCS with 7-day staging lifecycle enforcement.
 5. Persistent LRO monitoring and job resumption via BatchJobRecoveryManager.
-6. Fallback plaintext translation for skipped/failed pages (100% complete translation).
+6. Transparent failed-page surfacing with user re-run support (GCP-only translation).
 7. Session glossary quota auto-cleanup via SessionGlossaryLifecycleManager.
 8. Seamless Google Drive export via Google Identity Services (GIS).
 9. Synchronized side-by-side bilingual reading mode via DualPaneViewerController.
@@ -40,10 +40,6 @@ from services.batch_job_recovery import (
 from services.byok_credentials_manager import BYOKCredentialsManager
 from services.cost_estimator import CostQuote, GCPCostEstimator
 from services.dual_pane_viewer import BilingualPagePair, DualPaneViewerController
-from services.fallback_translator import (
-    FallbackPageTranslator,
-    TranslatedPage,
-)
 from services.fraktur_classifier import (
     FrakturClassifier,
     OCRConfidence,
@@ -106,20 +102,8 @@ class CompletionSummary:
     translated_pages: int
     failed_pages: int
     is_done: bool
-    can_fallback: bool
     output_gcs_uri: str
     error_message: str | None = None
-
-
-@dataclass
-class FallbackResult:
-    """Result of running plaintext fallback translation on failed layout pages."""
-
-    session_id: str
-    failed_pages_count: int
-    translated_pages: list[TranslatedPage]
-    spliced_output_gcs_uri: str
-    success: bool
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +124,6 @@ class BookTranslationOrchestrator:
         glossary_sync_manager: GlossarySyncManager | None = None,
         lifecycle_manager: SessionGlossaryLifecycleManager | None = None,
         fraktur_classifier: FrakturClassifier | None = None,
-        fallback_translator: FallbackPageTranslator | None = None,
         drive_exporter: GoogleDriveExporter | None = None,
         viewer_controller: DualPaneViewerController | None = None,
         cost_estimator: GCPCostEstimator | None = None,
@@ -155,7 +138,6 @@ class BookTranslationOrchestrator:
         self.glossary_sync_manager = glossary_sync_manager or GlossarySyncManager(self.credentials_manager)
         self.lifecycle_manager = lifecycle_manager or SessionGlossaryLifecycleManager(self.credentials_manager)
         self.fraktur_classifier = fraktur_classifier or FrakturClassifier()
-        self.fallback_translator = fallback_translator or FallbackPageTranslator(self.credentials_manager)
         self.drive_exporter = drive_exporter or GoogleDriveExporter()
         self.viewer_controller = viewer_controller or DualPaneViewerController()
         self.cost_estimator = cost_estimator or GCPCostEstimator()
@@ -487,11 +469,9 @@ class BookTranslationOrchestrator:
         state = self.recovery_manager.resume_active_job(session_id, user_id=user_id)
         update = self.progress_monitor.poll_once(user_id, state.lro_name)
 
-        can_fallback = update.failed_pages > 0
-
-        # If translation succeeded with 0 failed pages, clean up dynamic session glossary
-        if update.state == "SUCCEEDED" and update.failed_pages == 0:
-            logger.info("Batch job succeeded with 0 failed pages. Pruning session glossary for %s", session_id)
+        # If translation succeeded, clean up dynamic session glossary
+        if update.state == "SUCCEEDED":
+            logger.info("Batch job succeeded. Pruning session glossary for %s", session_id)
             self.lifecycle_manager.cleanup_session_glossary(user_id, session_id)
 
         return CompletionSummary(
@@ -501,104 +481,8 @@ class BookTranslationOrchestrator:
             translated_pages=update.translated_pages,
             failed_pages=update.failed_pages,
             is_done=update.is_done,
-            can_fallback=can_fallback,
             output_gcs_uri=state.gcs_output_uri,
             error_message=update.error_message,
-        )
-
-    # ------------------------------------------------------------------
-    # Task 5.1 Step 5: Fallback Plaintext Translation Trigger
-    # ------------------------------------------------------------------
-
-    def trigger_fallback_page_translation(
-        self,
-        user_id: str,
-        session_id: str,
-        source_pdf: Path | str | bytes | BinaryIO,
-        failed_page_indices: list[int] | None = None,
-        source_lang: str = "de",
-        target_lang: str = "en",
-    ) -> FallbackResult:
-        """Extract and translate raw text for failed pages, splicing into the output PDF.
-
-        Achieves a 98% layout-preserved, 100% fully translated book (FR-13, BDD FR-13.1).
-        Cleans up transient Tier 2 session glossary upon completion.
-
-        Parameters
-        ----------
-        user_id:
-            User identifier.
-        session_id:
-            Session identifier.
-        source_pdf:
-            German original source PDF.
-        failed_page_indices:
-            Optional explicit list of 0-indexed failed page numbers. If None, derived from state.
-        source_lang:
-            Source language code.
-        target_lang:
-            Target language code.
-
-        Returns:
-        -------
-        FallbackResult
-            Result with spliced output GCS URI.
-        """
-        state = self.recovery_manager.resume_active_job(session_id, user_id=user_id)
-        bucket_name = self.credentials_manager.get_bucket_name(user_id)
-
-        # 1. Determine failed page indices
-        if failed_page_indices is None:
-            failed_count = state.failed_pages or 1
-            failed_page_indices = list(range(failed_count))
-
-        # 2. Extract unformatted text from failed pages
-        pages_text = self.fallback_translator.extract_failed_pages_text(
-            source=source_pdf,
-            failed_page_indices=failed_page_indices,
-        )
-
-        # 3. Retrieve glossary resource name and translate raw text
-        glossary_name = state.extra_metadata.get("glossary_resource_name")
-        translated_pages = self.fallback_translator.translate_failed_pages(
-            user_id=user_id,
-            pages_text=pages_text,
-            glossary_name=glossary_name,
-            source_lang=source_lang,
-            target_lang=target_lang,
-        )
-
-        # 4. Stream layout PDF from GCS outputs
-        gcs_output_file = f"{state.gcs_output_uri.rstrip('/')}/source_{source_lang}_{target_lang}.pdf"
-        try:
-            layout_stream = self.batch_service.stream_translated_book(user_id, gcs_output_file)
-        except Exception:
-            # Fallback to source PDF stream as baseline layout placeholder if output not yet placed
-            layout_stream, _ = self._open_source(source_pdf)
-
-        # 5. Splice translated fallback pages into output PDF
-        spliced_buffer = self.fallback_translator.splice_fallback_pages(
-            layout_pdf_source=layout_stream,
-            translated_fallback_pages=translated_pages,
-        )
-
-        # 6. Upload complete spliced PDF to GCS
-        spliced_output_gcs_uri = f"gs://{bucket_name}/outputs/{state.book_id}/completed_spliced.pdf"
-        self.batch_service.upload_book_to_gcs(
-            user_id=user_id,
-            source=spliced_buffer,
-            gcs_destination_uri=spliced_output_gcs_uri,
-        )
-
-        # 7. Clean up session glossary now that fallback translation is complete
-        self.lifecycle_manager.cleanup_session_glossary(user_id, session_id)
-
-        return FallbackResult(
-            session_id=session_id,
-            failed_pages_count=len(failed_page_indices),
-            translated_pages=translated_pages,
-            spliced_output_gcs_uri=spliced_output_gcs_uri,
-            success=True,
         )
 
     # ------------------------------------------------------------------

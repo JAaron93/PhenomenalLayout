@@ -149,11 +149,6 @@ try:
         HighlightCoordinates,
         TextBoundingBox,
     )
-    from .fallback_translator import (  # noqa: F401
-        FallbackPageTranslator,
-        PageText,
-        TranslatedPage,
-    )
     from .fraktur_classifier import (  # noqa: F401
         FrakturClassifier,
         OCRConfidence,
@@ -170,9 +165,6 @@ try:
             "BatchJobRecoveryManager",
             "ActiveJobState",
             "JobNotFoundError",
-            "FallbackPageTranslator",
-            "PageText",
-            "TranslatedPage",
             "DualPaneViewerController",
             "BilingualPagePair",
             "HighlightCoordinates",
@@ -192,7 +184,6 @@ try:
         BookScanResult,
         BookTranslationOrchestrator,
         CompletionSummary,
-        FallbackResult,
     )
 
     _available_services.extend(
@@ -201,7 +192,6 @@ try:
             "BookJobHandle",
             "BookScanResult",
             "CompletionSummary",
-            "FallbackResult",
         ]
     )
     _service_availability["BOOK_ORCHESTRATOR_AVAILABLE"] = True
