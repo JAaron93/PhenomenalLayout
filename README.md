@@ -292,14 +292,12 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Requirements
 
-- Python 3.11 or 3.12 recommended (3.8–3.12 supported).
-- Core libs are pinned in `requirements.txt` (e.g., `gradio==6.26.0`, `pillow==12.3.0`, `starlette==1.6.0`, `pdf2image==1.17.0`, `reportlab==4.5.1`, `pypdf==6.16.2`).
-- Poppler runtime required by `pdf2image` (provides `pdftoppm`/`pdfinfo`). Ensure it's installed and on PATH:
-  - Ubuntu/Debian: `sudo apt-get update && sudo apt-get install -y poppler-utils`
-  - macOS: `brew install poppler`
+- Python 3.11, 3.12, or 3.13 supported.
+- Core libs are pinned in `requirements.txt` (e.g., `fastapi==0.143.0`, `starlette==1.6.0`, `pypdf==6.21.3`, `google-cloud-translate==3.28.0`, `google-cloud-storage==3.17.0`).
+- Poppler & OCR runtimes: Retired under ADR 0002. OCR and document layout parsing are outsourced directly to Google Cloud Document Translation Advanced v3.
 - Client/Server: `fastapi`, `uvicorn`, `httpx`, `starlette>=1.0.0`
-- UI: `gradio>=6.0,<7.0`
-- Testing: `pytest>=9.0,<10.0`, `pytest-cov`, `pytest-asyncio`
+- UI: Bespoke zero-build vanilla ES modules single-page application served directly from `static/`
+- Testing: `pytest>=9.0,<10.0`, `pytest-cov`, `pytest-asyncio`, `pytest-playwright`
 - Valid Lingo API key for translation functionality
 
 ## 📁 Key Files
@@ -395,8 +393,8 @@ Common workflows
 ```
 
 Important
-- Don't edit requirements.txt directly. Edit requirements.in and run ./scripts/update-deps.sh
-- pdf2image is pinned to >=1.17.0 for compatibility with Debian Bookworm + poppler-utils in the Modal image
+- Don't edit requirements.txt directly. Edit requirements.in and run `uv pip compile requirements.in -o requirements.txt`
+- Runtime Pillow, pdf2image, and ReportLab have been retired under ADR 0002. Test fixtures keep ReportLab in requirements-dev.txt only.
 
 ### Optional Security Scanning
 
@@ -426,7 +424,7 @@ Configure environment variables for Google Cloud Document Translation v3 and reg
 - `GCP_SESSION_GLOSSARY_TTL_HOURS` (int): Time-to-live before pruning expired session glossaries (default: `24`).
 
 ### PDF Processing Settings
-- `PDF_DPI` (int): Resolution for PDF rendering; affects pdf2image conversion. Default: 300 DPI.
+- `PDF_DPI` (int): Resolution for PDF rendering. Default: 300 DPI.
 - `PRESERVE_IMAGES` (bool): Preserve embedded images. Default: true.
 - `MEMORY_THRESHOLD_MB` (int): Memory threshold used by some validators. Default: 500.
 - `MAX_CONCURRENT_REQUESTS` (int): Concurrency for translation.
