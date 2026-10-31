@@ -55,9 +55,6 @@ def require_filename_component(name: str) -> str:
 
 def _managed_roots() -> list[str]:
     roots = [tempfile.gettempdir()]
-    gradio_temp = os.environ.get("GRADIO_TEMP_DIR")
-    if gradio_temp:
-        roots.append(gradio_temp)
     roots.extend(MANAGED_FILE_DIRS)
     return roots
 

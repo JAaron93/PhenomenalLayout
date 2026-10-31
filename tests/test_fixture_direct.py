@@ -67,10 +67,9 @@ def test_fixture_module_reloading(reload_app_with_env):
     finally:
         # Restore sys.modules to original state: remove only modules added
         # during test and restore any mutated originals.
-        # numpy and gradio are intentionally excluded because they carry
-        # C-extension/global runtime state and cannot be safely reloaded
-        # in-process.
-        excluded_top_level = {"numpy", "gradio"}
+        # numpy is intentionally excluded because it carries C-extension
+        # global runtime state and cannot be safely reloaded in-process.
+        excluded_top_level = {"numpy"}
 
         added = set(sys.modules) - set(original_modules)
         for name in added:

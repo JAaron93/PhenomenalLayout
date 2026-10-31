@@ -37,7 +37,7 @@ dependencies = [
 
 
 [tool.setuptools.packages.find]
-include = ["services*", "models*", "utils*", "database*", "config*", "core*", "api*", "ui*"]
+include = ["services*", "models*", "utils*", "database*", "config*", "core*", "api*"]
 exclude = ["tests*", "examples*", "scripts*", "docs*", "temp*", "input*", "output*", "downloads*", "static*", "templates*", "assets*"]
 
 [tool.black]

@@ -58,10 +58,15 @@ def reload_app_with_env():
     import sys
 
     # Modules to reload in dependency order (base → dependent)
-    # Order matters: auth → rate_limit → memory_routes → app
+    # Order matters: auth → rate_limit → routes → memory_routes → app.
+    # api.routes MUST be reloaded too: its include_router bindings otherwise
+    # reference the pre-reload memory_routes/rate_limit module objects, so the
+    # app under test serves stale rate-limit constants (60) instead of the
+    # patched ones (100).
     MODULE_NAMES = [
         "api.auth",
         "api.rate_limit",
+        "api.routes",
         "api.memory_routes",
         "app",
     ]

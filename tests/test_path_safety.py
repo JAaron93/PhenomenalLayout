@@ -89,7 +89,9 @@ class TestResolveManagedPath:
         probe.write_bytes(b"%PDF-1.4")
         assert resolve_managed_path(probe) == Path(os.path.realpath(probe))
 
-    def test_accepts_managed_dirs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_accepts_managed_dirs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         (tmp_path / "uploads").mkdir()
         probe = tmp_path / "uploads" / "doc.pdf"
@@ -114,12 +116,3 @@ class TestResolveManagedPath:
         probe = tmp_path / "x.pdf"
         probe.write_bytes(b"x")
         assert resolve_managed_path_or_none(probe) is not None
-
-    def test_gradio_temp_dir_env_is_honored(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("GRADIO_TEMP_DIR", str(tmp_path / "gradio-custom"))
-        (tmp_path / "gradio-custom").mkdir()
-        probe = tmp_path / "gradio-custom" / "doc.pdf"
-        probe.write_bytes(b"%PDF-1.4")
-        assert resolve_managed_path(probe) == Path(os.path.realpath(probe))
