@@ -108,7 +108,18 @@ export function initTranslate(root, api) {
     const { userId } = api.requireIdentity();
     const file = root.querySelector("#translate-file").files[0];
     if (!file) {
-      showStatus("Select a PDF first.");
+      showStatus(
+        sessionState.baseBookId
+          ? `Select the source PDF for '${sessionState.baseBookId}' first.`
+          : "Select a PDF first."
+      );
+      return;
+    }
+    const selectedBaseName = file.name.replace(/\.pdf$/i, "");
+    if (sessionState.baseBookId && selectedBaseName !== sessionState.baseBookId) {
+      showStatus(
+        `Selected file '${file.name}' does not match book '${sessionState.baseBookId}'. Please choose the matching PDF.`
+      );
       return;
     }
     const targetLang = root.querySelector("#translate-target")?.value || "en-US";
@@ -224,6 +235,12 @@ export function initTranslate(root, api) {
       sessionState.sessionId = activeSessionId;
       sessionState.bookId = activeBookId;
       sessionState.baseBookId = activeBookId.replace(/-r\d+$/, "");
+      sessionState.file = null;
+      sessionState.fileName = null;
+      const fileInput = root.querySelector("#translate-file");
+      if (fileInput) {
+        fileInput.value = "";
+      }
 
       showStatus(
         `Resumed ${activeBookId}: State: ${state.status} (${state.translated_pages}/${state.total_pages} pages)`
