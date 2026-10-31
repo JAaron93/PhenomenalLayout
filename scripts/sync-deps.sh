@@ -39,7 +39,7 @@ python -c "
 import sys
 print(f'  Python: {sys.version.split()[0]}')
 try:
-    import modal, fastapi, gradio
+    import modal, fastapi, pypdf
     print('  ✅ Core packages: OK')
 except ImportError as e:
     print(f'  ❌ Import error: {e}')

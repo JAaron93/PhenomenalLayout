@@ -74,7 +74,7 @@ class DualPaneViewerController:
     """Controller for bilingual side-by-side reading mode and term highlighting."""
 
     def __init__(self, default_dpi: int = 150) -> None:
-        """Initialise viewer controller with default rasterization DPI."""
+        """Initialise viewer controller (default_dpi retained for backward compatibility)."""
         self._default_dpi = default_dpi
 
     # ------------------------------------------------------------------
@@ -89,17 +89,21 @@ class DualPaneViewerController:
         render_images: bool = True,
         dpi: int | None = None,
     ) -> BilingualPagePair:
-        """Retrieve synchronized page text and optional rendered images.
+        """Retrieve synchronized page text for side-by-side reading.
+
+        Under ADR 0002, dual-pane delivers text-only page pairs without runtime
+        rasterization or image payloads. The ``render_images`` and ``dpi``
+        arguments are retained purely as backward-compatible shims.
 
         Args:
             german_source: German original PDF (Path, bytes, or stream).
             english_source: English translated PDF (Path, bytes, or stream).
             page_number: 1-indexed page number to display.
-            render_images: Whether to rasterize page images as base64 strings.
-            dpi: Image rasterization resolution (default 150).
+            render_images: Deprecated no-op (images removed under ADR 0002).
+            dpi: Deprecated no-op (resolution option no longer used).
 
         Returns:
-            BilingualPagePair containing text, total counts, and images.
+            BilingualPagePair containing synchronized text and page counts.
 
         Raises:
             ValueError: If page_number is out of range or PDF parsing fails.
