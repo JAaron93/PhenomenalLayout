@@ -46,8 +46,16 @@ def test_minimum_dependency_pins_present() -> None:
             f"(e.g., '{package}>=X.Y.Z' or '{package}==X.Y.Z')"
         )
 
-    for pkg in ("pdf2image", "Pillow", "reportlab"):
+    # Runtime critical dependencies must be pinned
+    for pkg in ("google-cloud-translate", "google-cloud-storage", "fastapi", "pypdf"):
         assert_version_pin(pkg)
+
+    # Legacy rasterization and UI dependencies must NOT be in runtime requirements.txt
+    for retired_pkg in ("pdf2image", "Pillow", "pillow", "reportlab", "gradio"):
+        pattern = re.compile(rf"(?im)^\s*{re.escape(retired_pkg)}\s*(?:>=|==)")
+        assert not pattern.search(
+            req
+        ), f"{retired_pkg} must not be present in runtime requirements.txt"
 
 
 def test_poppler_and_fonts_documented() -> None:

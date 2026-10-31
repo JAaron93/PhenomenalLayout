@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import importlib
 import os
-import subprocess
 import time
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
@@ -24,9 +23,9 @@ class ExtractTextResult:
 class PDFQualityValidator:
     """Helpers for PDF quality validation and lightweight comparison.
 
-    Implements hybrid text extraction with direct (pypdf/pdfminer) methods
-    and OCR fallback, streaming in batches to avoid OOM. Also provides
-    simple text accuracy and layout-hash length similarity checks.
+    Implements text extraction with direct (pypdf/pdfminer) methods,
+    streaming in batches to avoid OOM. Also provides simple text accuracy
+    and layout-hash length similarity checks.
     """
 
     # Environment-driven defaults
@@ -34,12 +33,8 @@ class PDFQualityValidator:
     DEFAULT_OVERALL_TIMEOUT_S = float(
         os.getenv("PDF_QUALITY_OVERALL_TIMEOUT_SECONDS", "60")
     )
-    DEFAULT_OCR_TIMEOUT_S = float(os.getenv("PDF_QUALITY_OCR_TIMEOUT_SECONDS", "5"))
     DEFAULT_PDFMINER_CHUNK = int(os.getenv("PDF_QUALITY_PDFMINER_CHUNK_SIZE", "16"))
-    DEFAULT_OCR_BATCH_PAGES = int(os.getenv("PDF_QUALITY_OCR_BATCH_PAGES", "8"))
     DEFAULT_PDF_DPI = int(os.getenv("PDF_DPI", "300"))
-    DEFAULT_TESS_LANG = os.getenv("TESSERACT_LANG", "eng")
-    DEFAULT_POPPLER_PATH = os.getenv("POPPLER_PATH")
 
     @staticmethod
     def _truncate(text: str, limit: int = 200) -> str:
@@ -70,18 +65,18 @@ class PDFQualityValidator:
         dpi: int | None = None,
         poppler_path: str | None = None,
     ) -> ExtractTextResult:
-        """Extract text using pypdf/pdfminer with OCR fallback per page.
+        """Extract text using pypdf/pdfminer with explicit warnings for missing text.
 
         - Uses pypdf first for speed and to capture born-digital text.
         - Fallback to pdfminer.six for empty pages to improve coverage.
-        - Fallback to OCR (pytesseract) per-page, in image batches via
-          pdf2image.convert_from_path to reduce reopening overhead.
+        - Records explicit text_missing warnings for pages lacking text.
         - Caps pages and time to avoid OOM/long runtimes.
 
         Returns text per page, warnings with aggregated counts, list of
-        OCR-used page indices (1-based), and a short extractor summary.
+        OCR-used page indices (always empty), and a short extractor summary.
         """
         # Resolve effective configuration
+        _ = (lang, ocr_batch_pages, dpi, poppler_path)  # Deprecated under ADR 0002; retained for backward compatibility
         effective_max_pages = max_pages or self.DEFAULT_MAX_PAGES
         overall_timeout = (
             overall_timeout_seconds
@@ -89,21 +84,12 @@ class PDFQualityValidator:
             else self.DEFAULT_OVERALL_TIMEOUT_S
         )
         pdfminer_chunk = pdfminer_chunk_size or self.DEFAULT_PDFMINER_CHUNK
-        ocr_batch = ocr_batch_pages or self.DEFAULT_OCR_BATCH_PAGES
-        target_dpi = dpi or self.DEFAULT_PDF_DPI
-        tess_lang = (lang or self.DEFAULT_TESS_LANG) or "eng"
-        poppler_path = (
-            poppler_path if poppler_path is not None else self.DEFAULT_POPPLER_PATH
-        )
 
         # Normalize/clamp configuration values to safe minimums
         if max_pages is not None and max_pages < 1:
             effective_max_pages = 1
-        if dpi is not None and dpi < 72:
-            target_dpi = 72
 
         warnings_out: list[str] = []
-        ocr_pages: list[int] = []
         start_ts = time.time()
 
         # 1) Determine number of pages via pypdf if possible
@@ -219,127 +205,15 @@ class PDFQualityValidator:
             except (ImportError, OSError, ValueError) as e:
                 warnings_out.append(f"pdfminer extract failed: {type(e).__name__}")
 
-        # 4) OCR fallback per page in streaming batches via pdf2image
+        # 4) Record explicit warnings for pages lacking extractable text
         still_missing = [
             i for i, t in enumerate(text_per_page) if not (t and t.strip())
         ]
-        if still_missing:
-            try:
-                pdf2image = importlib.import_module("pdf2image")
-                pytesseract = importlib.import_module("pytesseract")
-
-                def ocr_image(img) -> str:
-                    try:
-                        # Derive per-image timeout from remaining budget
-                        remaining = max(
-                            0.1,
-                            overall_timeout - (time.time() - start_ts),
-                        )
-                        attempts = [
-                            {"lang": tess_lang, "timeout": remaining},
-                            {"lang": tess_lang},
-                            {"lang": tess_lang, "config": ""},
-                            {"lang": tess_lang, "config": "", "timeout": remaining},
-                            {"lang": tess_lang},
-                        ]
-                        for kwargs in attempts:
-                            try:
-                                return pytesseract.image_to_string(img, **kwargs)
-                            except TypeError:
-                                continue
-                        return ""
-                    except (RuntimeError, ValueError):
-                        # Some tesseract wrappers raise ValueError on timeouts
-                        return ""
-                    except OSError:
-                        # Tesseract missing or not executable
-                        return ""
-
-                for page_range in self._iter_pages_for_indices(
-                    still_missing,
-                    ocr_batch,
-                ):
-                    if self._elapsed_exceeded(start_ts, overall_timeout):
-                        warnings_out.append("overall timeout reached during OCR phase")
-                        break
-                    # Convert to 1-based; last is exclusive already
-                    first = page_range.start + 1
-                    last = page_range.stop
-                    try:
-                        convert_attempts = [
-                            {
-                                "dpi": target_dpi,
-                                "first_page": first,
-                                "last_page": last,
-                                "poppler_path": poppler_path,
-                            },
-                            {
-                                "dpi": target_dpi,
-                                "first_page": first,
-                                "last_page": last,
-                            },
-                            {"first_page": first, "last_page": last},
-                        ]
-                        images = None
-                        convert_type_error: TypeError | None = None
-                        for kwargs in convert_attempts:
-                            try:
-                                images = pdf2image.convert_from_path(
-                                    pdf_path, **kwargs
-                                )
-                                break
-                            except TypeError as exc:
-                                convert_type_error = exc
-                                continue
-                        if images is None:
-                            if convert_type_error is not None:
-                                raise convert_type_error
-                            raise TypeError(
-                                "pdf2image.convert_from_path failed for all argument variants"
-                            )
-                    except (OSError, ValueError, RuntimeError) as e:
-                        # Handle poppler absence gracefully
-                        et = type(e).__name__
-                        if et in {
-                            "PDFInfoNotInstalledError",
-                            "PDFPageCountError",
-                        }:
-                            warnings_out.append(
-                                "pdf2image unavailable or poppler " f"missing: {et}"
-                            )
-                            break
-                        warnings_out.append(f"pdf2image failure: {et}")
-                        break
-                    except TypeError as e:
-                        # Older pdf2image might not accept some kwargs
-                        warnings_out.append(f"pdf2image type error: {type(e).__name__}")
-                        break
-
-                    # Map images back to page indices
-                    batch_indices = list(range(first - 1, last))
-                    for img, page_i in zip(images, batch_indices, strict=False):
-                        if page_i < 0 or page_i >= capped_pages:
-                            continue
-                        if text_per_page[page_i]:
-                            continue
-                        text = ocr_image(img) or ""
-                        if text.strip():
-                            text_per_page[page_i] = text
-                            ocr_pages.append(page_i + 1)
-                        else:
-                            warnings_out.append(
-                                "OCR produced empty text on page " f"{page_i+1}"
-                            )
-            except (ImportError, OSError, ValueError) as e:
-                warnings_out.append(f"OCR fallback not available: {type(e).__name__}")
-            except subprocess.CalledProcessError as e:
-                # Tesseract may bubble this up from underlying calls
-                warnings_out.append(f"OCR process failed: {type(e).__name__}")
+        for page_idx in still_missing:
+            warnings_out.append(f"text_missing: page {page_idx + 1}")
 
         # Final aggregation and summary
-        extractor_summary = (
-            f"pypdf:{used_pypdf} pdfminer:{used_pdfminer} ocr:{len(ocr_pages)}"
-        )
+        extractor_summary = f"pypdf:{used_pypdf} pdfminer:{used_pdfminer}"
         # Aggregate counts BEFORE truncation, then truncate for presentation
         warning_counts = self._aggregate_warnings(warnings_out)
         warnings_truncated = [self._truncate(w, 200) for w in warnings_out]
@@ -347,7 +221,7 @@ class PDFQualityValidator:
             text_per_page=text_per_page,
             warnings=warnings_truncated,
             warning_counts=warning_counts,
-            used_ocr_pages=sorted(set(ocr_pages)),
+            used_ocr_pages=[],
             extractor_summary=extractor_summary,
         )
 
@@ -359,36 +233,6 @@ class PDFQualityValidator:
         while i < n:
             yield list(indices[i : i + chunk_size])
             i += chunk_size
-
-    def _iter_pages_for_indices(
-        self, indices: Sequence[int], batch: int
-    ) -> Iterator[range]:
-        if not indices:
-            return
-        # Merge contiguous indices; then chunk ranges to at most `batch` pages
-        groups: list[list[int]] = []
-        current: list[int] = [indices[0]]
-        for i in indices[1:]:
-            if i == current[-1] + 1:
-                current.append(i)
-            else:
-                groups.append(current)
-                current = [i]
-        groups.append(current)
-
-        for g in groups:
-            start = g[0]
-            end = g[-1]
-            size = end - start + 1
-            if size <= batch:
-                yield range(start, end + 1)
-            else:
-                # split into batches
-                sub_start = start
-                while sub_start <= end:
-                    sub_end = min(end, sub_start + batch - 1)
-                    yield range(sub_start, sub_end + 1)
-                    sub_start = sub_end + 1
 
     # ------------------------- Accuracy & Hashes -------------------------
     @staticmethod

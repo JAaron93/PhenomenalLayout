@@ -55,6 +55,7 @@ def test_extract_text_hybrid_pdfminer_fallback(
             self.pages = [_FakePage(), _FakePage()]
 
     def _extract_text(_pdf_path: str, page_numbers=None) -> str:
+        _ = page_numbers
         # Return one chunk per page separated by form feed
         return "X\x0cY"
 
@@ -77,10 +78,11 @@ def test_extract_text_hybrid_pdfminer_fallback(
     assert res.used_ocr_pages == []
 
 
-def test_extract_text_hybrid_ocr_fallback(
+def test_extract_text_hybrid_missing_text_warning(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ):
+    """When pypdf and pdfminer extract no text, validator records explicit text_missing warning without OCR."""
     # pypdf returns no text
     class _FakePage:
         def extract_text(self, _extraction_mode: str | None = None) -> str:
@@ -90,42 +92,21 @@ def test_extract_text_hybrid_ocr_fallback(
         def __init__(self, _path: str) -> None:
             self.pages = [_FakePage(), _FakePage()]
 
-    # pdfminer returns empty -> force OCR
+    # pdfminer returns empty -> no OCR fallback
     def _pdfminer_extract(_pdf_path: str, page_numbers=None) -> str:
+        _ = page_numbers
         return ""
-
-    class _Img:
-        def __init__(self, idx: int) -> None:
-            self.idx = idx
-
-    def _convert_from_path(
-        _pdf_path: str = "",
-        _dpi: int = 72,
-        first_page: int = 1,
-        last_page: int = 1,
-        _poppler_path=None,
-        **_kwargs,
-    ) -> list[_Img]:
-        count = (last_page - first_page) + 1
-        return [_Img(i) for i in range(count)]
-
-    def _image_to_string(img: _Img, lang: str = "eng", timeout: float = 10.0, **_kwargs) -> str:
-        return f"OCR{img.idx + 1}"
 
     fake_pypdf = _make_module(PdfReader=_FakeReader)
     fake_pdfminer_high = _make_module(extract_text=_pdfminer_extract)
-    fake_pdf2image = _make_module(convert_from_path=_convert_from_path)
-    fake_pytesseract = _make_module(image_to_string=_image_to_string)
 
     def _import_module(name: str):
         if name == "pypdf":
             return fake_pypdf
         if name == "pdfminer.high_level":
             return fake_pdfminer_high
-        if name == "pdf2image":
-            return fake_pdf2image
-        if name == "pytesseract":
-            return fake_pytesseract
+        if name in ("pdf2image", "pytesseract"):
+            pytest.fail(f"Unexpected attempt to import {name}")
         raise ModuleNotFoundError(name)
 
     monkeypatch.setattr("importlib.import_module", _import_module)
@@ -136,8 +117,13 @@ def test_extract_text_hybrid_ocr_fallback(
 
     v = PDFQualityValidator()
     res = v.extract_text_hybrid(str(pdf_path))
-    assert res.text_per_page == ["OCR1", "OCR2"]
-    assert res.used_ocr_pages == [1, 2]
+    assert res.text_per_page == ["", ""]
+    assert res.used_ocr_pages == []
+    assert res.extractor_summary == "pypdf:0 pdfminer:0"
+    assert "text_missing: page 1" in res.warnings
+    assert "text_missing: page 2" in res.warnings
+    assert res.warning_counts.get("text_missing: page 1") == 1
+    assert res.warning_counts.get("text_missing: page 2") == 1
 
 
 def test_compute_text_accuracy_basic():
@@ -450,11 +436,11 @@ def test_extract_text_honors_max_pages_boundary(
     assert res.text_per_page == ["A"]
 
 
-def test_extract_text_clamps_dpi_minimum(
+def test_extract_text_hybrid_reports_missing_text_aggregated(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ):
-    # Force OCR path so convert_from_path is used
+    """Ensure missing text pages populate warning counts and 0 OCR pages."""
     class _FakePage:
         def extract_text(self, _extraction_mode: str | None = None) -> str:
             return ""
@@ -463,36 +449,14 @@ def test_extract_text_clamps_dpi_minimum(
         def __init__(self, _path: str) -> None:
             self.pages = [_FakePage()]
 
-    dpi_seen: list[int] = []
-
-    def _convert_from_path(
-        _pdf_path: str = "",
-        dpi: int = 72,
-        first_page: int = 1,
-        last_page: int = 1,
-        _poppler_path=None,
-        **_kwargs,
-    ) -> list[object]:
-        dpi_seen.append(dpi)
-        return [object()]
-
-    def _image_to_string(_img: object, _lang: str, _timeout: float) -> str:
-        return "X"
-
     fake_pypdf = _make_module(PdfReader=_Reader)
     fake_pdfminer_high = _make_module(extract_text=lambda *_a, **_k: "")
-    fake_pdf2image = _make_module(convert_from_path=_convert_from_path)
-    fake_pytesseract = _make_module(image_to_string=_image_to_string)
 
     def _import_module(name: str):
         if name == "pypdf":
             return fake_pypdf
         if name == "pdfminer.high_level":
             return fake_pdfminer_high
-        if name == "pdf2image":
-            return fake_pdf2image
-        if name == "pytesseract":
-            return fake_pytesseract
         raise ModuleNotFoundError(name)
 
     monkeypatch.setattr("importlib.import_module", _import_module)
@@ -501,59 +465,7 @@ def test_extract_text_clamps_dpi_minimum(
     pdf_path.write_bytes(b"%PDF-1.4\n")
 
     v = PDFQualityValidator()
-    _ = v.extract_text_hybrid(str(pdf_path), dpi=0)
-    assert dpi_seen and dpi_seen[0] >= 72
-
-
-def test_extract_text_honors_dpi_boundary(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-):
-    class _FakePage:
-        def extract_text(self, _extraction_mode: str | None = None) -> str:
-            return ""
-
-    class _Reader:
-        def __init__(self, _path: str) -> None:
-            self.pages = [_FakePage()]
-
-    dpi_seen: list[int] = []
-
-    def _convert_from_path(
-        _pdf_path: str = "",
-        dpi: int = 72,
-        first_page: int = 1,
-        last_page: int = 1,
-        _poppler_path=None,
-        **_kwargs,
-    ) -> list[object]:
-        dpi_seen.append(dpi)
-        return [object()]
-
-    def _image_to_string(_img: object, _lang: str, _timeout: float) -> str:
-        return "X"
-
-    fake_pypdf = _make_module(PdfReader=_Reader)
-    fake_pdfminer_high = _make_module(extract_text=lambda *_a, **_k: "")
-    fake_pdf2image = _make_module(convert_from_path=_convert_from_path)
-    fake_pytesseract = _make_module(image_to_string=_image_to_string)
-
-    def _import_module(name: str):
-        if name == "pypdf":
-            return fake_pypdf
-        if name == "pdfminer.high_level":
-            return fake_pdfminer_high
-        if name == "pdf2image":
-            return fake_pdf2image
-        if name == "pytesseract":
-            return fake_pytesseract
-        raise ModuleNotFoundError(name)
-
-    monkeypatch.setattr("importlib.import_module", _import_module)
-
-    pdf_path = tmp_path / "y.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n")
-
-    v = PDFQualityValidator()
-    _ = v.extract_text_hybrid(str(pdf_path), dpi=72)
-    assert dpi_seen and dpi_seen[0] == 72
+    res = v.extract_text_hybrid(str(pdf_path))
+    assert res.used_ocr_pages == []
+    assert "text_missing: page 1" in res.warnings
+    assert res.warning_counts.get("text_missing: page 1") == 1
