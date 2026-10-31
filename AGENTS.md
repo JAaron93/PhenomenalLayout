@@ -118,7 +118,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | **Dynamic Programming Layout Placement** (`core/dynamic_layout_engine.py` [deleted under ADR 0001]) | Fragile heuristics and technical debt. | Cloud Translation handles typography scaling and line wrapping natively. `core/dynamic_programming.py` is retained as a live dependency of the language, validation, choice, and middleware engines. |
 | **Third-Party Auth Middleware** (Auth0, Clerk, Firebase) | Unnecessary SaaS dependency, cost, and complexity. | Use native client-side Google Identity Services (GIS) OAuth with `drive.file` scope. |
 | **Storing Book PDFs on Host Disk** | Memory exhaustion and disk bloat on serverless instances. | Stream directly to/from user GCS bucket and Google Drive. |
-| **Absolute Local Worktree Links** (`file:///` absolute paths) | Breaks portability across machines and GitHub UI. | All markdown documentation and spec links must be repository-relative (`.kiro/specs/gcp-migration/design.md`). |
+| **Absolute Local Worktree Links & External URL Formatting** (`file:///` paths, absolute GitHub URLs) | Breaks portability across machines and GitHub UI; triggers reviewer link linting. | All internal documentation links must be repository-relative (`.kiro/specs/...`, `docs/adr/...`). External issues and PR references MUST be formatted as plain text tokens (e.g. `gradio-app/gradio#14005`, `#14018`), NEVER absolute hyperlinks. |
 | **Blocking Sync I/O in Async Paths** | Degrades throughput on multi-chapter books. | Use `asyncio` and non-blocking streaming I/O for GCS uploads and LRO polling. |
 | **Hardcoded Credentials or `.env` Commits** | Security vulnerability. | Use session-scoped BYOK vaults or Google Cloud Application Default Credentials (ADC). |
 | **Premature Glossary Deletion** (Deleting working glossary before replacement is READY) | Leaves translations without a glossary during creation windows or upon creation failures. | Zero-downtime Blue-Green replacement: provision alternating slot (`-a` / `-b`), verify `READY`, then retire old slot. |
@@ -137,6 +137,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
   2. `requirements.md`: User Stories, Functional/Non-Functional Requirements with Gherkin BDD scenarios.
   3. `tasks.md`: Test-driven implementation plan with explicit execution tracks and TDD criteria.
 * **Architecture Decision Records (ADRs)**: Major architectural shifts must be documented in `docs/adr/XXXX-<title>.md`.
+* **Live Filesystem Path Verification**: When authoring ADRs, documentation, task plans, or project rules based on design specs, agents MUST verify actual directory and file locations on the live filesystem (e.g., verifying `static/` rather than blindly adopting draft spec placeholders like `public/`).
 
 ---
 
