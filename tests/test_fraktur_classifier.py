@@ -14,9 +14,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 
+from tests.conftest import build_test_pdf
 from services.fraktur_classifier import (
     FrakturClassifier,
     OCRConfidence,
@@ -26,16 +25,8 @@ from services.fraktur_classifier import (
 
 
 def _create_minimal_pdf(pages_count: int = 1) -> bytes:
-    """Generate minimal valid PDF bytes."""
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=letter)
-    for _ in range(pages_count):
-        c.setFont("Helvetica", 12)
-        c.drawString(100, 700, "placeholder")
-        c.showPage()
-    c.save()
-    buf.seek(0)
-    return buf.getvalue()
+    """Generate minimal valid PDF bytes via build_test_pdf."""
+    return build_test_pdf(["placeholder"] * pages_count)
 
 
 @pytest.fixture

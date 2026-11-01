@@ -57,6 +57,17 @@ def test_minimum_dependency_pins_present() -> None:
             req
         ), f"{retired_pkg} must not be present in runtime requirements.txt"
 
+    # reportlab must also be absent from requirements-dev.txt (fully eradicated — PR #147)
+    # Pillow was its transitive dependent; removing reportlab eliminates Pillow entirely.
+    dev_req_path = Path("requirements-dev.txt")
+    if dev_req_path.exists():
+        dev_req = dev_req_path.read_text(encoding="utf-8")
+        dev_pattern = re.compile(r"(?im)^\s*reportlab\s*(?:>=|==)")
+        assert not dev_pattern.search(dev_req), (
+            "reportlab must not be present in requirements-dev.txt — "
+            "use build_test_pdf() from tests/conftest.py for PDF test fixtures (PR #147)"
+        )
+
 
 def test_poppler_and_fonts_documented() -> None:
     readme = Path("README.md")

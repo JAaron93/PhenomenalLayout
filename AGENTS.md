@@ -126,6 +126,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | **Overwriting Unversioned Staged TSVs in GCS** | Overwrites known-good terminology before the replacement is verified live, breaking rollback restoration. | Versioned GCS object paths (`.../{slot}_{version}.tsv`) preserving the prior input URI until cleanup. |
 | **Gradio Web Interface** (`ui/gradio_interface.py` [deleted under ADR 0002 / Track A]) | Upstream Pillow pinning (`pillow<13.0`) caused 41 open Dependabot alerts; duplicated API functionality. | Bespoke zero-build vanilla ES modules SPA (`static/`) served directly by FastAPI. |
 | **Local Fallback Translation Engine** (`services/fallback_translator.py` [deleted under ADR 0002 / Track B]) | High complexity TrueType font parsing, CMap unpacking, and ReportLab canvas drawing. | Google Cloud Document Translation is the sole translation pipeline; failed pages surfaced with re-run under `{book_id}-r2`. |
+| **`reportlab` in any `requirements*.txt`** (removed from `requirements-dev.txt` under PR #147) | `reportlab` declares `pillow` as a hard `Requires`, reintroducing Pillow transitively even after all runtime removals. | Use `build_test_pdf(pages: list[str]) -> bytes` from `tests/conftest.py` for all PDF test fixtures. This stdlib-only helper produces valid PDF 1.4 bytes using Helvetica Type1 / WinAnsiEncoding; `pypdf.page.extract_text()` recovers the embedded strings verbatim. |
 
 ---
 
@@ -197,3 +198,33 @@ When a method's active behavior is removed but its public signature is intention
      dpi (int): Deprecated no-op. Retained for backward compatibility only.
      ```
 3. This invariant applies to public and private methods alike. Docstring drift on a `_ = (...)` change is a Greptile P1 (misleading API contract) — verified in PR #146 review.
+
+### 6.9 PDF Test Fixture Standard — `build_test_pdf` over `reportlab`
+All test fixtures that require in-memory PDF bytes MUST use the shared helper
+`build_test_pdf(pages: list[str]) -> bytes` from `tests/conftest.py`.
+
+```python
+from tests.conftest import build_test_pdf
+
+pdf_bytes = build_test_pdf(["Page 1 text", "Page 2 text"])
+```
+
+**Rationale**: `reportlab` declares `pillow` as a hard `Requires` dependency,
+reintroducing Pillow into the developer environment even after all runtime
+removals. `build_test_pdf` is a stdlib-only raw PDF 1.4 writer (no imports
+beyond `io`) that produces valid PDFs whose text is recoverable by
+`pypdf.page.extract_text()` — the same extractor used in production services.
+
+**Rules**:
+1. Never add `reportlab` back to `requirements-dev.txt` or any
+   `requirements*.txt` file. `test_deployment_config.py::test_minimum_dependency_pins_present`
+   enforces this at CI level.
+2. For multi-page PDFs, pass one string per page: `build_test_pdf(["p1", "p2"])`.
+3. For PDFs needed as file paths (not bytes), write the result via
+   `tmp_path / "name.pdf"` and call `.write_bytes(build_test_pdf([...]))`.
+4. The helper encodes text as WinAnsiEncoding (Latin-1 range). All ASCII and
+   standard Western European characters (including German umlauts) are
+   supported. Do not pass characters outside Latin-1 without first verifying
+   encoding compatibility.
+
+Established in PR #147 — verified against 752-test suite at 70.75% coverage.

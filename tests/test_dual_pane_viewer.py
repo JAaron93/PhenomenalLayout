@@ -14,9 +14,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 
+from tests.conftest import build_test_pdf
 from services.dual_pane_viewer import (
     BilingualPagePair,
     DualPaneViewerController,
@@ -25,19 +24,8 @@ from services.dual_pane_viewer import (
 
 
 def _create_sample_pdf(pages_text: list[str]) -> bytes:
-    """Helper to generate an in-memory PDF with specified text per page."""
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=letter)
-    for text in pages_text:
-        c.setFont("Helvetica", 12)
-        text_obj = c.beginText(50, 700)
-        for line in text.split("\n"):
-            text_obj.textLine(line)
-        c.drawText(text_obj)
-        c.showPage()
-    c.save()
-    buf.seek(0)
-    return buf.getvalue()
+    """Generate an in-memory PDF with specified text per page via build_test_pdf."""
+    return build_test_pdf(pages_text)
 
 
 @pytest.fixture
