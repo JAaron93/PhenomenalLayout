@@ -26,9 +26,9 @@ def test_problematic_case_fixed(
         "MEMORY_API_WRITE_RATE_LIMIT": "100",
         "MEMORY_API_ADMIN_RATE_LIMIT": "100",
     }
-    
+
     client = reload_app_with_env(test_env)
-    
+
     # Check auth state via public API
     # Import after reload to get the updated module state
     import api.auth
@@ -37,10 +37,10 @@ def test_problematic_case_fixed(
         assert api.auth.ANONYMOUS_USER is not None
     else:
         assert api.auth.is_auth_enabled(), "Auth should be enabled"
-    
+
     # Test endpoint
     response = client.get('/api/v1/memory/stats')
-    
+
     assert response.status_code == expected_status, (
         f"Expected status {expected_status} but got {response.status_code}. "
         f"Response body: {response.text}"

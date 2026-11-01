@@ -8,10 +8,10 @@ import pytest
 
 # Import test dependencies at module level
 from utils.memory_monitor import (
-    MemoryMonitor, 
+    MemoryMonitor,
     cleanup_memory_monitor,
     get_memory_monitor,
-    start_memory_monitoring
+    start_memory_monitoring,
 )
 
 
@@ -47,10 +47,10 @@ def _reset_memory_monitor_singleton():
     """
     # Clean up any existing monitor before the test
     cleanup_memory_monitor()
-    
+
     # Yield to let the test run
     yield
-    
+
     # Clean up after the test
     cleanup_memory_monitor()
 

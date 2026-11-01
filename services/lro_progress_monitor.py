@@ -383,7 +383,7 @@ class LROProgressMonitor:
                     "LROProgressMonitor: deserialised metadata via Stage A (bytes)."
                 )
                 return parsed
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.debug(
                     "LROProgressMonitor: Stage A deserialisation failed (%s); "
                     "falling back to Stage B.",
@@ -528,7 +528,7 @@ def _normalise_state(raw_state: Any, metadata_obj: Any) -> str:
         upper_resolved: str = resolved_name.upper()
         if upper_resolved in _ALL_STATES:
             return upper_resolved
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
     logger.warning(

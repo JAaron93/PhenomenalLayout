@@ -1,13 +1,14 @@
 """Tests for the rate limit decorator functionality."""
 
 import pytest
-from fastapi.testclient import TestClient
 from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+
 from api.rate_limit import (
+    RATE_LIMITS,
+    get_rate_limiter,
     rate_limit,
     shutdown_rate_limiter,
-    get_rate_limiter,
-    RATE_LIMITS,
 )
 
 

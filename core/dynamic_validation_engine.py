@@ -599,7 +599,7 @@ class DynamicValidationEngine:
             managed_path = resolve_managed_path_or_none(file_path)
             if managed_path is not None and managed_path.exists():
                 file_size = managed_path.stat().st_size
-            
+
         file_ext = kwargs.pop("file_ext", file_path_obj.suffix.lower() if hasattr(file_path_obj, "suffix") else "")
 
         return ValidationContext(

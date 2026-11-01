@@ -12,9 +12,9 @@ from __future__ import annotations
 import io
 from unittest.mock import MagicMock, patch
 
+import httplib2
 import pytest
 from googleapiclient.errors import HttpError
-import httplib2
 
 from services.google_drive_exporter import DriveExportResult, GoogleDriveExporter
 

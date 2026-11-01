@@ -1356,7 +1356,7 @@ class ChoiceDatabase:
         try:
             # Start savepoint transaction for the batch
             conn.execute("SAVEPOINT sp_batch")
-            
+
             # Prepare batch data for user_choices table
             choice_rows = []
             context_rows = []

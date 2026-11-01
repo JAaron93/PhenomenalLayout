@@ -363,11 +363,11 @@ class TestBookSessionGlossarySync:
         session_key = sync_mgr._session_id_prefix("book-101")
         slot_a = MagicMock()
         slot_a.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-a"
-        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
 
         slot_b = MagicMock()
         slot_b.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-b"
-        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.timezone.utc)
+        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.UTC)
 
         mock_trans.list_glossaries.return_value = [slot_a, slot_b]
 
@@ -400,12 +400,12 @@ class TestBookSessionGlossarySync:
         session_key = sync_mgr._session_id_prefix("book-101")
         slot_a = MagicMock()
         slot_a.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-a"
-        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
         slot_a.input_config.gcs_source.input_uri = "gs://user-trans-bucket/glossaries/sessions/old_a.tsv"
 
         slot_b = MagicMock()
         slot_b.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-b"
-        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.timezone.utc)
+        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.UTC)
 
         mock_trans.list_glossaries.return_value = [slot_a, slot_b]
 

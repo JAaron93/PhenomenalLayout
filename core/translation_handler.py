@@ -7,7 +7,7 @@ import os
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -30,6 +30,7 @@ from services.neologism_detector import NeologismDetector
 from services.philosophy_enhanced_translation_service import (
     PhilosophyEnhancedTranslationService,
 )
+
 
 class ProcessFileUploadResult(TypedDict):
     """Structured result for file upload processing."""
@@ -341,7 +342,7 @@ async def start_translation(
         # Create session for philosophy mode
             session = user_choice_manager.create_session(
                 session_name=(
-                    f"Philosophy Translation {datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+                    f"Philosophy Translation {datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
                 ),
                 document_name=(
                     Path(state.current_file).name if state.current_file else "Unknown"

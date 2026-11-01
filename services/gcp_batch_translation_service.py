@@ -1,5 +1,4 @@
-"""
-services/gcp_batch_translation_service.py
+"""services/gcp_batch_translation_service.py
 ==========================================
 Track 1 — GCP Batch Translation Migration  (FR-03, FR-10, NFR-01, NFR-02, NFR-07)
 
@@ -58,7 +57,7 @@ _RETRYABLE_GCP_EXCEPTIONS: tuple[type[Exception], ...] = (
 class BatchJobHandle:
     """Lightweight handle returned after a successful batch job submission.
 
-    Attributes
+    Attributes:
     ----------
     operation_name:
         The fully-qualified LRO name returned by GCP, e.g.
@@ -108,7 +107,7 @@ class GCPBatchTranslationService:
     location:
         GCP region for Translation API operations (default ``"us-central1"``).
 
-    Example
+    Example:
     -------
     ::
 
@@ -163,7 +162,7 @@ class GCPBatchTranslationService:
         user_id:
             The end-user whose BYOK credentials should be used.
 
-        Returns
+        Returns:
         -------
         storage.Client
             An authenticated GCS client scoped to the user's credentials.
@@ -180,7 +179,7 @@ class GCPBatchTranslationService:
         user_id:
             The end-user whose BYOK credentials should be used.
 
-        Returns
+        Returns:
         -------
         translate.TranslationServiceClient
             An authenticated Translation v3 client.
@@ -251,13 +250,13 @@ class GCPBatchTranslationService:
         gcs_destination_uri:
             Target ``gs://bucket/path/to/file.pdf`` URI.
 
-        Returns
+        Returns:
         -------
         str
             The fully-qualified ``gs://…`` URI of the uploaded object, identical
             to *gcs_destination_uri*.
 
-        Raises
+        Raises:
         ------
         ValueError
             If *gcs_destination_uri* is malformed.
@@ -344,14 +343,14 @@ class GCPBatchTranslationService:
             Number of days after which matching objects are deleted
             (default ``7``).
 
-        Returns
+        Returns:
         -------
         bool
             ``True`` if the lifecycle policy already existed or was successfully
             applied; ``False`` if an unexpected error prevented the patch
             (callers should treat ``False`` as a non-fatal warning).
 
-        Raises
+        Raises:
         ------
         google.cloud.exceptions.GoogleCloudError
             On unrecoverable GCS errors when fetching or patching the bucket.
@@ -449,13 +448,13 @@ class GCPBatchTranslationService:
             When provided, the glossary is attached to every target-language
             config in the request.
 
-        Returns
+        Returns:
         -------
         str
             The fully-qualified LRO operation name returned by GCP, e.g.
             ``"projects/my-project/locations/us-central1/operations/abc123"``.
 
-        Raises
+        Raises:
         ------
         google.api_core.exceptions.GoogleAPICallError
             If all retry attempts are exhausted or the error is non-retryable.
@@ -561,13 +560,13 @@ class GCPBatchTranslationService:
         gcs_output_uri:
             ``gs://`` URI of the translated PDF object.
 
-        Returns
+        Returns:
         -------
         BinaryIO
             A readable, non-seekable binary stream backed by GCS.  Callers are
             responsible for closing the stream when finished.
 
-        Raises
+        Raises:
         ------
         ValueError
             If *gcs_output_uri* is malformed.
@@ -576,7 +575,7 @@ class GCPBatchTranslationService:
         google.cloud.exceptions.GoogleCloudError
             On other unrecoverable GCS errors.
 
-        Notes
+        Notes:
         -----
         The returned stream is **not** seekable.  If random-access is required
         the caller must buffer the stream themselves.

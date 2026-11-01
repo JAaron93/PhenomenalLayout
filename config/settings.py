@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import secrets
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
@@ -70,7 +70,7 @@ class GCPSettings:
     base_dictionary_path: str = "config/klages_terminology.json"
 
     @classmethod
-    def from_env(cls) -> "GCPSettings":
+    def from_env(cls) -> GCPSettings:
         """Build a GCPSettings instance overriding defaults from environment variables.
 
         All GCP constants can be overridden via env vars with the GCP_ prefix.

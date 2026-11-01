@@ -58,7 +58,7 @@ def auth_module():
     else:
         # Remove so next import loads with actual environment
         sys.modules.pop('api.auth', None)
-        
+
     if original_app_module is not None:
         sys.modules['app'] = original_app_module
     else:
@@ -69,7 +69,7 @@ def auth_module():
 def test_auth_direct(auth_module):
     """Test auth dependencies directly."""
     AuthConfig, UserRole, create_jwt_token, create_app = auth_module
-    
+
     # Create app with test configuration
     client = TestClient(create_app(TEST_CONFIG))
 

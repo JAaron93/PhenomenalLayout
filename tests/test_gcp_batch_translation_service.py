@@ -18,7 +18,6 @@ from google.api_core import exceptions as gcp_exceptions
 
 from services.byok_credentials_manager import BYOKCredentialsManager
 from services.gcp_batch_translation_service import (
-    BatchJobHandle,
     GCPBatchTranslationService,
 )
 

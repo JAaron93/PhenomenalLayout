@@ -9,7 +9,6 @@ from core.translation_handler import (
     get_translation_status,
     process_file_upload,
     start_translation,
-
 )
 
 
@@ -65,7 +64,7 @@ async def run_test():
     )
 
     if not is_ready:
-        print(f"\n❌ Translation failed to start!")
+        print("\n❌ Translation failed to start!")
         print(f"Status: {start_status}")
         print(f"Upload Status: {start_upload_status}")
         return

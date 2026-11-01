@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from tests.helpers import restore_module_family, snapshot_module_family
 
-
 # ---------------------------------------------------------------------------
 # Shared PDF test-fixture factory (reportlab-free)
 # ---------------------------------------------------------------------------

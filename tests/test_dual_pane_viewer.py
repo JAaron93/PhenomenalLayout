@@ -15,12 +15,12 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.conftest import build_test_pdf
 from services.dual_pane_viewer import (
     BilingualPagePair,
     DualPaneViewerController,
     HighlightCoordinates,
 )
+from tests.conftest import build_test_pdf
 
 
 def _create_sample_pdf(pages_text: list[str]) -> bytes:

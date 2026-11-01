@@ -21,7 +21,6 @@ from urllib.parse import urlparse
 
 import pytest
 
-from tests.conftest import build_test_pdf
 from services.batch_job_recovery import ActiveJobState, BatchJobRecoveryManager
 from services.book_translation_orchestrator import (
     BookScanResult,
@@ -42,6 +41,7 @@ from services.google_drive_exporter import DriveExportResult, GoogleDriveExporte
 from services.lro_progress_monitor import LROProgressMonitor, ProgressUpdate
 from services.session_glossary_lifecycle import SessionGlossaryLifecycleManager
 from services.user_vocabulary_store import UserVocabularyStore
+from tests.conftest import build_test_pdf
 
 
 def _create_sample_pdf(text: str = "Klages Geist Seele Dasein Schauung", pages: int = 2) -> bytes:

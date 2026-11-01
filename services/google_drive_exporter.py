@@ -1,5 +1,4 @@
-"""
-services/google_drive_exporter.py
+"""services/google_drive_exporter.py
 ==================================
 TASK-1.6 — FR-09, FR-10, NFR-03, NFR-07, NFR-09
 
@@ -61,7 +60,7 @@ logger = logging.getLogger(__name__)
 class DriveExportResult:
     """Immutable result returned after a successful Drive export.
 
-    Attributes
+    Attributes:
     ----------
     file_id:
         The opaque Drive file identifier assigned by the API.
@@ -113,7 +112,7 @@ class GoogleDriveExporter:
     retries on transient HTTP status codes (429, 500, 503) up to
     :data:`MAX_RETRIES` times with exponential backoff and full jitter.
 
-    Example
+    Example:
     -------
     ::
 
@@ -167,12 +166,12 @@ class GoogleDriveExporter:
             Name of the destination Drive folder.  Created if absent.
             Defaults to ``"PhenomenalLayout Translations"``.
 
-        Returns
+        Returns:
         -------
         DriveExportResult
             Metadata about the newly created Drive file.
 
-        Raises
+        Raises:
         ------
         googleapiclient.errors.HttpError
             Re-raised after all retry attempts are exhausted for
@@ -248,7 +247,7 @@ class GoogleDriveExporter:
         access_token:
             Short-lived GIS OAuth bearer token.  **Never** logged.
 
-        Returns
+        Returns:
         -------
         googleapiclient.discovery.Resource
             Authenticated Drive v3 service resource.
@@ -282,7 +281,7 @@ class GoogleDriveExporter:
         folder_name:
             Human-readable folder name to look up or create.
 
-        Returns
+        Returns:
         -------
         str
             The Drive folder ID.

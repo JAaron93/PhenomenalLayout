@@ -1,11 +1,11 @@
 """FastAPI route handlers for document translation API."""
 
+import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import json
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -24,21 +24,6 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from api.auth import UserRole, get_current_user_dependency, is_auth_enabled
-
-from services.byok_credentials_manager import (
-    BYOKCredentialsManager,
-    GuideStep,
-    ValidationResult,
-)
-from services.cost_estimator import CostQuote, GCPCostEstimator
-from services.user_vocabulary_store import TermPreference, UserVocabularyStore
-from services.book_translation_orchestrator import (
-    BookJobHandle,
-    BookScanResult,
-    BookTranslationOrchestrator,
-    CompletionSummary,
-)
-
 from api.memory_routes import router as memory_router
 from core.state_manager import state, translation_jobs
 from core.translation_handler import (
@@ -49,12 +34,6 @@ from core.translation_handler import (
     philosophy_translation_service,
     process_advanced_translation_job,
     user_choice_manager,
-)
-from utils.document_errors import (
-    DOC_ENCRYPTED_PDF,
-    DOC_INVALID_FORMAT,
-    DOC_SERVICE_UNAVAILABLE,
-    get_error_message,
 )
 from models.neologism_models import (
     ConfidenceFactors,
@@ -67,17 +46,31 @@ from models.user_choice_models import (
     ChoiceScope,
     ChoiceType,
 )
-from utils import pdf_validator
-from utils.language_utils import extract_text_sample_for_language_detection
-from utils.path_safety import resolve_managed_path
+from services.book_translation_orchestrator import (
+    BookTranslationOrchestrator,
+)
+from services.byok_credentials_manager import (
+    BYOKCredentialsManager,
+)
+from services.confidence_scorer import ConfidenceScorer
+from services.cost_estimator import GCPCostEstimator
+from services.neologism_detector import merge_neologism_analyses
+from services.pdf_quality_validator import PDFQualityValidator
 
 # Import services for configuration endpoints
 from services.philosophy_enhanced_translation_service import (
     translate_with_philosophy_awareness,
 )
-from services.neologism_detector import merge_neologism_analyses
-from services.pdf_quality_validator import PDFQualityValidator
-from services.confidence_scorer import ConfidenceScorer
+from services.user_vocabulary_store import UserVocabularyStore
+from utils import pdf_validator
+from utils.document_errors import (
+    DOC_ENCRYPTED_PDF,
+    DOC_INVALID_FORMAT,
+    DOC_SERVICE_UNAVAILABLE,
+    get_error_message,
+)
+from utils.language_utils import extract_text_sample_for_language_detection
+from utils.path_safety import resolve_managed_path
 
 logger: logging.Logger = logging.getLogger(__name__)
 
