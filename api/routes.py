@@ -1280,7 +1280,7 @@ async def pre_scan_book_endpoint(
                 getattr(
                     n,
                     "to_dict",
-                    lambda: n.__dict__ if hasattr(n, "__dict__") else str(n),
+                    lambda n=n: n.__dict__ if hasattr(n, "__dict__") else str(n),
                 )()
                 for n in result.detected_neologisms
             ],

@@ -31,6 +31,10 @@ USER_AGENT: str = os.getenv("TRANSLATION_USER_AGENT", "PhenomenalLayout-Translat
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+# Module-level holder for fire-and-forget close() tasks so they cannot be
+# garbage-collected before completing (asyncio dangling-task prevention).
+_CLOSE_TASKS: set[asyncio.Task] = set()
+
 
 class BaseTranslator(ABC):
     """Abstract base class for translation providers."""
@@ -246,7 +250,9 @@ class MCPLingoTranslator(BaseTranslator):
                 )
             return
 
-        loop.create_task(self.aclose())
+        task = loop.create_task(self.aclose())
+        task.add_done_callback(_CLOSE_TASKS.discard)
+        _CLOSE_TASKS.add(task)
 
 
 def _parse_positive_float_env(name: str, default: float) -> float:

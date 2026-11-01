@@ -38,10 +38,10 @@ _temp_files = []
 
 def _create_temp_db(prefix="test_db_"):
     """Create a temporary database file and track it for cleanup."""
-    temp_file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=".db", delete=False)
-    temp_file.close()
-    _temp_files.append(temp_file.name)
-    return temp_file.name
+    fd, temp_path = tempfile.mkstemp(prefix=prefix, suffix=".db")
+    os.close(fd)
+    _temp_files.append(temp_path)
+    return temp_path
 
 
 def cleanup_temp_files():
