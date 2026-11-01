@@ -19,9 +19,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 
+from tests.conftest import build_test_pdf
 from api.auth import UserRole
 from api.routes import api_router
 from services.batch_job_recovery import ActiveJobState
@@ -39,15 +38,8 @@ from services.user_vocabulary_store import TermPreference
 
 
 def _create_minimal_pdf_bytes(text: str = "Test Philosophical Document", pages: int = 1) -> bytes:
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=letter)
-    for i in range(pages):
-        c.setFont("Helvetica", 12)
-        c.drawString(100, 700, f"Page {i + 1}: {text}")
-        c.showPage()
-    c.save()
-    buf.seek(0)
-    return buf.getvalue()
+    """Generate minimal valid PDF bytes via build_test_pdf."""
+    return build_test_pdf([f"Page {i + 1}: {text}" for i in range(pages)])
 
 
 @pytest.fixture

@@ -113,7 +113,7 @@ dependencies: vanilla ES modules + `fetch`.
 | --- | --- | --- |
 | `gradio`, `gradio-client`, `hf-gradio`, `groovy`, `safehttpx`, `tomlkit`, `orjson`, `pytz`, `pandas` | Remove (transitive of Gradio) | UI replaced |
 | `pydub`, `audioop-lts` | Remove (audioop-lts is a direct markered requirement in `requirements.in`; pydub is transitive) | Only Gradio consumed pydub; the PEP 594 shim dies with it |
-| `reportlab` | Remove from runtime; **keep in `requirements-dev.txt`** | Runtime consumer was the fallback engine only; tests keep reportlab as a fixture generator (dev-tree Pillow does not produce runtime Dependabot alerts) |
+| `reportlab` | Remove from runtime and dev entirely (PR #147) | Runtime consumer was the fallback engine only; dev test fixtures migrated to `build_test_pdf()` in `tests/conftest.py` — a stdlib-only PDF 1.4 factory (no Pillow) |
 | `pdf2image` | Remove | Both consumers removed (§4.1) |
 | `Pillow` | Remove direct requirement (the `pillow>=12.0,<13.0` line in `requirements.in`) | No runtime importer remains once gradio, pdf2image, and reportlab are gone; all 41 open Dependabot alerts close by removal |
 | `pydantic`, `numpy`, `spacy`, `psutil`, `rich`, `mcp`, `modal`, GCP stack | Unchanged | Independent consumers |
@@ -146,9 +146,7 @@ GCP remains the sole translation engine; no locally synthesized pages exist at a
   to Google Cloud (OCR/layout), required poppler + tesseract host binaries, and its only
   graceful-degradation path already assumed absence. Quality metrics that pypdf can compute
   (page counts, text presence flags) are retained.
-- **D4 — reportlab retained as dev-only fixture dependency.** Test fixtures need text-bearing
-  PDFs; pypdf cannot author them. Dev-tree presence does not affect runtime Dependabot alerts
-  (manifest-scanned) and avoids hand-crafted binary fixtures.
+- **D4 — reportlab fully eradicated (updated PR #147).** Initially retained as a dev-only fixture dependency, `reportlab` was subsequently removed from `requirements-dev.txt` because it declares `pillow` as a hard `Requires`, keeping Pillow alive in all developer environments. All PDF test fixtures were migrated to `build_test_pdf()` in `tests/conftest.py` — a stdlib-only raw PDF 1.4 writer using Helvetica Type1 / WinAnsiEncoding (cp1252) with text recoverable by `pypdf.page.extract_text()`.
 - **D5 — Token storage in `sessionStorage`, never `localStorage`.** Matches the BYOK credential
   isolation posture: tokens die with the tab; no long-lived client-side credential surface.
 - **D6 — Coverage gate stays at 70%.** Removals delete both covered and covering lines; a

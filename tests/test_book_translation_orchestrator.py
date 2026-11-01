@@ -20,9 +20,8 @@ from unittest.mock import MagicMock
 from urllib.parse import urlparse
 
 import pytest
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 
+from tests.conftest import build_test_pdf
 from services.batch_job_recovery import ActiveJobState, BatchJobRecoveryManager
 from services.book_translation_orchestrator import (
     BookScanResult,
@@ -46,15 +45,8 @@ from services.user_vocabulary_store import UserVocabularyStore
 
 
 def _create_sample_pdf(text: str = "Klages Geist Seele Dasein Schauung", pages: int = 2) -> bytes:
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=letter)
-    for i in range(pages):
-        c.setFont("Helvetica", 12)
-        c.drawString(100, 700, f"Page {i + 1}: {text}")
-        c.showPage()
-    c.save()
-    buf.seek(0)
-    return buf.getvalue()
+    """Generate in-memory PDF bytes for test fixtures via build_test_pdf."""
+    return build_test_pdf([f"Page {i + 1}: {text}" for i in range(pages)])
 
 
 @pytest.fixture

@@ -114,16 +114,11 @@ def fulfill_pdf(route: Any, name: str = "translated.pdf") -> None:
 
 @pytest.fixture
 def fixture_pdf(tmp_path: Path) -> Path:
-    """A one-page text PDF built with the dev-only reportlab fixture dep."""
-    from reportlab.lib.pagesizes import letter
-    from reportlab.pdfgen import canvas
+    """A one-page text PDF built with the shared build_test_pdf helper (no reportlab)."""
+    from tests.conftest import build_test_pdf
 
     path = tmp_path / "fixture-book.pdf"
-    c = canvas.Canvas(str(path), pagesize=letter)
-    c.setFont("Helvetica", 12)
-    c.drawString(100, 700, "Sein und Zeit - fixture page")
-    c.showPage()
-    c.save()
+    path.write_bytes(build_test_pdf(["Sein und Zeit - fixture page"]))
     return path
 
 

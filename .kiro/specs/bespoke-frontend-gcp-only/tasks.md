@@ -123,7 +123,7 @@ Track C (raster + deps removal) ──┘   (C3 requires B1, C1, C2, A1)
 **Depends on:** A1, A8, B1–B3, C1, C2 (join point).
 - [x] Update `requirements.in`: remove the direct requirement lines for `gradio`, `pdf2image`, `reportlab`, **`pillow`, and `audioop-lts`**; keep everything else; regenerate `requirements.txt` with `uv pip compile requirements.in -o requirements.txt` (Python 3.13).
 - [x] Verify `audioop-lts`, `pydub`, `pillow`, and the Gradio cluster are absent from the regenerated lockfile; `uv pip check` clean; resolver succeeds on `--python-platform x86_64-unknown-linux-gnu` too.
-- [x] Move `reportlab>=5.0.1,<6.0` into `requirements-dev.txt` (already present — confirm) and delete the duplicate runtime line.
+- [x] ~~Move `reportlab>=5.0.1,<6.0` into `requirements-dev.txt`~~ **Superseded by PR #147**: `reportlab` fully eradicated from all manifests. Test fixtures migrated to `build_test_pdf()` in `tests/conftest.py` (stdlib-only; removes the transitive Pillow dependency from dev environments).
 - [x] Hermetic install + `python -c "import app"` succeeds with Pillow absent (NFR-07, flips T0's red baseline to green).
 - [x] Remove the `gradio-majors` group from `.github/dependabot.yml`.
 

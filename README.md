@@ -667,7 +667,7 @@ PhenomenalLayout has evolved through three major architectural eras:
 ### Modern Architecture Invariants (Track 4 Streamlining)
 - **Direct-to-GCS Processing**: Large book PDFs stream directly into user GCS staging buckets (`inputs/`) with an unconditional 7-day auto-delete policy.
 - **Native Layout Preservation**: Google Cloud Document Translation handles font scaling, column wrapping, diagram overlays, and vector graphics natively.
-- **Runtime Dependency Pruning**: Heavy dependencies like `reportlab` have been eliminated from runtime production requirements (retained solely in `requirements-dev.txt` for mock test fixtures).
+- **Runtime Dependency Pruning**: Heavy dependencies like `reportlab`, `pdf2image`, and `Pillow` have been fully eradicated from all dependency manifests (runtime and dev). PDF test fixtures use the stdlib-only `build_test_pdf()` helper in `tests/conftest.py`.
 - **Scholarly Fallback & Unicode Fidelity**: Fallback page synthesis uses `pypdf` composite Type 0 fonts (`/CIDFontType2`) with format 4/12 TrueType `cmap` parsing and dynamic sequential 16-bit CID allocation, completely replacing legacy ReportLab canvas painting.
 
 ### Deprecated Components & Replacements
@@ -681,7 +681,7 @@ PhenomenalLayout has evolved through three major architectural eras:
 | `services/enhanced_document_processor.py` | Deprecated (ADR 0001) | `services/gcp_batch_translation_service.py` |
 | `services/fallback_translator.py` | Permanently deleted (ADR 0002) | Google Cloud Document Translation sole pipeline; transparent failed-page re-run |
 | `ui/gradio_interface.py` | Permanently deleted (ADR 0002) | Bespoke zero-build vanilla ES modules SPA (`static/`) |
-| `reportlab` (runtime) | Retained as dev-only test fixture dependency (ADR 0002) | Google Cloud Document Translation native layout preservation |
+| `reportlab` (all manifests) | Permanently removed (PR #147) | `build_test_pdf(pages)` in `tests/conftest.py` — stdlib-only PDF 1.4 writer; Pillow now fully eradicated from all dependency trees |
 
 ### 🚀 Parallel Translation
 - **API Key Required**: Valid Lingo.dev API key is mandatory for translation functionality
