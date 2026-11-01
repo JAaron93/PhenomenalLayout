@@ -216,7 +216,6 @@ class GlossarySyncManager:
         return self._create_glossary_resource(
             user_id=user_id,
             project_id=project_id,
-            glossary_id=glossary_id,
             glossary_name=glossary_name,
             gcs_input_uri=gcs_uri,
         )
@@ -412,7 +411,6 @@ class GlossarySyncManager:
             new_resource_name = self._create_glossary_resource(
                 user_id=user_id,
                 project_id=project_id,
-                glossary_id=new_glossary_id,
                 glossary_name=new_glossary_name,
                 gcs_input_uri=gcs_uri,
             )
@@ -426,7 +424,6 @@ class GlossarySyncManager:
                     self._create_glossary_resource(
                         user_id=user_id,
                         project_id=project_id,
-                        glossary_id=new_glossary_id,
                         glossary_name=new_glossary_name,
                         gcs_input_uri=older_input_uri,
                     )
@@ -458,7 +455,6 @@ class GlossarySyncManager:
         self,
         user_id: str,
         project_id: str,
-        glossary_id: str,
         glossary_name: str,
         gcs_input_uri: str,
     ) -> str:

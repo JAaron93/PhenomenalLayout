@@ -245,7 +245,6 @@ class PhilosophyEnhancedDocumentProcessor:
         provider: str = "auto",
         user_id: str | None = None,
         session_id: str | None = None,
-        philosophy_mode: bool = True,
         progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> PhilosophyDocumentResult:
         """Process document with comprehensive philosophy-aware translation.
@@ -257,7 +256,6 @@ class PhilosophyEnhancedDocumentProcessor:
             provider: Translation provider to use
             user_id: User ID for session management
             session_id: Existing session ID or None to create new
-            philosophy_mode: Enable philosophy-aware processing features
             progress_callback: Optional progress callback
 
         Returns:

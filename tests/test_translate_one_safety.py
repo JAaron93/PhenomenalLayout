@@ -20,10 +20,10 @@ class StubPhilosophyService:
         self,
         *,
         text: str,
-        source_lang: str,
-        target_lang: str,
-        provider: str,
-        session_id: str,
+        source_lang: str,  # noqa: ARG002  (keyword-only provider protocol)
+        target_lang: str,  # noqa: ARG002  (keyword-only provider protocol)
+        provider: str,  # noqa: ARG002  (keyword-only provider protocol)
+        session_id: str,  # noqa: ARG002  (keyword-only provider protocol)
     ) -> dict[str, str]:
         action = self.behavior.get(text)
         if isinstance(action, Exception):

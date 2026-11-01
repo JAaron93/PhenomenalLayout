@@ -87,7 +87,7 @@ async def test_batch_texts_uses_only_texts_shapes(make_client):
 
 
 @pytest.mark.asyncio
-async def test_both_text_and_texts_prefers_batch(make_client, caplog):
+async def test_both_text_and_texts_prefers_batch(make_client):
     client = make_client(
         succeed_on_call=2
     )  # ensure we see more than one attempt if first fails

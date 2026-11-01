@@ -222,7 +222,7 @@ class TestRetryOnTransientErrors:
 
     @patch("time.sleep", return_value=None)
     def test_retry_exhausted_raises(
-        self, mock_sleep: MagicMock, monitor: LROProgressMonitor, mock_creds_manager: MagicMock
+        self, _mock_sleep: MagicMock, monitor: LROProgressMonitor, mock_creds_manager: MagicMock
     ) -> None:
         mock_client = MagicMock()
         mock_creds_manager.get_translation_client.return_value = mock_client

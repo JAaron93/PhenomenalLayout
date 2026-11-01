@@ -126,7 +126,7 @@ def get_monitoring_status_and_handle_errors(request: Request, response: Response
 async def get_memory_statistics(
     request: Request,
     response: Response,
-    current_user: dict = Depends(get_read_only_user)
+    _current_user: dict = Depends(get_read_only_user)
 ) -> dict[str, Any]:
     """Get current memory usage statistics."""
     # Check rate limit
@@ -138,7 +138,7 @@ async def get_memory_statistics(
 async def force_garbage_collection_endpoint(
     request: Request,
     response: Response,
-    current_user: dict = Depends(get_admin_user)
+    _current_user: dict = Depends(get_admin_user)
 ) -> dict[str, Any]:
     """Force garbage collection and return results."""
     # Check rate limit
@@ -172,7 +172,7 @@ async def force_garbage_collection_endpoint(
 async def start_memory_monitoring_endpoint(
     request: Request,
     response: Response,
-    current_user: dict = Depends(get_admin_user),
+    _current_user: dict = Depends(get_admin_user),
     check_interval: float = 60.0,
     alert_threshold_mb: float = 100.0
 ) -> dict[str, Any]:
@@ -211,7 +211,7 @@ async def start_memory_monitoring_endpoint(
 async def stop_memory_monitoring_endpoint(
     request: Request,
     response: Response,
-    current_user: dict = Depends(get_admin_user)
+    _current_user: dict = Depends(get_admin_user)
 ) -> dict[str, Any]:
     """Stop memory monitoring."""
     # Check rate limit
@@ -244,7 +244,7 @@ async def stop_memory_monitoring_endpoint(
 async def get_monitoring_status(
     request: Request,
     response: Response,
-    current_user: dict = Depends(get_read_only_user)
+    _current_user: dict = Depends(get_read_only_user)
 ) -> dict[str, Any]:
     """Get current memory monitoring status."""
     # Check rate limit

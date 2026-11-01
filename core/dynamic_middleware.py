@@ -133,9 +133,7 @@ class DynamicProgrammingMonitor:
                     else 0,
                     "max_duration_ms": metrics.max_duration_ms,
                     "error_rate": metrics.error_rate,
-                    "performance_improvement": self._calculate_improvement(
-                        operation, metrics
-                    ),
+                    "performance_improvement": self._calculate_improvement(metrics),
                 }
 
             summary["pattern_usage"] = dict(self.pattern_usage)
@@ -147,7 +145,7 @@ class DynamicProgrammingMonitor:
             return summary
 
     def _calculate_improvement(
-        self, operation: str, metrics: MiddlewareMetrics
+        self, metrics: MiddlewareMetrics
     ) -> float:
         """Calculate estimated performance improvement."""
         if metrics.cache_hits == 0:
@@ -178,7 +176,7 @@ class DynamicProgrammingMonitor:
 
         with self._lock:
             for operation, metrics in self.metrics.items():
-                improvement = self._calculate_improvement(operation, metrics)
+                improvement = self._calculate_improvement(metrics)
                 performers.append(
                     {
                         "operation": operation,

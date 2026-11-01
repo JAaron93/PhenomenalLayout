@@ -261,7 +261,7 @@ def test_client():
 
 
 @pytest.fixture
-def read_token(test_client):
+def read_token(test_client):  # noqa: ARG001  (fixture dependency: test_client bootstraps the app before token creation)
     """Pytest fixture providing a read-only token."""
     import api.auth
 
@@ -269,7 +269,7 @@ def read_token(test_client):
 
 
 @pytest.fixture
-def admin_token(test_client):
+def admin_token(test_client):  # noqa: ARG001  (fixture dependency: test_client bootstraps the app before token creation)
     """Pytest fixture providing an admin token."""
     import api.auth
 

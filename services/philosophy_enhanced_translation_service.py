@@ -349,8 +349,6 @@ class PhilosophyEnhancedTranslationService:
             final_translation = await self._restore_preserved_neologisms_async(
                 translated_text,
                 preservation_data,
-                progress,
-                progress_callback,
             )
 
             # Update statistics
@@ -552,8 +550,6 @@ class PhilosophyEnhancedTranslationService:
             restored = await self._restore_preserved_neologisms_async(
                 translated,
                 preservation_data,
-                progress,
-                progress_callback,
             )
             results.append(
                 NeologismPreservationResult(
@@ -789,9 +785,6 @@ class PhilosophyEnhancedTranslationService:
         self,
         translated_text: str,
         preservation_data: PreservationData,
-        progress: PhilosophyTranslationProgress,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None]
-        | None = None,
     ) -> str:
         """Restore preserved neologisms in translated text."""
         restored_text = translated_text
@@ -879,8 +872,6 @@ class PhilosophyEnhancedTranslationService:
                     restored_text = await self._restore_preserved_neologisms_async(
                         translated_text,
                         preservation_data,
-                        progress,
-                        progress_callback,
                     )
 
                     # Update block with translation

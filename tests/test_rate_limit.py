@@ -36,7 +36,7 @@ def test_app_sync():
 
     @app.get("/sync-endpoint")
     @rate_limit("read")
-    def sync_endpoint(request: Request):
+    def sync_endpoint(request: Request):  # noqa: ARG001  (rate_limit wrapper reads kwargs["request"] by name)
         return {"message": "Success"}
 
     return app
@@ -49,7 +49,7 @@ def test_app_async():
 
     @app.get("/async-endpoint")
     @rate_limit("write")
-    async def async_endpoint(request: Request):
+    async def async_endpoint(request: Request):  # noqa: ARG001  (rate_limit wrapper reads kwargs["request"] by name)
         return {"message": "Success"}
 
     return app

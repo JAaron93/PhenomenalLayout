@@ -893,8 +893,8 @@ class NeologismDetector:
         """Extract philosophical keywords from text."""
         return self.philosophical_context_analyzer.extract_philosophical_keywords(text)
 
-    def _identify_semantic_field(self, term: str, context: str) -> str:
-        """Identify semantic field of a term."""
+    def _identify_semantic_field(self, context: str) -> str:
+        """Identify semantic field from surrounding context."""
         return self.philosophical_context_analyzer._identify_semantic_field(context)
 
     def _extract_context_window(

@@ -112,6 +112,10 @@ unfixable = []
 "tests/*" = ["D", "S101"]  # No docstrings required, assert allowed
 "examples/*" = ["D", "E402"]  # No docstrings required, allow path manipulation before imports
 
+[tool.ruff.lint.flake8-unused-arguments]
+# *args/**kwargs are signature-parity stubs (mcp fallbacks, __getattr__ dispatch, test placeholder clients)
+ignore-variadic-names = true
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"  # or "numpy" based on project preference
 

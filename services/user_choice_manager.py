@@ -221,7 +221,7 @@ class UserChoiceManager:
             raise RuntimeError(f"Failed to save choice: {choice_id}")
 
     def get_choice_for_neologism(
-        self, neologism: DetectedNeologism, session_id: str | None = None
+        self, neologism: DetectedNeologism, session_id: str | None = None  # noqa: ARG002  (public API; internal callers pass session_id positionally)
     ) -> UserChoice | None:
         """Get the best matching choice for a detected neologism.
 

@@ -280,14 +280,14 @@ def verify_api_key(api_key: str, config: AuthConfig | None = None) -> bool:
 
 
 async def get_current_user(
-    request: Request,
+    _request: Request,
     api_key: str | None = None,
     credentials: HTTPAuthorizationCredentials | None = None,
 ) -> dict:
     """Get current user from authentication credentials.
 
     Args:
-        request: FastAPI request object
+        _request: FastAPI request object (injected for DI wiring; unused in body)
         api_key: API key from header
         credentials: Bearer token credentials
 
