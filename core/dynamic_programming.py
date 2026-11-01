@@ -8,27 +8,28 @@ that can be used across the codebase for performance optimization.
 
 from __future__ import annotations
 
-import warnings
-
-warnings.warn(
-    "core.dynamic_programming has been retired and deprecated under ADR 0001 / Track 4. "
-    "Core caching and metric utilities are retained for backward compatibility.",
-    DeprecationWarning,
-    stacklevel=2,
-)
-
 import dataclasses
 import functools
 import hashlib
 import heapq
 import threading
 import time
+import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, TypeVar
+
+# Retired under ADR 0001 / Track 4; notice emitted after the import block so the
+# module keeps all imports at the top.
+warnings.warn(
+    "core.dynamic_programming has been retired and deprecated under ADR 0001 / Track 4. "
+    "Core caching and metric utilities are retained for backward compatibility.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def _normalize_value(value: Any) -> Hashable:

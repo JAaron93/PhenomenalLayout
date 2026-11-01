@@ -30,6 +30,10 @@ from services.neologism_detector import NeologismDetector
 from services.philosophy_enhanced_translation_service import (
     PhilosophyEnhancedTranslationService,
 )
+from services.translation_service import TranslationService
+from utils.file_handler import FileHandler
+from utils.language_utils import extract_text_sample_for_language_detection
+from utils.path_safety import resolve_managed_path
 
 
 class ProcessFileUploadResult(TypedDict):
@@ -40,10 +44,6 @@ class ProcessFileUploadResult(TypedDict):
     preprocessing_info: str
     processing_details: str
     success: bool
-from services.translation_service import TranslationService
-from utils.file_handler import FileHandler
-from utils.language_utils import extract_text_sample_for_language_detection
-from utils.path_safety import resolve_managed_path
 
 # PDF preprocessing constants
 PDF_PREPROCESSING_DPI: int = (

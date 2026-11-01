@@ -19,8 +19,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from database.choice_database import ChoiceDatabase
-from models.user_choice_models import (
+from database.choice_database import ChoiceDatabase  # noqa: E402  (sys.path bootstrap above)
+from models.user_choice_models import (  # noqa: E402  (sys.path bootstrap above)
     ChoiceScope,
     ChoiceSession,
     ChoiceType,

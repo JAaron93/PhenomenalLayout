@@ -13,11 +13,6 @@ from unittest.mock import patch
 
 import pytest
 
-# Performance testing configuration
-PERFORMANCE_SAMPLE_COUNT = int(os.getenv("TEST_PERFORMANCE_SAMPLES", "5"))
-PERFORMANCE_PERCENTILE = float(os.getenv("TEST_PERFORMANCE_PERCENTILE", "90"))
-PERFORMANCE_MAX_RETRIES = int(os.getenv("TEST_PERFORMANCE_MAX_RETRIES", "3"))
-
 from core.dynamic_choice_engine import (
     DynamicConflictResolutionEngine,
 )
@@ -48,6 +43,11 @@ from models.user_choice_models import (
     TranslationContext,
     UserChoice,
 )
+
+# Performance testing configuration
+PERFORMANCE_SAMPLE_COUNT = int(os.getenv("TEST_PERFORMANCE_SAMPLES", "5"))
+PERFORMANCE_PERCENTILE = float(os.getenv("TEST_PERFORMANCE_PERCENTILE", "90"))
+PERFORMANCE_MAX_RETRIES = int(os.getenv("TEST_PERFORMANCE_MAX_RETRIES", "3"))
 
 
 class TestDynamicProgrammingCore:
