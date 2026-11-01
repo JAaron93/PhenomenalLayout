@@ -17,9 +17,20 @@ from tests.helpers import restore_module_family, snapshot_module_family
 def build_test_pdf(pages: list[str]) -> bytes:
     """Build a minimal valid PDF with extractable text — no reportlab, no Pillow.
 
-    Produces a PDF 1.4 document using Helvetica Type1 with WinAnsiEncoding.
-    ``pypdf.page.extract_text()`` can recover the original strings verbatim for
-    all characters in the WinAnsiEncoding range (ASCII + Western European).
+    Produces a PDF 1.4 document using Helvetica Type1 with WinAnsiEncoding
+    (``cp1252``). ``pypdf.page.extract_text()`` can recover the original strings
+    verbatim for all characters in the cp1252 / WinAnsiEncoding range, which
+    includes ASCII, Western European characters, and the Windows-1252 extension
+    block (positions 0x80–0x9F) — e.g. ``€`` (U+20AC), curly quotes
+    (U+2018/U+2019/U+201C/U+201D), en dash (U+2013), and em dash (U+2014).
+
+    .. note::
+        Page text is encoded with ``cp1252`` (Windows-1252), **not** ``latin-1``
+        (ISO-8859-1). The two codecs share the 0x00–0x7F and 0xA0–0xFF ranges
+        but differ in 0x80–0x9F: latin-1 maps those bytes to C1 control
+        characters, while cp1252 maps them to printable symbols (``€``, curly
+        quotes, dashes, etc.). Pass only characters in the cp1252 code page;
+        anything outside it raises ``UnicodeEncodeError``.
 
     This helper replaces ``reportlab.pdfgen.canvas.Canvas`` across the test
     suite (ADR 0002 / PR #147). Use it in place of any ``_create_*_pdf``
@@ -92,7 +103,7 @@ def build_test_pdf(pages: list[str]) -> bytes:
                 .replace("\r", " ")
                 .replace("\n", " ")
         )
-        stream = f"BT /F1 12 Tf 72 720 Td ({safe}) Tj ET".encode("latin-1")
+        stream = f"BT /F1 12 Tf 72 720 Td ({safe}) Tj ET".encode("cp1252")
         _start(content_base + i)
         _w(f"<< /Length {len(stream)} >>\nstream\n")
         buf.write(stream)
