@@ -260,13 +260,15 @@ class TestSubmitBatchJob:
     def test_upload_fails_if_lifecycle_policy_fails(
         self, batch_service: GCPBatchTranslationService
     ) -> None:
-        with patch.object(batch_service, "ensure_staging_lifecycle_policy", return_value=False):
-            with pytest.raises(RuntimeError, match="Failed to ensure 7-day auto-delete"):
-                batch_service.upload_book_to_gcs(
-                    user_id="user-1",
-                    source=io.BytesIO(b"%PDF-test"),
-                    gcs_destination_uri="gs://my-bucket/inputs/book_101/source.pdf",
-                )
+        with (
+            patch.object(batch_service, "ensure_staging_lifecycle_policy", return_value=False),
+            pytest.raises(RuntimeError, match="Failed to ensure 7-day auto-delete"),
+        ):
+            batch_service.upload_book_to_gcs(
+                user_id="user-1",
+                source=io.BytesIO(b"%PDF-test"),
+                gcs_destination_uri="gs://my-bucket/inputs/book_101/source.pdf",
+            )
 
 
 class TestStreamTranslatedBook:

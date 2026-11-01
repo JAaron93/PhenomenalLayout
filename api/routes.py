@@ -1169,14 +1169,14 @@ async def validate_byok_credentials(
         proj = getattr(
             val,
             "project_id",
-            getattr(mgr, "get_project_id", lambda u: "")(user_id)
+            getattr(mgr, "get_project_id", lambda _u: "")(user_id)
             if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
             else "",
         )
         bkt = getattr(
             val,
             "bucket_name",
-            getattr(mgr, "get_bucket_name", lambda u: "")(user_id)
+            getattr(mgr, "get_bucket_name", lambda _u: "")(user_id)
             if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
             else "",
         )
@@ -1516,12 +1516,15 @@ def _verify_job_ownership(session_id: str, requested_user_id: str, orch: Any) ->
                 res = finder(session_id)
                 if isinstance(res, tuple) and len(res) >= 2:
                     _path, state = res[0], res[1]
-                    if state is not None and getattr(state, "user_id", None):
-                        if state.user_id != requested_user_id:
-                            raise HTTPException(
-                                status_code=status.HTTP_403_FORBIDDEN,
-                                detail=f"Access denied: Job session '{session_id}' belongs to another user",
-                            )
+                    if (
+                        state is not None
+                        and getattr(state, "user_id", None)
+                        and state.user_id != requested_user_id
+                    ):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"Access denied: Job session '{session_id}' belongs to another user",
+                        )
             except HTTPException:
                 raise
             except Exception:

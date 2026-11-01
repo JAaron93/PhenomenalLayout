@@ -1,6 +1,7 @@
 """Memory monitoring utilities for detecting memory leaks and resource usage."""
 
 import atexit
+import contextlib
 import gc
 import logging
 import os
@@ -351,11 +352,9 @@ class MemoryMonitor:
 
     def __del__(self):
         """Destructor to ensure cleanup on object deletion."""
-        try:
+        # Ignore errors during cleanup in destructor
+        with contextlib.suppress(Exception):
             self.cleanup()
-        except Exception:
-            # Ignore errors during cleanup in destructor
-            pass
 
 
 def force_garbage_collection() -> dict[str, Any]:

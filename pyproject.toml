@@ -101,7 +101,7 @@ ignore = [
     "D100",  # Missing docstring in public module
     "D104",  # Missing docstring in public package
 ]
-allowed-confusables = ["ſ", "ﬅ", "ﬆ"]
+allowed-confusables = ["ſ", "ﬅ", "ﬆ", "–", "’", "×"]
 
 # Allow autofix for all enabled rules
 fixable = ["ALL"]
@@ -109,8 +109,9 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore specific rules for test files
-"tests/*" = ["D", "S101"]  # No docstrings required, assert allowed
+"tests/*" = ["D", "S101", "N806"]  # No docstrings required, assert allowed; tests rebind imported class names and set local constants
 "examples/*" = ["D", "E402"]  # No docstrings required, allow path manipulation before imports
+"scripts/test_linting_setup.py" = ["SIM102"]  # Intentionally non-compliant demo file for the linting walkthrough
 
 [tool.ruff.lint.flake8-unused-arguments]
 # *args/**kwargs are signature-parity stubs (mcp fallbacks, __getattr__ dispatch, test placeholder clients)

@@ -337,7 +337,7 @@ class McpLingoClient:
         """
         if not lang:
             return None
-        l = lang.strip().lower()
+        code = lang.strip().lower()
         # Common language-name to code mapping
         name_map = {
             "english": "en",
@@ -356,17 +356,17 @@ class McpLingoClient:
             "chinese": "zh",
             "中文": "zh",
         }
-        if l in name_map:
-            return name_map[l]
+        if code in name_map:
+            return name_map[code]
         # Normalize underscore to hyphen and casing like en-us -> en-US
-        l = l.replace("_", "-")
-        parts = l.split("-")
+        code = code.replace("_", "-")
+        parts = code.split("-")
         if len(parts) == 2 and len(parts[0]) == 2 and len(parts[1]) == 2:
             return f"{parts[0]}-{parts[1].upper()}"
         # Fallback: use two-letter code if available
-        if len(l) >= 2:
-            return l[:2]
-        return l
+        if len(code) >= 2:
+            return code[:2]
+        return code
 
     def _filter_args_by_schema(self, args: dict[str, Any]) -> dict[str, Any]:
         """Filter a payload to only include keys declared in the tool schema.

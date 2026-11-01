@@ -270,17 +270,16 @@ class GCPBatchTranslationService:
         bucket_name, blob_name = self._parse_gcs_uri(gcs_destination_uri)
 
         # Enforce 7-day auto-delete staging lifecycle policy if uploaded to staging prefix
-        if blob_name.startswith("inputs/"):
-            if not self.ensure_staging_lifecycle_policy(
-                user_id=user_id,
-                bucket_name=bucket_name,
-                staging_prefix="inputs/",
-                age_days=7,
-            ):
-                raise RuntimeError(
-                    f"Failed to ensure 7-day auto-delete staging lifecycle policy on bucket '{bucket_name}' "
-                    f"for staging object '{blob_name}'."
-                )
+        if blob_name.startswith("inputs/") and not self.ensure_staging_lifecycle_policy(
+            user_id=user_id,
+            bucket_name=bucket_name,
+            staging_prefix="inputs/",
+            age_days=7,
+        ):
+            raise RuntimeError(
+                f"Failed to ensure 7-day auto-delete staging lifecycle policy on bucket '{bucket_name}' "
+                f"for staging object '{blob_name}'."
+            )
 
         storage_client = self._get_storage_client(user_id)
         bucket = storage_client.bucket(bucket_name)
@@ -463,17 +462,16 @@ class GCPBatchTranslationService:
         """
         # Enforce 7-day auto-delete staging lifecycle policy if input is in staging prefix
         in_bucket, in_blob = self._parse_gcs_uri(gcs_input_uri)
-        if in_blob.startswith("inputs/"):
-            if not self.ensure_staging_lifecycle_policy(
-                user_id=user_id,
-                bucket_name=in_bucket,
-                staging_prefix="inputs/",
-                age_days=7,
-            ):
-                raise RuntimeError(
-                    f"Failed to ensure 7-day auto-delete staging lifecycle policy on bucket '{in_bucket}' "
-                    f"for staging input '{in_blob}'."
-                )
+        if in_blob.startswith("inputs/") and not self.ensure_staging_lifecycle_policy(
+            user_id=user_id,
+            bucket_name=in_bucket,
+            staging_prefix="inputs/",
+            age_days=7,
+        ):
+            raise RuntimeError(
+                f"Failed to ensure 7-day auto-delete staging lifecycle policy on bucket '{in_bucket}' "
+                f"for staging input '{in_blob}'."
+            )
 
         translate_client = self._get_translate_client(user_id)
         project_id = self._get_project_id(user_id)

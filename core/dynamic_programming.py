@@ -395,12 +395,11 @@ class SmartCache[K: Hashable, V]:
                     self._lfu_stale_keys.discard(key)  # Clean up just in case
                     break
 
-        elif self.policy == CachePolicy.FIFO:
+        elif self.policy == CachePolicy.FIFO and self._fifo_order:
             # O(1) eviction using OrderedDict
-            if self._fifo_order:
-                oldest_key, _ = self._fifo_order.popitem(last=False)
-                if oldest_key in self._cache:
-                    del self._cache[oldest_key]
+            oldest_key, _ = self._fifo_order.popitem(last=False)
+            if oldest_key in self._cache:
+                del self._cache[oldest_key]
 
     def clear(self) -> None:
         """Clear all cached entries and auxiliary structures."""

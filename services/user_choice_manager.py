@@ -1016,8 +1016,8 @@ class UserChoiceManager:
 # Convenience functions for integration
 
 # NOTE: create_session_for_document has been moved to core.dynamic_choice_engine
-# for API consolidation. Import from there for unified API access:
-#   from core.dynamic_choice_engine import create_session_for_document
+# for API consolidation. Unified API access: import create_session_for_document
+# from core.dynamic_choice_engine.
 
 
 def create_choice_manager(db_path: str = "user_choices.db") -> UserChoiceManager:

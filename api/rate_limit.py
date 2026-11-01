@@ -425,24 +425,23 @@ def _extract_request(args: tuple, kwargs: dict) -> Request:
     """
     # Extract request from kwargs
     request = kwargs.get("request")
-    if not request:
+    if not request and args:
         # Try to get request from first positional argument
-        if args:
-            # Case 1: args[0] has a request attribute
-            if hasattr(args[0], "request"):
-                potential_request = args[0].request
-                # Validate: Request instance OR duck-typed with scope/method
-                is_valid = isinstance(potential_request, Request)
-                is_valid = is_valid or (
-                    hasattr(potential_request, "scope")
-                    and hasattr(potential_request, "method")
-                )
-                if is_valid:
-                    request = potential_request
-            # Case 2: args[0] is Request (type check or duck typing)
-            elif (isinstance(args[0], Request) or
-                  (hasattr(args[0], "scope") and hasattr(args[0], "method"))):
-                request = args[0]
+        # Case 1: args[0] has a request attribute
+        if hasattr(args[0], "request"):
+            potential_request = args[0].request
+            # Validate: Request instance OR duck-typed with scope/method
+            is_valid = isinstance(potential_request, Request)
+            is_valid = is_valid or (
+                hasattr(potential_request, "scope")
+                and hasattr(potential_request, "method")
+            )
+            if is_valid:
+                request = potential_request
+        # Case 2: args[0] is Request (type check or duck typing)
+        elif (isinstance(args[0], Request) or
+              (hasattr(args[0], "scope") and hasattr(args[0], "method"))):
+            request = args[0]
     if not request:
         raise ValueError("Request object not found in function arguments")
     return request

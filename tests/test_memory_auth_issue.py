@@ -58,9 +58,8 @@ def setup_test_client_with_env(test_env):
         finally:
             # Clean up any new modules imported during the test
             for module in list(sys.modules.keys()):
-                if module.startswith("api.") or module == "app":
-                    if module not in saved_modules:
-                        del sys.modules[module]
+                if (module.startswith("api.") or module == "app") and module not in saved_modules:
+                    del sys.modules[module]
             # Restore saved modules
             sys.modules.update(saved_modules)
 

@@ -503,9 +503,8 @@ class TestGlossaryDeletionAndEdgeCases:
         mock_trans = mock_creds_mgr.get_translation_client.return_value
         mock_trans.get_glossary.side_effect = gcp_exceptions.ServiceUnavailable("Down")
 
-        with patch("time.sleep", return_value=None):
-            with pytest.raises(gcp_exceptions.ServiceUnavailable):
-                sync_mgr.sync_base_glossary("user_1")
+        with patch("time.sleep", return_value=None), pytest.raises(gcp_exceptions.ServiceUnavailable):
+            sync_mgr.sync_base_glossary("user_1")
 
     def test_sanitize_empty_string(self) -> None:
         assert sanitize_glossary_id("") == "glossary"

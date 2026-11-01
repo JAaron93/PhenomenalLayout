@@ -16,8 +16,7 @@ if api_key and api_key.strip():
     print("✓ LINGO_API_KEY loaded successfully")
 else:
     print("✗ LINGO_API_KEY not found or empty")
-    # Uncomment the next line if tests require the API key
-    # sys.exit(1)
+    # A missing API key only degrades the run; a hard exit can be wired here if tests require it.
 
 # Run pytest with the loaded environment
 if __name__ == "__main__":
