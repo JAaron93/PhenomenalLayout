@@ -82,6 +82,7 @@ class DynamicProgrammingMonitor:
 
     def __init__(self, cache_time_savings_factor: float | None = None):
         # Resolve cache time savings factor from argument or environment
+        """Configure the monitor's cache time-savings factor."""
         if cache_time_savings_factor is None:
             env_val = os.getenv("CACHE_TIME_SAVINGS_FACTOR", "0.9").strip()
             try:
@@ -206,6 +207,7 @@ class SmartCachingMiddleware:
         default_ttl_seconds: float | None = None,
         adaptive_sizing: bool = True,
     ):
+        """Initialize middleware caching defaults."""
         self.default_cache_size = default_cache_size
         self.default_ttl_seconds = default_ttl_seconds
         self.adaptive_sizing = adaptive_sizing

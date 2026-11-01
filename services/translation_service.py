@@ -201,6 +201,7 @@ class MCPLingoTranslator(BaseTranslator):
     async def translate_text(
         self, text: str, source_lang: str, target_lang: str
     ) -> str:
+        """Translate a single text via the MCP Lingo provider."""
         await self._ensure_started()
         try:
             return await self._client.translate_text(text, source_lang, target_lang)
@@ -211,6 +212,7 @@ class MCPLingoTranslator(BaseTranslator):
     async def translate_batch(
         self, texts: list[str], source_lang: str, target_lang: str
     ) -> list[str]:
+        """Translate a batch of texts via the MCP Lingo provider."""
         await self._ensure_started()
         try:
             return await self._client.translate_batch(texts, source_lang, target_lang)

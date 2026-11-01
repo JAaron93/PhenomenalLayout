@@ -239,6 +239,7 @@ class CacheEntry[V]:
     """Generic cache entry with metadata."""
 
     def __init__(self, value: V, timestamp: float | None = None, access_count: int = 0):
+        """Create a cache entry wrapping the stored value."""
         self.value = value
         self.timestamp = timestamp or time.time()
         self.access_count = access_count
@@ -269,6 +270,7 @@ class SmartCache[K: Hashable, V]:
         policy: CachePolicy = CachePolicy.LRU,
         ttl_seconds: float | None = None,
     ):
+        """Initialize the cache with its size bound and eviction policy."""
         self.max_size = max_size
         self.policy = policy
         self.ttl_seconds = ttl_seconds
@@ -435,6 +437,7 @@ class DynamicRegistry[T]:
         cache_policy: CachePolicy = CachePolicy.LRU,
         ttl_seconds: float | None = None,
     ):
+        """Initialize the registry's strategy cache."""
         self._registry: dict[str, Callable[..., T]] = {}
         self._cache: SmartCache[tuple, T] = SmartCache(
             max_size=cache_size, policy=cache_policy, ttl_seconds=ttl_seconds
@@ -526,6 +529,7 @@ class DecisionTreeNode[T]:
         result: T | None = None,
         cache: SmartCache[str, T] | None = None,
     ):
+        """Create a decision-tree node with its predicate and optional result."""
         self.condition = condition
         self.result = result
         self.children: list[DecisionTreeNode[T]] = []
@@ -595,6 +599,7 @@ class StrategyRegistry[T]:
     """Registry for strategy pattern with dynamic selection."""
 
     def __init__(self):
+        """Initialize the strategy list, selection cache, and metrics."""
         self._strategies: list[StrategyPattern[T]] = []
         self._cache: SmartCache[str, StrategyPattern[T]] = SmartCache(max_size=128)
         self._metrics = PerformanceMetrics("strategy_selection")
@@ -747,6 +752,7 @@ class DynamicFactory[T]:
     """Generic factory with dynamic type resolution and caching."""
 
     def __init__(self):
+        """Initialize the creator registry and instance cache."""
         self._creators: dict[str, Callable[..., T]] = {}
         self._cache: SmartCache[tuple, T] = SmartCache(max_size=64)
 

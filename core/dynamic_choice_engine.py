@@ -154,6 +154,7 @@ class DynamicConflictResolutionEngine:
 
     def __init__(self, cache_size: int = 512):
         # Core components
+        """Initialize conflict-resolution strategies, registry, and caches."""
         self.resolution_table: dict[int, ResolutionStrategy] = {}
         self.strategy_registry: StrategyRegistry[str | None] = StrategyRegistry()
 
@@ -329,6 +330,7 @@ class OptimizedUserChoiceManager:
         session_expiry_hours: int = 24,
     ):
         # Import original manager for compatibility with fallback
+        """Initialize the optimized user-choice manager with its database backend."""
         try:
             from services.user_choice_manager import UserChoiceManager
 

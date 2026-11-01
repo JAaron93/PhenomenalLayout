@@ -516,6 +516,7 @@ class DynamicValidationEngine:
         enable_parallel: bool = False,
         fail_fast: bool = True,
     ):
+        """Configure validation caching and fail-fast behavior."""
         self.cache_size = cache_size
         self.enable_parallel = enable_parallel
         self.fail_fast = fail_fast
@@ -864,6 +865,7 @@ class OptimizedFileValidator:
     """Drop-in replacement for FileValidator with dynamic programming optimizations."""
 
     def __init__(self):
+        """Wire the lazy file validator into the dynamic validation engine."""
         validator_class = _get_file_validator()
         if validator_class is None:
             raise RuntimeError("FileValidator could not be imported")

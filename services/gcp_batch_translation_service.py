@@ -1,4 +1,5 @@
 """services/gcp_batch_translation_service.py.
+
 ==========================================
 Track 1 — GCP Batch Translation Migration  (FR-03, FR-10, NFR-01, NFR-02, NFR-07)
 
@@ -138,6 +139,7 @@ class GCPBatchTranslationService:
         project_id: str | None = None,
         location: str = "us-central1",
     ) -> None:
+        """Initialize the service with BYOK credentials and location overrides."""
         self._creds_manager = credentials_manager
         self._project_id = project_id
         self._location = location

@@ -63,6 +63,7 @@ class AdvancedTranslationState:
     def create_and_track_translation_task(
         self, coro: Coroutine[Any, Any, Any]
     ) -> asyncio.Task[Any]:
+        """Create a task on the current loop and track it for lifecycle checks."""
         loop = asyncio.get_running_loop()
         task: asyncio.Task[Any] = loop.create_task(coro)
         self._translation_task = task
@@ -70,10 +71,12 @@ class AdvancedTranslationState:
         return task
 
     def get_tracked_translation_task(self) -> asyncio.Task[Any] | None:
+        """Return the currently tracked translation task, if any."""
         self._assert_current_loop_matches_translation_task()
         return self._translation_task
 
     def cancel_tracked_translation_task(self) -> bool:
+        """Cancel the tracked translation task when it is still running."""
         self._assert_current_loop_matches_translation_task()
         task = self._translation_task
         if task is None or task.done():
@@ -95,6 +98,7 @@ class AdvancedTranslationState:
         self._translation_task_loop = None
 
     def clear_tracked_translation_task(self, task: asyncio.Task[Any]) -> None:
+        """Detach the tracked task reference if it matches the given task."""
         self._assert_current_loop_matches_translation_task()
         if self._translation_task is task:
             self._translation_task = None

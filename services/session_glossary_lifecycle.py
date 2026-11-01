@@ -1,4 +1,5 @@
 """services/session_glossary_lifecycle.py.
+
 =========================================
 Track 2 — Dual-Tier Glossary Sync & Persistent User Vocabulary Store
 Traceability: FR-14, NFR-03
@@ -45,6 +46,7 @@ class SessionGlossaryRecord:
     status: str = "active"  # "active", "cleaned_up", "expired"
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the session glossary record to a JSON-compatible dict."""
         return {
             "user_id": self.user_id,
             "session_id": self.session_id,
@@ -56,6 +58,7 @@ class SessionGlossaryRecord:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SessionGlossaryRecord:
+        """Reconstruct a session glossary record from a serialized dict."""
         return cls(
             user_id=data["user_id"],
             session_id=data["session_id"],

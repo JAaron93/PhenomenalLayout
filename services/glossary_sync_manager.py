@@ -1,4 +1,5 @@
 """services/glossary_sync_manager.py.
+
 ====================================
 Track 2 — Dual-Tier Glossary Sync & Persistent User Vocabulary Store
 Traceability: FR-02, FR-06, NFR-04

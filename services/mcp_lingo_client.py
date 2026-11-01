@@ -17,6 +17,7 @@ except Exception:  # pragma: no cover - optional dependency not present in tests
     StdioServerParameters = object  # type: ignore
 
     def stdio_client(*args, **kwargs):  # type: ignore
+        """Fallback stub for stdio_client when the optional mcp package is unavailable."""
         raise RuntimeError("mcp package is not installed")
 
     class _DummyTypes:  # Minimal stand-ins for typing/instance checks
@@ -94,8 +95,9 @@ class McpLingoConfig:
 
 
 class McpLingoClient:
-    """Thin wrapper that launches the Lingo.dev MCP server via stdio and exposes
-    convenience methods to call its translation tool.
+    """Thin wrapper that launches the Lingo.dev MCP server via stdio.
+
+    Exposes convenience methods to call its translation tool.
 
     Usage:
         client = McpLingoClient(McpLingoConfig(api_key=...))
@@ -105,6 +107,7 @@ class McpLingoClient:
     """
 
     def __init__(self, config: McpLingoConfig):
+        """Initialize the client with its configuration."""
         self._config = config
         self._stdio_ctx: asyncio.AbstractAsyncContextManager | None = None
         self._session_ctx: asyncio.AbstractAsyncContextManager | None = None
@@ -118,6 +121,7 @@ class McpLingoClient:
         return self._config
 
     async def start(self) -> None:
+        """Start the MCP server session and cache the session and tool name."""
         if self._session is not None:
             return
 
@@ -273,6 +277,7 @@ class McpLingoClient:
     async def translate_text(
         self, text: str, source_lang: str, target_lang: str
     ) -> str:
+        """Translate a single text via the MCP tool, retrying transient errors."""
         if not text:
             return ""
         # Try a few times in case of transient server errors
@@ -292,6 +297,7 @@ class McpLingoClient:
     async def translate_batch(
         self, texts: Sequence[str], source_lang: str, target_lang: str
     ) -> list[str]:
+        """Translate a batch of texts, using the batch tool when supported."""
         if not texts:
             return []
         # Call once if tool supports batch; otherwise call per-item

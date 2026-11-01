@@ -235,6 +235,7 @@ class DynamicLanguageDetector:
         confidence_threshold: float = 0.5,
         min_text_length: int = DEFAULT_MIN_TEXT_LENGTH,
     ):
+        """Initialize pattern and result caches with detection thresholds."""
         self.confidence_threshold = confidence_threshold
         self.min_text_length = max(1, min_text_length)  # Ensure minimum of 1
 
