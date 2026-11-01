@@ -55,7 +55,7 @@ class MemoryMonitor:
         Args:
             check_interval: Seconds between memory checks (must be > 0 and <= 3600, enforced)
             alert_threshold_mb: Memory growth threshold in MB for alerts (must be between 0 and 10240, enforced)
-            
+
         Raises:
             ValueError: If check_interval <= 0 or > 3600, or alert_threshold_mb < 0 or > 10240
         """
@@ -178,10 +178,10 @@ class MemoryMonitor:
 
     def get_current_stats(self) -> dict[str, Any]:
         """Get current memory statistics.
-        
+
         Returns:
             Dictionary containing memory statistics
-            
+
         Raises:
             MemoryMonitoringError: If unable to get current memory usage
         """
@@ -279,7 +279,7 @@ class MemoryMonitor:
     @staticmethod
     def _get_memory_usage_mb() -> float:
         """Get current process memory usage in MB.
-        
+
         Raises:
             MemoryMonitoringError: If unable to get memory usage
         """
@@ -294,7 +294,7 @@ class MemoryMonitor:
     @property
     def is_monitoring(self) -> bool:
         """Check if memory monitoring is currently active.
-        
+
         Returns:
             True if monitoring is active, False otherwise
         """
@@ -304,7 +304,7 @@ class MemoryMonitor:
     @property
     def baseline_memory_mb(self) -> float | None:
         """Get the baseline memory usage in MB.
-        
+
         Returns:
             Baseline memory in MB, or None if not established
         """
@@ -319,7 +319,7 @@ class MemoryMonitor:
     @property
     def peak_memory_mb(self) -> float:
         """Get the peak memory usage recorded in MB.
-        
+
         Returns:
             Peak memory usage in MB
         """
@@ -333,7 +333,7 @@ class MemoryMonitor:
 
     def cleanup(self) -> None:
         """Clean up resources and stop monitoring.
-        
+
         This method should be called during application shutdown to ensure
         proper cleanup of monitoring thread and resources.
         """
@@ -399,11 +399,11 @@ def get_memory_monitor() -> MemoryMonitor:
 
 def start_memory_monitoring(check_interval: float = 60.0, alert_threshold_mb: float = 100.0) -> None:
     """Start global memory monitoring.
-    
+
     Args:
         check_interval: Seconds between memory checks (must be between 0.001 and 3600, enforced)
         alert_threshold_mb: Memory growth threshold in MB for alerts (must be between 0 and 10240, enforced)
-        
+
     Raises:
         ValueError: If check_interval <= 0 or > 3600, or alert_threshold_mb < 0 or > 10240
     """
@@ -420,7 +420,7 @@ def stop_memory_monitoring() -> None:
 
 def cleanup_memory_monitor() -> None:
     """Clean up global memory monitor during application shutdown.
-    
+
     This function stops monitoring, clears resources, and resets the global
     monitor reference to None, ensuring a clean state for subsequent tests
     or application restarts.
@@ -445,10 +445,10 @@ atexit.register(cleanup_memory_monitor)
 
 def get_memory_stats() -> dict[str, Any]:
     """Get current memory statistics.
-    
+
     Returns:
         Dictionary containing memory statistics
-        
+
     Raises:
         MemoryMonitoringError: If unable to get memory statistics
     """

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 from collections.abc import Sequence
@@ -634,7 +635,7 @@ class McpLingoClient:
             try:
                 filtered = self._filter_args_by_schema(args)
                 # Structured logging for observability
-                try:
+                with contextlib.suppress(Exception):
                     logger.info(
                         "mcp_translate_attempt",
                         extra={
@@ -645,13 +646,11 @@ class McpLingoClient:
                             "keys": sorted(filtered.keys()),
                         },
                     )
-                except Exception:
-                    pass
                 call = self._session.call_tool(self._tool_name, arguments=filtered)
                 result = await asyncio.wait_for(
                     call, timeout=self._config.call_timeout_s
                 )
-                try:
+                with contextlib.suppress(Exception):
                     logger.info(
                         "mcp_translate_success",
                         extra={
@@ -662,13 +661,11 @@ class McpLingoClient:
                             "keys": sorted(filtered.keys()),
                         },
                     )
-                except Exception:
-                    pass
                 return result
             except Exception as e:
                 errors.append(e)
                 last_err = e
-                try:
+                with contextlib.suppress(Exception):
                     logger.warning(
                         "mcp_translate_failure",
                         extra={
@@ -680,8 +677,6 @@ class McpLingoClient:
                             "error": str(e),
                         },
                     )
-                except Exception:
-                    pass
                 continue
         # If we get here, all attempts failed
         attempted_key_sets = []

@@ -50,7 +50,7 @@ def auth_module():
 @pytest.mark.asyncio
 async def test_get_current_user_raises_401_when_credentials_none(auth_module):
     """Test get_current_user function directly."""
-    create_jwt_token, get_current_user, UserRole = auth_module
+    _create_jwt_token, get_current_user, _UserRole = auth_module
 
     # Test get_current_user directly with no credentials
     class MockRequest:

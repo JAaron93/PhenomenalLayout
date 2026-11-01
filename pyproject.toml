@@ -97,6 +97,7 @@ select = [
 ignore = [
     "E203",  # whitespace before ':'
     "E501",  # line too long (handled by Black)
+    "B008",  # function-call-in-default-argument: idiomatic FastAPI Depends(...) parameter signature; rewrites to Annotated would churn 30 DI call sites across api/
     "D100",  # Missing docstring in public module
     "D104",  # Missing docstring in public package
 ]

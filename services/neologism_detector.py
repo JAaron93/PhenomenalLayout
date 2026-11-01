@@ -306,7 +306,7 @@ class NeologismDetector:
         # Add terminology terms as indicators (avoid circular dependency)
         # Only add if terminology is already loaded, don't trigger lazy loading
         if self._terminology_map is not None:
-            indicators.update(term.lower() for term in self._terminology_map.keys())
+            indicators.update(term.lower() for term in self._terminology_map)
 
         return indicators
 
@@ -343,7 +343,7 @@ class NeologismDetector:
             chunks = self._chunk_text(text, chunk_size)
             analysis.analyzed_chunks = len(chunks)
 
-            for chunk_idx, chunk in enumerate(chunks):
+            for _chunk_idx, chunk in enumerate(chunks):
                 chunk_neologisms = self._analyze_chunk(chunk)
 
                 for neologism in chunk_neologisms:

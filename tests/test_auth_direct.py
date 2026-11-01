@@ -157,7 +157,7 @@ def test_auth_malformed_jwt(auth_module):
 
 def test_auth_expired_token(auth_module):
     """Test that expired JWT returns 401."""
-    AuthConfig, UserRole, create_jwt_token, create_app = auth_module
+    AuthConfig, UserRole, _create_jwt_token, create_app = auth_module
     client = TestClient(create_app(TEST_CONFIG))
     auth_config = AuthConfig(TEST_CONFIG)
 

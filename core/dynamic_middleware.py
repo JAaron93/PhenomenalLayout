@@ -336,7 +336,7 @@ class SmartCachingMiddleware:
         summary = self.monitor.get_performance_summary()
 
         with self._lock:
-            for cache_name, cache in self.caches.items():
+            for cache_name, _cache in self.caches.items():
                 if cache_name in summary:
                     metrics = summary[cache_name]
                     current_size = self.cache_configs[cache_name]["size"]

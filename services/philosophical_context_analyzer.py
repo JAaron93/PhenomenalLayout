@@ -163,7 +163,7 @@ class PhilosophicalContextAnalyzer:
 
         # Add terminology terms as indicators
         if self.terminology_map:
-            indicators.update(term.lower() for term in self.terminology_map.keys())
+            indicators.update(term.lower() for term in self.terminology_map)
 
         return indicators
 

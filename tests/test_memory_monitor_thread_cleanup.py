@@ -18,7 +18,7 @@ from utils.memory_monitor import (
 @pytest.fixture
 def monitor():
     """Pytest fixture providing a MemoryMonitor instance.
-    
+
     Creates a monitor with short interval for fast tests.
     Automatically stops monitoring after test completion.
     """
@@ -29,7 +29,7 @@ def monitor():
 @pytest.fixture
 def monitor_with_long_interval():
     """Pytest fixture providing a MemoryMonitor with long interval.
-    
+
     Used for responsive shutdown tests.
     Automatically stops monitoring after test completion.
     """
@@ -41,7 +41,7 @@ def monitor_with_long_interval():
 @pytest.fixture
 def _reset_memory_monitor_singleton():
     """Pytest fixture to reset the memory monitor singleton state.
-    
+
     This fixture ensures that each test gets a clean memory monitor instance
     by resetting the global singleton before and after each test.
     """

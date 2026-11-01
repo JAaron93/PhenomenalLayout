@@ -497,7 +497,7 @@ async def get_terminology() -> TerminologyResponse:
 
 
 @api_router.post("/upload")
-async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: B008
+async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
     """Enhanced upload endpoint with advanced processing."""
     try:
         # Save file first so validators can inspect header and structure
@@ -558,11 +558,7 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
             if s.startswith(("/", "./", "../", "~")):
                 return True
             # Generic presence of separators suggesting a path (but not just a lone slash)
-            if ("/" in s or "\\" in s) and any(
-                part not in ("", ".", "..") for part in s.replace("\\", "/").split("/")
-            ):
-                return True
-            return False
+            return bool(("/" in s or "\\" in s) and any(part not in ("", ".", "..") for part in s.replace("\\", "/").split("/")))
 
         def sanitize_metadata(obj: Any) -> Any:
             """Recursively sanitize metadata by removing path-like keys and values."""

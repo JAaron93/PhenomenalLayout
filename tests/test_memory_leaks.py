@@ -66,7 +66,7 @@ class MemoryTestConfig:
 
     def get_adaptive_threshold(self, baseline_mb: float) -> float:
         """Get adaptive threshold based on baseline memory.
-        
+
         When use_relative_thresholds is True, uses growth_percentage for
         relative calculation. When False, falls back to alert_threshold_mb.
         Note: Both this method and get_adaptive_max_growth intentionally
@@ -80,7 +80,7 @@ class MemoryTestConfig:
 
     def get_adaptive_max_growth(self, baseline_mb: float) -> float:
         """Get adaptive max growth based on baseline memory.
-        
+
         When use_relative_thresholds is True, uses growth_percentage for
         relative calculation. When False, falls back to max_growth_mb.
         Note: Both this method and get_adaptive_threshold intentionally
@@ -369,7 +369,7 @@ class TestMemoryMonitor:
         # Create some objects to collect
         test_objects = [[] for _ in range(100)]
         for obj_list in test_objects:
-            obj_list.extend([i for i in range(100)])
+            obj_list.extend(list(range(100)))
 
         # Force garbage collection
         result = force_garbage_collection()
@@ -394,7 +394,7 @@ class TestResourceLeakDetection:
             time.sleep(0.1)
 
         threads = []
-        for i in range(5):
+        for _i in range(5):
             thread = threading.Thread(target=dummy_work)
             threads.append(thread)
             thread.start()
@@ -414,7 +414,7 @@ class TestResourceLeakDetection:
         """Test garbage collection effectiveness."""
         # Create some cyclic references
         objects = []
-        for i in range(100):
+        for _i in range(100):
             obj = {}
             obj["self"] = obj  # Create cyclic reference
             objects.append(obj)
@@ -454,7 +454,7 @@ class TestResourceLeakDetection:
         try:
             # Simulate memory load
             data_chunks = []
-            for chunk in range(10):
+            for _chunk in range(10):
                 chunk_data = [0] * 100000  # ~400KB per chunk
                 data_chunks.append(chunk_data)
                 # Trigger monitoring cycle instead of sleeping

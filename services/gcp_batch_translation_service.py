@@ -1,4 +1,4 @@
-"""services/gcp_batch_translation_service.py
+"""services/gcp_batch_translation_service.py.
 ==========================================
 Track 1 — GCP Batch Translation Migration  (FR-03, FR-10, NFR-01, NFR-02, NFR-07)
 

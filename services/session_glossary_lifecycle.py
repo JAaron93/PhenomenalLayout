@@ -1,4 +1,4 @@
-"""services/session_glossary_lifecycle.py
+"""services/session_glossary_lifecycle.py.
 =========================================
 Track 2 — Dual-Tier Glossary Sync & Persistent User Vocabulary Store
 Traceability: FR-14, NFR-03

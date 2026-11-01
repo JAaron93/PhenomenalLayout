@@ -187,7 +187,7 @@ class ValidatorProtocol(ABC):
 class FileExtensionValidator(ValidatorProtocol):
     """Validates file extensions."""
 
-    def __init__(self, allowed_extensions: set[str] = None):
+    def __init__(self, allowed_extensions: set[str] | None = None):
         self.allowed_extensions = allowed_extensions or {".pdf"}
 
     @property

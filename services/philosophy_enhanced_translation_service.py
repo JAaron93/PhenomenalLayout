@@ -50,10 +50,10 @@ def _shutdown_executor(executor: concurrent.futures.ThreadPoolExecutor) -> None:
     executor.shutdown(wait=True)
 
 
-def _run_coro_sync(coro: Coroutine[Any, Any, _T]) -> _T:
+def _run_coro_sync[T](coro: Coroutine[Any, Any, _T]) -> _T:
     """Run a coroutine synchronously, handling both cases with and without a
     running loop.
-    
+
 
     Note: When running the coroutine on a different thread, this creates a
     fresh event loop and will not propagate contextvars/task-local state.

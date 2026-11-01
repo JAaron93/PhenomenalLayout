@@ -20,7 +20,7 @@ from services.translation_service import TranslationService
 # Determine repository root by searching for a marker file
 def find_project_root() -> Path:
     current: Path = Path(__file__).resolve()
-    for parent in [current] + list(current.parents):
+    for parent in [current, *list(current.parents)]:
         if (parent / "pyproject.toml").exists() or (parent / "setup.py").exists():
             return parent
     return current.parent.parent  # fallback to current behavior

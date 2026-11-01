@@ -98,7 +98,7 @@ def test_endpoints_with_auth(test_env, expected_status):
     )
     print(f"\n=== Test: Direct import with auth {auth_state} ===")
 
-    with setup_test_client_with_env(test_env) as (client, enable_auth):
+    with setup_test_client_with_env(test_env) as (client, _enable_auth):
         # Test the endpoint
         response = client.get("/api/v1/memory/stats")
         print(f"\nGET /api/v1/memory/stats response: {response.status_code}")

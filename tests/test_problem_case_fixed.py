@@ -12,10 +12,10 @@ def test_problematic_case_fixed(
     reload_app_with_env, auth_enabled, expected_status
 ):
     """Test the problematic scenario with proper fixture usage.
-    
-    When auth is disabled (auth_enabled="false"), unauthenticated 
+
+    When auth is disabled (auth_enabled="false"), unauthenticated
     requests should succeed.
-    When auth is enabled (auth_enabled="true"), unauthenticated 
+    When auth is enabled (auth_enabled="true"), unauthenticated
     requests should be rejected with 401.
     """
     test_env = {

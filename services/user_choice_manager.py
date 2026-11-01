@@ -322,7 +322,7 @@ class UserChoiceManager:
             return []
 
         # Create list including the new choice
-        all_choices = existing_choices + [new_choice]
+        all_choices = [*existing_choices, new_choice]
 
         # Detect conflicts
         conflicts = detect_choice_conflicts(all_choices)

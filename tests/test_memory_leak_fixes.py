@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 
 import pytest
 
@@ -68,10 +69,8 @@ async def test_start_translation_single_flight_cancels_previous(monkeypatch: pyt
         task = state.get_tracked_translation_task()
         if task is not None:
             state.cancel_tracked_translation_task()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
             state.drop_tracked_translation_task()
 
         # Restore original global state

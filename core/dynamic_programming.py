@@ -28,7 +28,7 @@ from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 
 def _normalize_value(value: Any) -> Hashable:
@@ -95,12 +95,12 @@ def _normalize_value(value: Any) -> Hashable:
 
 def _create_cache_key_from_args(key: str, args: tuple, kwargs: dict) -> tuple:
     """Create a hashable cache key from arguments.
-    
+
     Args:
         key: Base key for the cache entry
         args: Positional arguments to normalize and include in the cache key
         kwargs: Keyword arguments to normalize and include in the cache key
-        
+
     Returns:
         Tuple containing the normalized cache key components:
         (key, normalized_args, normalized_kwargs_tuple)
@@ -234,7 +234,7 @@ class PerformanceMetrics:
         self.avg_duration_ms = self.total_duration_ms / self.total_calls
 
 
-class CacheEntry(Generic[V]):
+class CacheEntry[V]:
     """Generic cache entry with metadata."""
 
     def __init__(self, value: V, timestamp: float | None = None, access_count: int = 0):
@@ -250,7 +250,7 @@ class CacheEntry(Generic[V]):
         return self.value
 
 
-class SmartCache(Generic[K, V]):
+class SmartCache[K: Hashable, V]:
     """Intelligent caching system with multiple eviction policies.
 
     Uses efficient auxiliary structures:
@@ -379,7 +379,7 @@ class SmartCache(Generic[K, V]):
         elif self.policy == CachePolicy.LFU:
             # O(log n) eviction using min-heap
             while self._lfu_heap:
-                access_count, insertion_order, key = heapq.heappop(self._lfu_heap)
+                access_count, _insertion_order, key = heapq.heappop(self._lfu_heap)
 
                 # Skip stale entries
                 if key in self._lfu_stale_keys:
@@ -425,7 +425,7 @@ class SmartCache(Generic[K, V]):
             }
 
 
-class DynamicRegistry(Generic[T]):
+class DynamicRegistry[T]:
     """Generic registry with dynamic loading and intelligent caching."""
 
     def __init__(
@@ -452,13 +452,13 @@ class DynamicRegistry(Generic[T]):
 
     def get(self, key: str, *args, cache_enabled: bool | None = None, **kwargs) -> T | None:
         """Get or create instance with intelligent caching (optional).
-        
+
         Args:
             key: Registry key for the factory
             *args: Positional arguments to pass to the factory
             cache_enabled: Whether to use caching (None = use default, True = enable, False = disable)
             **kwargs: Keyword arguments to pass to the factory
-            
+
         Returns:
             Created instance or None if key not registered
         """
@@ -516,7 +516,7 @@ class DynamicRegistry(Generic[T]):
         return dict(self._metrics)
 
 
-class DecisionTreeNode(Generic[T]):
+class DecisionTreeNode[T]:
     """Node in a dynamic decision tree for pattern matching."""
 
     def __init__(
@@ -570,7 +570,7 @@ class DecisionTreeNode(Generic[T]):
         return hashlib.md5(context_str.encode(), usedforsecurity=False).hexdigest()[:16]
 
 
-class StrategyPattern(ABC, Generic[T]):
+class StrategyPattern[T](ABC):
     """Abstract base for strategy pattern implementation."""
 
     @abstractmethod
@@ -590,7 +590,7 @@ class StrategyPattern(ABC, Generic[T]):
         pass
 
 
-class StrategyRegistry(Generic[T]):
+class StrategyRegistry[T]:
     """Registry for strategy pattern with dynamic selection."""
 
     def __init__(self):
@@ -742,7 +742,7 @@ def performance_monitor(operation_name: str | None = None):
 # Factory patterns for common use cases
 
 
-class DynamicFactory(Generic[T]):
+class DynamicFactory[T]:
     """Generic factory with dynamic type resolution and caching."""
 
     def __init__(self):
@@ -755,13 +755,13 @@ class DynamicFactory(Generic[T]):
 
     def create(self, type_name: str, *args, cache_enabled: bool | None = None, **kwargs) -> T | None:
         """Create an instance of the specified type with optional caching.
-        
+
         Args:
             type_name: Name of the type to create
             *args: Positional arguments to pass to the creator
             cache_enabled: Whether to use caching (None = use default, True = enable, False = disable)
             **kwargs: Keyword arguments to pass to the creator
-            
+
         Returns:
             Created instance or None if type not registered
         """
@@ -810,7 +810,7 @@ def get_registry(name: str, **kwargs) -> DynamicRegistry:
 
 def clear_all_registries(name: str | None = None) -> None:
     """Clear all global registries or a specific registry by name.
-    
+
     Args:
         name: Optional registry name to clear. If None, clears all registries.
     """

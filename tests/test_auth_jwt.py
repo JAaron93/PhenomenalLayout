@@ -11,7 +11,7 @@ import pytest
 @pytest.fixture
 def auth_setup():
     """Fixture that sets up auth module with patched environment.
-    
+
     This fixture:
     1. Patches os.environ with required environment variables
     2. Reloads api.auth to pick up the patched environment

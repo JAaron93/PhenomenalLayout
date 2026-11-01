@@ -39,19 +39,19 @@ def test_api_uses_public_properties():
     # Test properties are read-only
     try:
         monitor.is_monitoring = True
-        assert False, "Should not be able to set is_monitoring property"
+        raise AssertionError("Should not be able to set is_monitoring property")
     except AttributeError:
         pass
 
     try:
         monitor.baseline_memory_mb = 100.0
-        assert False, "Should not be able to set baseline_memory_mb property"
+        raise AssertionError("Should not be able to set baseline_memory_mb property")
     except AttributeError:
         pass
 
     try:
         monitor.peak_memory_mb = 200.0
-        assert False, "Should not be able to set peak_memory_mb property"
+        raise AssertionError("Should not be able to set peak_memory_mb property")
     except AttributeError:
         pass
 
