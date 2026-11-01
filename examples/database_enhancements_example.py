@@ -14,7 +14,7 @@ import os
 import sys
 import tempfile
 import time
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 # Local imports (must come before sys.path modification)
 from database.choice_database import ChoiceDatabase

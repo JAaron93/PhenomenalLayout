@@ -7,7 +7,7 @@ import os
 import threading
 import time
 from collections.abc import Callable
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 import psutil

@@ -12,7 +12,7 @@ import tempfile
 import time
 import traceback
 from contextlib import contextmanager
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 # Ensure project root is on sys.path for package imports when running from scripts/
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

@@ -1,7 +1,7 @@
 """User Choice Management System for neologism translation decisions."""
 
 import logging
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from database.choice_database import ChoiceDatabase

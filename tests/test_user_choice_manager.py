@@ -2,7 +2,7 @@
 
 import os
 import tempfile
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
