@@ -2,7 +2,7 @@
 
 import os
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, UTC, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -75,7 +75,7 @@ def sample_analysis(sample_neologism):
     """Create a sample neologism analysis."""
     analysis = NeologismAnalysis(
         text_id="test_text_1",
-        analysis_timestamp=datetime.now().isoformat(),
+        analysis_timestamp=datetime.now(UTC).isoformat(),
         total_tokens=1000,
         analyzed_chunks=5,
     )
@@ -493,7 +493,7 @@ class TestUserChoiceManager:
         """Test cleaning up expired sessions."""
         # Create session with old timestamp
         with patch("services.user_choice_manager.datetime") as mock_datetime:
-            old_time = datetime.now() - timedelta(hours=25)
+            old_time = datetime.now(UTC) - timedelta(hours=25)
             mock_datetime.now.return_value = old_time
 
             temp_manager.create_session(session_name="Old Session")

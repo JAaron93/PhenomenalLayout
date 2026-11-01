@@ -120,7 +120,7 @@ async def get_terminology_map() -> dict[str, Any]:
         }
     except Exception as e:
         logger.error("Error getting terminology map: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/philosophy/terminology")
@@ -153,7 +153,7 @@ async def update_terminology_map(terminology_data: dict[str, Any]) -> dict[str, 
         raise
     except Exception as e:
         logger.error("Error updating terminology map: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Philosophy-Enhanced Translation Configuration Endpoints
@@ -177,7 +177,7 @@ async def get_philosophy_translation_config() -> dict[str, Any]:
         }
     except Exception as e:
         logger.error("Error getting philosophy translation config: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/philosophy/config")
@@ -213,7 +213,7 @@ async def update_philosophy_translation_config(
             }
     except Exception as e:
         logger.error("Error updating philosophy translation config: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/philosophy/translate")
@@ -251,7 +251,7 @@ async def translate_with_philosophy(
         raise
     except Exception as e:
         logger.error("Error in philosophy-aware translation: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Neologism Analysis Utilities
@@ -287,7 +287,7 @@ async def merge_neologism_analyses_endpoint(
         raise
     except Exception as e:
         logger.error("Error merging neologism analyses: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Philosophy API Endpoints
@@ -774,7 +774,7 @@ async def validate_pdf_quality(
         raise
     except Exception as e:
         logger.error("Error validating PDF quality: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Confidence Scorer Endpoints
@@ -791,7 +791,7 @@ async def get_confidence_scorer_info() -> dict[str, Any]:
         }
     except Exception as e:
         logger.error("Error getting confidence scorer info: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/confidence/scorer-config")
@@ -842,7 +842,7 @@ async def update_confidence_scorer_config(
             }
     except Exception as e:
         logger.error("Error updating confidence scorer config: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/confidence/calculate")
@@ -876,7 +876,7 @@ async def calculate_confidence(
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid morphological or philosophical data: {e}",
-            )
+            ) from e
         factors = scorer.calculate_confidence_factors(term, morph, phil)
 
         # Get final confidence and breakdown
@@ -895,7 +895,7 @@ async def calculate_confidence(
         raise
     except Exception as e:
         logger.error("Error calculating confidence: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ===========================================================================
@@ -973,10 +973,10 @@ async def estimate_cost(
     except HTTPException:
         raise
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Error calculating cost estimate: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/byok/onboarding-guide")
@@ -1015,7 +1015,7 @@ async def get_onboarding_guide() -> dict[str, Any]:
         }
     except Exception as exc:
         logger.error("Error retrieving onboarding guide: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _verify_resource_ownership(
@@ -1141,7 +1141,7 @@ async def set_byok_credentials(
         raise
     except Exception as exc:
         logger.error("Error setting BYOK credentials: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/byok/validate")
@@ -1195,7 +1195,7 @@ async def validate_byok_credentials(
         raise
     except Exception as exc:
         logger.error("Error validating credentials for %s: %s", user_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.delete("/byok/credentials")
@@ -1214,7 +1214,7 @@ async def clear_byok_credentials(
         raise
     except Exception as exc:
         logger.error("Error clearing credentials: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/pre-scan")
@@ -1291,10 +1291,10 @@ async def pre_scan_book_endpoint(
     except HTTPException:
         raise
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Pre-scan failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/vocabulary/{user_id}")
@@ -1319,7 +1319,7 @@ async def get_user_vocabulary_endpoint(
         raise
     except Exception as exc:
         logger.error("Error fetching vocabulary for %s: %s", user_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/vocabulary/{user_id}")
@@ -1368,7 +1368,7 @@ async def save_user_vocabulary_endpoint(
         raise
     except Exception as exc:
         logger.error("Error saving vocabulary preference: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/vocabulary/{user_id}/bulk")
@@ -1391,7 +1391,7 @@ async def bulk_save_vocabulary_endpoint(
         raise
     except Exception as exc:
         logger.error("Error in bulk saving preferences: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/vocabulary/{user_id}/import")
@@ -1426,7 +1426,7 @@ async def import_vocabulary_tsv_endpoint(
         raise
     except Exception as exc:
         logger.error("Error importing TSV vocabulary: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/vocabulary/{user_id}/export")
@@ -1455,7 +1455,7 @@ async def export_vocabulary_tsv_endpoint(
         raise
     except Exception as exc:
         logger.error("Error exporting TSV vocabulary: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/translate")
@@ -1494,12 +1494,12 @@ async def start_batch_translation_endpoint(
     except HTTPException:
         raise
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Failed starting book batch translation: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _verify_job_ownership(session_id: str, requested_user_id: str, orch: Any) -> None:
@@ -1558,7 +1558,7 @@ async def get_book_status_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Error polling progress for %s: %s", session_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/book/resume/{session_id}")
@@ -1592,7 +1592,7 @@ async def resume_book_job_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Error resuming job %s for user %s: %s", session_id, user_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/book/jobs/{user_id}")
@@ -1618,7 +1618,7 @@ async def list_user_jobs_endpoint(
         raise
     except Exception as exc:
         logger.error("Error listing jobs for %s: %s", user_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/complete/{session_id}")
@@ -1642,7 +1642,7 @@ async def complete_job_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Error handling completion for %s: %s", session_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/export-drive")
@@ -1687,7 +1687,7 @@ async def export_to_drive_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Drive export failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/book/download/{session_id}")
@@ -1740,7 +1740,7 @@ async def download_translated_book_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Download failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/dual-pane/{session_id}")
@@ -1785,4 +1785,4 @@ async def dual_pane_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Dual-pane view error: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

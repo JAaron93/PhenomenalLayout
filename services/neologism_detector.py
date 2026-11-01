@@ -8,7 +8,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -333,7 +333,7 @@ class NeologismDetector:
         # Initialize analysis
         analysis = NeologismAnalysis(
             text_id=text_id,
-            analysis_timestamp=datetime.now().isoformat(),
+            analysis_timestamp=datetime.now(UTC).isoformat(),
             total_tokens=len(text.split()),
             analyzed_chunks=0,
         )
@@ -459,7 +459,7 @@ class NeologismDetector:
                     morphological_analysis=morphological_analysis,
                     philosophical_context=philosophical_context,
                     confidence_factors=confidence_factors,
-                    detection_timestamp=datetime.now().isoformat(),
+                    detection_timestamp=datetime.now(UTC).isoformat(),
                 )
 
                 neologisms.append(neologism)
@@ -843,7 +843,7 @@ class NeologismDetector:
                     "neologism_type": neologism_type.value if neologism_type else None,
                 },
                 "debug_metadata": {
-                    "analysis_timestamp": datetime.now().isoformat(),
+                    "analysis_timestamp": datetime.now(UTC).isoformat(),
                     "detector_config": {
                         "philosophical_threshold": self.philosophical_threshold,
                         "spacy_model": self.spacy_model if self.nlp else None,

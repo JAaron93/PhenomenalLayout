@@ -8,7 +8,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -581,7 +581,7 @@ class PhilosophyEnhancedDocumentProcessor:
             ],
             "total_neologisms_detected": neologism_results["total_neologisms"],
             "total_choices_applied": choice_results["total_choices_applied"],
-            "processing_timestamp": datetime.now().isoformat(),
+            "processing_timestamp": datetime.now(UTC).isoformat(),
         }
 
         progress.reconstruction_progress = 100

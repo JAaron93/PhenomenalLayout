@@ -7,7 +7,7 @@ import os
 import threading
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any
 
 import psutil
@@ -379,7 +379,7 @@ def force_garbage_collection() -> dict[str, Any]:
         "after_counts": after_stats["counts"],
         "before_stats": before_stats["stats"],
         "after_stats": after_stats["stats"],
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 

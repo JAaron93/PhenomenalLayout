@@ -14,7 +14,7 @@ import os
 import sys
 import tempfile
 import time
-from datetime import datetime
+from datetime import datetime, UTC
 
 # Local imports (must come before sys.path modification)
 from database.choice_database import ChoiceDatabase
@@ -219,7 +219,7 @@ def demonstrate_batch_import():
 
     # Export to JSON for batch import
     export_data = {
-        "export_timestamp": datetime.now().isoformat(),
+        "export_timestamp": datetime.now(UTC).isoformat(),
         "version": "1.0",
         "total_choices": len(test_choices),
         "choices": [choice.to_dict() for choice in test_choices],

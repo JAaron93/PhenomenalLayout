@@ -1,7 +1,7 @@
 """User Choice Management System for neologism translation decisions."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any
 
 from database.choice_database import ChoiceDatabase
@@ -90,7 +90,7 @@ class UserChoiceManager:
         session = ChoiceSession(
             session_id=session_id,
             session_name=session_name
-            or f"Session {datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            or f"Session {datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
             document_id=document_id,
             document_name=document_name,
             user_id=user_id,
@@ -300,7 +300,7 @@ class UserChoiceManager:
             if hasattr(choice, field):
                 setattr(choice, field, value)
 
-        choice.updated_at = datetime.now().isoformat()
+        choice.updated_at = datetime.now(UTC).isoformat()
 
         # Mark as used if requested
         if mark_as_used:
@@ -893,7 +893,7 @@ class UserChoiceManager:
         """Check for expired sessions that should be cleaned up."""
         try:
             expired_sessions = []
-            current_time = datetime.now()
+            current_time = datetime.now(UTC)
 
             # Get all active sessions
             all_sessions = self.db.get_all_sessions()
