@@ -35,8 +35,8 @@ We adopt a **Bespoke Zero-Build Frontend** and establish **Google Cloud Document
 * **D3 — Remove pdf_quality_validator OCR Recovery Path**:
   The poppler/tesseract rasterize-and-OCR recovery path in `services/pdf_quality_validator.py` is removed, reinforcing ADR 0001'sTenet of delegating OCR and layout parsing strictly to Google Cloud while eliminating external binary dependencies.
 
-* **D4 — ReportLab Retained Strictly as Dev-Only Fixture Dependency**:
-  `reportlab` is removed from runtime `requirements.in`/`requirements.txt` and retained exclusively in `requirements-dev.txt` for generating dynamic text-bearing PDF test fixtures. Dev-only presence avoids runtime Dependabot vulnerability alerts.
+* **D4 — ReportLab Fully Eradicated (Updated: PR #147)**:
+  `reportlab` was initially retained in `requirements-dev.txt` as a test-fixture generator. It was subsequently discovered that `reportlab` declares `pillow` as a hard `Requires`, reintroducing Pillow into developer environments. PR #147 completed full eradication: `reportlab` was removed from `requirements-dev.txt` and all five test files that used `reportlab.pdfgen.canvas` were migrated to `build_test_pdf()` — a stdlib-only raw PDF 1.4 fixture factory in `tests/conftest.py` that uses Helvetica Type1 / WinAnsiEncoding (cp1252) and produces text recoverable by `pypdf.page.extract_text()`.
 
 * **D5 — Token Storage in `sessionStorage`, Never `localStorage`**:
   All client-side bearer tokens and API keys are stored strictly in browser `sessionStorage`, adhering to the BYOK credential isolation principle. Credentials expire automatically when the scholar closes the tab.
@@ -49,7 +49,7 @@ We adopt a **Bespoke Zero-Build Frontend** and establish **Google Cloud Document
 ## Consequences
 
 ### Positive Consequences
-* **Complete Security Alert Remediation**: Removing Gradio, runtime `reportlab`, and `pdf2image` drops `Pillow` from runtime dependencies entirely, resolving all 41 open Dependabot alerts by dependency removal.
+* **Complete Security Alert Remediation**: Removing Gradio, runtime `reportlab`, and `pdf2image` drops `Pillow` from runtime dependencies entirely, resolving all 41 open Dependabot alerts by dependency removal. PR #147 completed this by also removing `reportlab` from `requirements-dev.txt`, eliminating Pillow from all dependency trees.
 * **Simplified Maintenance**: Eliminates `audioop-lts` workarounds, Gradio schema monkeypatches (`GRADIO_SCHEMA_PATCH`), and headless share URL overrides (`GRADIO_SHARE`).
 * **Clean Single Controller Architecture**: All client actions route through standard FastAPI `/api/v1/*` endpoints, covered by OpenAPI schemas and automated test suites.
 * **Streamlined Pipeline**: Removes over 1,400 lines of CID font parsing, TrueType CMap binary manipulation, and fallback splicing code.
