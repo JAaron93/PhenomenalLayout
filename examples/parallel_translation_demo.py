@@ -144,7 +144,7 @@ async def demo_basic_parallel_translation() -> None:
     except Exception as e:
         logger.error("Translation failed: %s", e)
     finally:
-        await service.close()
+        service.close()
 
 
 async def demo_large_document_processing() -> None:
@@ -200,7 +200,7 @@ async def demo_large_document_processing() -> None:
     except Exception as e:
         logger.error("Document processing failed: %s", e)
     finally:
-        await service.close()
+        service.close()
 
 
 async def demo_batch_performance_comparison() -> None:
@@ -249,7 +249,7 @@ async def demo_batch_performance_comparison() -> None:
         except Exception as e:
             logger.error("Batch processing failed: %s", e)
         finally:
-            await service.close()
+            service.close()
 
 
 async def demo_error_handling_and_resilience() -> None:
@@ -296,7 +296,7 @@ async def demo_error_handling_and_resilience() -> None:
     except Exception as e:
         logger.error("Resilience test failed: %s", e)
     finally:
-        await service.close()
+        service.close()
 
 
 async def main() -> None:
