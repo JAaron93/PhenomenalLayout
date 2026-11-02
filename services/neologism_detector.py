@@ -14,7 +14,7 @@ from typing import Any
 
 # Import spaCy for German linguistic analysis
 try:
-    import spacy  # type: ignore
+    import spacy
 
     SPACY_AVAILABLE = True
 except ImportError:
@@ -75,9 +75,9 @@ class NeologismDetector:
         # Lazy loading attributes - models are loaded only when first accessed
         self._nlp = None
         self._nlp_lock = threading.Lock()
-        self._terminology_map = None
-        self._philosophical_indicators = None
-        self._german_morphological_patterns = None
+        self._terminology_map: dict[str, str] | None = None
+        self._philosophical_indicators: set[str] | None = None
+        self._german_morphological_patterns: dict[str, list[str]] | None = None
 
         # Component analyzers with dependency injection support
         self._morphological_analyzer = morphological_analyzer

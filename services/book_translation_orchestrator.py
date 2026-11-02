@@ -342,9 +342,12 @@ class BookTranslationOrchestrator:
 
         # 2. Upload source PDF directly to GCS without caching on host disk
         gcs_input_uri = f"gs://{bucket_name}/{staging_prefix}{book_id}/source.pdf"
+        upload_source: str | Path | BinaryIO = (
+            io.BytesIO(source) if isinstance(source, bytes) else source
+        )
         self.batch_service.upload_book_to_gcs(
             user_id=user_id,
-            source=source,
+            source=upload_source,
             gcs_destination_uri=gcs_input_uri,
         )
 

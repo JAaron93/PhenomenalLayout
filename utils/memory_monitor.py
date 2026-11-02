@@ -162,7 +162,7 @@ class MemoryMonitor:
         # Log final stats with lock protection
         with self._lock:
             try:
-                final_memory = self._get_memory_usage_mb()
+                final_memory: float | str = self._get_memory_usage_mb()
             except MemoryMonitoringError as e:
                 logger.warning("Failed to get final memory stats: %s", e)
                 final_memory = "unknown"
@@ -242,8 +242,12 @@ class MemoryMonitor:
 
             except MemoryMonitoringError as e:
                 logger.error("Memory monitoring error: %s", e)
-                # Check shutdown flag before continuing
-                if not self._monitoring:
+                # Check shutdown flag before continuing; read it under lock since
+                # stop() clears the flag from a different thread. Wrap in bool()
+                # so the value is a fresh non-literal for the flag check.
+                with self._lock:
+                    monitoring_active: bool = bool(self._monitoring)
+                if not monitoring_active:
                     break
                 # Read check_interval under lock before sleeping
                 with self._lock:

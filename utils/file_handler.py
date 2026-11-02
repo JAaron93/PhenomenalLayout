@@ -77,6 +77,8 @@ class FileHandler:
         """Save FastAPI UploadFile and ensure its underlying stream is closed."""
         file_path: str | None = None
         try:
+            if upload_file.filename is None:
+                raise ValueError("Upload file has no filename")
             file_id = str(uuid.uuid4())
             file_ext = Path(upload_file.filename).suffix
             filename = f"{file_id}{file_ext}"

@@ -16,7 +16,7 @@ except Exception:  # pragma: no cover - optional dependency not present in tests
     ClientSession = object  # type: ignore
     StdioServerParameters = object  # type: ignore
 
-    def stdio_client(*args, **kwargs):  # type: ignore
+    def stdio_client(*args, **kwargs):
         """Fallback stub for stdio_client when the optional mcp package is unavailable."""
         raise RuntimeError("mcp package is not installed")
 
@@ -477,32 +477,32 @@ class McpLingoClient:
             attempt: dict[str, object] = dict(tpl)
             # Fill payload
             if "text" in attempt:
-                attempt["text"] = text  # type: ignore[assignment]
+                attempt["text"] = text
             if "texts" in attempt:
-                attempt["texts"] = texts  # type: ignore[assignment]
+                attempt["texts"] = texts
             if "inputs" in attempt:
-                attempt["inputs"] = texts  # type: ignore[assignment]
+                attempt["inputs"] = texts
             # Fill languages
             if "targetLocale" in attempt:
-                attempt["targetLocale"] = target  # type: ignore[assignment]
+                attempt["targetLocale"] = target
             if "sourceLocale" in attempt:
-                attempt["sourceLocale"] = source  # type: ignore[assignment]
+                attempt["sourceLocale"] = source
             if "target_lang" in attempt:
-                attempt["target_lang"] = target  # type: ignore[assignment]
+                attempt["target_lang"] = target
             if "source_lang" in attempt:
-                attempt["source_lang"] = source  # type: ignore[assignment]
+                attempt["source_lang"] = source
             if "target" in attempt:
-                attempt["target"] = target  # type: ignore[assignment]
+                attempt["target"] = target
             if "source" in attempt:
-                attempt["source"] = source  # type: ignore[assignment]
+                attempt["source"] = source
             if "to" in attempt:
-                attempt["to"] = target  # type: ignore[assignment]
+                attempt["to"] = target
             if "from" in attempt:
-                attempt["from"] = source  # type: ignore[assignment]
+                attempt["from"] = source
             if "targetLanguage" in attempt:
-                attempt["targetLanguage"] = target  # type: ignore[assignment]
+                attempt["targetLanguage"] = target
             if "sourceLanguage" in attempt:
-                attempt["sourceLanguage"] = source  # type: ignore[assignment]
+                attempt["sourceLanguage"] = source
 
             # Drop None values
             attempt = _drop_none(attempt)

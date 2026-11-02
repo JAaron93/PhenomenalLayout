@@ -384,7 +384,7 @@ class PhilosophyEnhancedTranslationService:
                 if asyncio.iscoroutine(maybe_coro):
                     fallback_translation = await maybe_coro
                 else:
-                    fallback_translation = maybe_coro  # type: ignore[assignment]
+                    fallback_translation = maybe_coro
             except Exception:
                 fallback_translation = text
 
@@ -535,7 +535,7 @@ class PhilosophyEnhancedTranslationService:
             if asyncio.iscoroutine(maybe_coro):
                 translated_texts = await maybe_coro
             else:
-                translated_texts = maybe_coro  # type: ignore[assignment]
+                translated_texts = maybe_coro
         except Exception as e:  # pragma: no cover - defensive
             logger.error(f"Batch translation failed: {e}")
             translated_texts = modified_texts
@@ -770,7 +770,7 @@ class PhilosophyEnhancedTranslationService:
         if asyncio.iscoroutine(maybe_coro):
             translated_text = await maybe_coro
         else:
-            translated_text = maybe_coro  # type: ignore[assignment]
+            translated_text = maybe_coro
 
         # Update progress
         progress.translation_progress = 100
@@ -924,7 +924,7 @@ class PhilosophyEnhancedTranslationService:
             if asyncio.iscoroutine(maybe_coro):
                 fallback_result = await maybe_coro
             else:
-                fallback_result = maybe_coro  # type: ignore[assignment]
+                fallback_result = maybe_coro
 
             return {
                 "translated_content": fallback_result,
@@ -1007,7 +1007,7 @@ class PhilosophyEnhancedTranslationService:
     def get_available_providers(self) -> list[str]:
         """Get list of available translation providers."""
         try:
-            prov = self.translation_service.get_available_providers()  # type: ignore[attr-defined]
+            prov = self.translation_service.get_available_providers()
             # Some tests inject MagicMocks; coerce to sensible default
             if not isinstance(prov, list):
                 return ["lingo"]

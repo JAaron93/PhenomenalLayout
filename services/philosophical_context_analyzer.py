@@ -35,7 +35,7 @@ class PhilosophicalContextAnalyzer:
 
     def _load_philosophical_indicators(self) -> set[str]:
         """Load philosophical indicators from configuration or fallback to hardcoded set."""
-        indicators = set()
+        indicators: set[str] = set()
 
         # Try to load from config file first
         config_file_path = (
@@ -304,7 +304,7 @@ class PhilosophicalContextAnalyzer:
                 field_scores[field] = score
 
         if field_scores:
-            return max(field_scores, key=field_scores.get)
+            return max(field_scores, key=lambda field: field_scores[field])
 
         return "general"
 
@@ -360,7 +360,7 @@ class PhilosophicalContextAnalyzer:
 
     def extract_dominant_concepts(self, detected_neologisms: list[Any]) -> list[str]:
         """Extract dominant concepts from detected neologisms."""
-        concept_counts = {}
+        concept_counts: dict[str, int] = {}
 
         for neologism in detected_neologisms:
             if hasattr(neologism, "philosophical_context"):

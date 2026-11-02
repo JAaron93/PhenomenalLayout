@@ -93,9 +93,6 @@ class TranslationContext:
 
     def calculate_similarity(self, other: TranslationContext) -> float:
         """Calculate similarity with another context."""
-        if not isinstance(other, TranslationContext):
-            return 0.0
-
         similarity_factors = []
 
         # Semantic field similarity
@@ -235,8 +232,6 @@ class UserChoice:
             similarity = self.context.calculate_similarity(target_context)
             return similarity >= self.context.context_similarity_threshold
 
-        return False
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
@@ -346,7 +341,7 @@ class ChoiceSession:
             return 1.0
 
         # Group similar terms
-        term_groups = {}
+        term_groups: dict[str, list[UserChoice]] = {}
         for choice in choices:
             term_key = choice.neologism_term.lower()
             if term_key not in term_groups:

@@ -593,4 +593,4 @@ class GCPBatchTranslationService:
 
         # blob.open('rb') returns a google.cloud.storage.fileio.BlobReader which
         # satisfies the BinaryIO protocol and reads in lazy chunks from GCS.
-        return blob.open("rb")  # type: ignore[return-value]
+        return blob.open("rb")

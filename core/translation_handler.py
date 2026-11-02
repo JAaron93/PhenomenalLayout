@@ -835,7 +835,7 @@ async def _show_pdf_preprocessing_steps(
 
         # Prefer an exact page count via pypdf; fall back to size heuristic
         try:
-            from pypdf import PdfReader  # type: ignore
+            from pypdf import PdfReader
 
             with open(file_path, "rb") as pdf_file:
                 reader: Any = PdfReader(pdf_file)

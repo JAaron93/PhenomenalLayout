@@ -228,7 +228,7 @@ def extract_text_sample_for_language_detection(content: dict[str, Any]) -> str:
             try:
                 page_keys = list(text_by_page.keys())
                 # Ensure keys are sortable (convert to int if possible)
-                sortable_keys = []
+                sortable_keys: list[tuple[int | float, str]] = []
                 for key in page_keys:
                     try:
                         sortable_keys.append((int(key), key))

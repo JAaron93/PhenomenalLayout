@@ -269,7 +269,12 @@ class FrakturClassifier:
                 )
 
         except FileNotFoundError as exc:
-            raise ValueError(f"File not found: {source}") from exc
+            source_display = (
+                source.decode("utf-8", "backslashreplace")
+                if isinstance(source, bytes)
+                else source
+            )
+            raise ValueError(f"File not found: {source_display}") from exc
         except TypeError as exc:
             raise TypeError(f"Unsupported source type: {type(source)}") from exc
         except Exception as exc:

@@ -16,10 +16,10 @@ import requests
 
 try:
     # Prefer relative import when part of a package
-    from .mcp_lingo_client import McpLingoClient, McpLingoConfig  # type: ignore
+    from .mcp_lingo_client import McpLingoClient, McpLingoConfig
 except (ModuleNotFoundError, ImportError):  # pragma: no cover - fallback
     # Fallback absolute import when running as a flat module
-    from services.mcp_lingo_client import McpLingoClient, McpLingoConfig  # type: ignore
+    from services.mcp_lingo_client import McpLingoClient, McpLingoConfig
 
 # Translation service configuration
 TRANSLATION_DELAY: float = float(
@@ -584,12 +584,12 @@ class TranslationService:
                     for element in page["text_elements"]:
                         # Skip any null entries
                         if element:
-                            element_id: str | None = element.get("id")
+                            text_element_id: str | None = element.get("id")
                             if (
-                                element_id is not None
-                                and element_id in block_map[page_num]
+                                text_element_id is not None
+                                and text_element_id in block_map[page_num]
                             ):
-                                element["text"] = block_map[page_num][element_id]
+                                element["text"] = block_map[page_num][text_element_id]
 
         return translated_content
 

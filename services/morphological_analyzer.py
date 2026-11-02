@@ -7,7 +7,7 @@ import re
 from functools import lru_cache
 
 try:
-    from spacy.language import Language  # type: ignore
+    from spacy.language import Language
 except Exception:  # pragma: no cover - optional for tests without spaCy
     from typing import Any as Language  # type: ignore
 

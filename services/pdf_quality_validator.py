@@ -371,7 +371,7 @@ class PDFQualityValidator:
         require_font_preservation: bool = False,
         min_font_match_ratio: float = 0.8,
         page_normalize_layout: bool = False,
-    ) -> dict[str, float | bool | None]:
+    ) -> dict[str, float | bool | list[str] | None]:
         """Basic PDF quality validation using lightweight heuristics.
 
         Checks:
