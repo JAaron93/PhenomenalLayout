@@ -15,7 +15,7 @@ import os
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 # Optional dependency detection without importing at module import time
 LANGDETECT_AVAILABLE: bool = importlib.util.find_spec("langdetect") is not None
@@ -83,6 +83,10 @@ class LanguagePattern(TypedDict):
     chars: list[str]
     word_weight: float
     char_weight: float
+    # Optional scoring-mix weights; defaulted by consumers
+    # (core/dynamic_language_engine.py :: _compile_pattern).
+    word_pattern_weight: NotRequired[float]
+    char_pattern_weight: NotRequired[float]
 
 
 LANGUAGE_PATTERNS: dict[str, LanguagePattern] = {

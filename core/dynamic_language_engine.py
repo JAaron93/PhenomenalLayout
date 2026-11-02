@@ -13,6 +13,7 @@ import re
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from re import Pattern
 from typing import Any
@@ -21,10 +22,15 @@ from core.dynamic_programming import (
     DynamicRegistry,
     PerformanceMetrics,
     SmartCache,
+    is_cache_hit,
     memoize,
     performance_monitor,
 )
-from services.language_detector import LANGUAGE_MAP, LANGUAGE_PATTERNS
+from services.language_detector import (
+    LANGUAGE_MAP,
+    LANGUAGE_PATTERNS,
+    LanguagePattern,
+)
 
 # Module-level constants for configurable behavior
 # Empirical minimum for reliable language detection: below 10 chars produces
@@ -155,7 +161,7 @@ class TextFingerprint:
         words = normalized_text.split()
         word_set = set(words)
 
-        char_histogram = defaultdict(int)
+        char_histogram: defaultdict[str, int] = defaultdict(int)
         for char in normalized_text:
             char_histogram[char] += 1
 
@@ -302,7 +308,7 @@ class DynamicLanguageDetector:
                 raise e
 
     def _compile_pattern(
-        self, language: str, pattern_data: dict[str, Any]
+        self, language: str, pattern_data: LanguagePattern
     ) -> CompiledPattern:
         """Compile regex patterns for a language."""
         words = pattern_data.get("words", [])
@@ -370,7 +376,7 @@ class DynamicLanguageDetector:
 
             # Check result cache
             cached_result = self.result_cache.get(cache_key)
-            if cached_result is not self.result_cache.MISS:
+            if is_cache_hit(cached_result):
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self.metrics.record_operation(duration_ms, cache_hit=True)
                 return cached_result
@@ -430,7 +436,7 @@ class DynamicLanguageDetector:
     @performance_monitor("batch_language_detection")
     def detect_languages_batch(self, texts: list[str]) -> list[str]:
         """Batch language detection for improved throughput."""
-        results = []
+        results: list[str | None] = []
 
         # Pre-process all texts
         fingerprints = [TextFingerprint.create(text) for text in texts]
@@ -443,7 +449,7 @@ class DynamicLanguageDetector:
             cache_key = fingerprint.to_cache_key()
             cached_result = self.result_cache.get(cache_key)
 
-            if cached_result is not self.result_cache.MISS:
+            if is_cache_hit(cached_result):
                 results.append(cached_result)
                 cache_hits += 1
             else:
@@ -454,10 +460,14 @@ class DynamicLanguageDetector:
         if cache_misses:
             self._process_batch_sequential(cache_misses, results)
 
-        return results
+        # Every placeholder slot is filled by _process_batch_sequential;
+        # expose a plain list[str] like the single-text path.
+        return [t if t is not None else "" for t in results]
 
     def _process_batch_sequential(
-        self, cache_misses: list[tuple[int, TextFingerprint]], results: list[str]
+        self,
+        cache_misses: list[tuple[int, TextFingerprint]],
+        results: list[str | None],
     ) -> None:
         """Process batch misses sequentially."""
         for index, fingerprint in cache_misses:
@@ -738,7 +748,9 @@ LANGUAGE_DETECTOR_REGISTRY = DynamicRegistry[DynamicLanguageDetector](
 )
 
 
-def register_language_detector(name: str, detector_factory: callable) -> None:
+def register_language_detector(
+    name: str, detector_factory: Callable[..., DynamicLanguageDetector]
+) -> None:
     """Register a custom language detector."""
     LANGUAGE_DETECTOR_REGISTRY.register(name, detector_factory)
 
@@ -747,7 +759,10 @@ def get_language_detector(name: str = "default", **kwargs) -> DynamicLanguageDet
     """Get a language detector instance."""
     if name == "default":
         return DynamicLanguageDetector(**kwargs)
-    return LANGUAGE_DETECTOR_REGISTRY.get(name, **kwargs)
+    detector = LANGUAGE_DETECTOR_REGISTRY.get(name, **kwargs)
+    if detector is None:
+        raise KeyError(f"Language detector '{name}' is not registered")
+    return detector
 
 
 # Export for backward compatibility

@@ -199,7 +199,7 @@ class EnhancedDocumentProcessor:
     def create_translated_document(
         self,
         original_content: dict[str, Any],
-        translated_texts: dict[int, list[str]],
+        translated_texts: dict[str, list[str]] | dict[int, list[str]],
         output_filename: str,
     ) -> str:
         """Create translated document preserving original formatting."""

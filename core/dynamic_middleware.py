@@ -14,14 +14,16 @@ import time
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, TypeVar
+from typing import Any, ParamSpec, TypeVar
 
 from core.dynamic_programming import (
     CachePolicy,
     SmartCache,
+    is_cache_hit,
 )
 
-F = TypeVar("F", bound=Callable[..., Any])
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 @dataclass
@@ -122,7 +124,7 @@ class DynamicProgrammingMonitor:
     def get_performance_summary(self) -> dict[str, Any]:
         """Generate comprehensive performance summary."""
         with self._lock:
-            summary = {}
+            summary: dict[str, Any] = {}
 
             for operation, metrics in self.metrics.items():
                 summary[operation] = {
@@ -173,7 +175,7 @@ class DynamicProgrammingMonitor:
 
     def get_top_performers(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get top performing operations by improvement."""
-        performers = []
+        performers: list[dict[str, Any]] = []
 
         with self._lock:
             for operation, metrics in self.metrics.items():
@@ -250,13 +252,23 @@ class SmartCachingMiddleware:
     def cached_call(
         self,
         cache_name: str,
-        func: Callable,
-        *args,
-        cache_key: str | None = None,
-        **kwargs,
-    ) -> Any:
-        """Execute function with caching."""
+        func: Callable[P, R],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R:
+        """Execute function with caching.
+
+        A ``cache_key`` keyword argument overrides the auto-generated cache
+        key. It is consumed here and never forwarded to the wrapped callable.
+        """
         cache = self.get_cache(cache_name)
+
+        # Callers may supply a stable cache_key as a keyword argument; it is
+        # consumed manually because ParamSpec kwargs must remain last.
+        cache_key_value: object = kwargs.pop("cache_key", None)
+        cache_key: str | None = (
+            cache_key_value if isinstance(cache_key_value, str) else None
+        )
 
         # Generate cache key
         if cache_key is None:
@@ -266,7 +278,7 @@ class SmartCachingMiddleware:
 
         # Check cache
         cached_result = cache.get(cache_key)
-        if cached_result is not cache.MISS:
+        if is_cache_hit(cached_result):
             duration_ms = (time.perf_counter() - start_time) * 1000
             self.monitor.record_operation(cache_name, duration_ms, cache_hit=True)
             return cached_result
@@ -358,15 +370,15 @@ class SmartCachingMiddleware:
 def performance_tracking(
     operation_name: str | None = None,
     monitor: DynamicProgrammingMonitor | None = None,
-) -> Callable[[F], F]:
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator for performance tracking."""
 
-    def decorator(func: F) -> F:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         name = operation_name or func.__name__
         global_monitor = monitor or _global_monitor
 
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             start_time = time.perf_counter()
             error_occurred = False
 
@@ -396,14 +408,14 @@ def smart_cache(
     ttl_seconds: float | None = None,
     policy: CachePolicy = CachePolicy.LRU,
     middleware: SmartCachingMiddleware | None = None,
-) -> Callable[[F], F]:
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator for smart caching."""
 
-    def decorator(func: F) -> F:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         cache_middleware = middleware or _global_cache_middleware
 
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             return cache_middleware.cached_call(cache_name, func, *args, **kwargs)
 
         # Ensure cache exists with proper configuration
@@ -419,10 +431,10 @@ def hybrid_optimization(
     operation_name: str | None = None,
     cache_size: int = 256,
     ttl_seconds: float | None = None,
-) -> Callable[[F], F]:
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Combined decorator for caching and performance monitoring."""
 
-    def decorator(func: F) -> F:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         # Apply both decorators
         cached_func = smart_cache(cache_name, cache_size, ttl_seconds)(func)
         monitored_func = performance_tracking(operation_name)(cached_func)

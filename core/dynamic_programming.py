@@ -20,7 +20,7 @@ from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, ClassVar, TypeGuard, TypeVar
 
 # Retired under ADR 0001 / Track 4; notice emitted after the import block so the
 # module keeps all imports at the top.
@@ -52,14 +52,11 @@ def _normalize_value(value: Any) -> Hashable:
         if isinstance(value, list):
             return tuple(_normalize_value(item) for item in value)
         elif isinstance(value, set):
-            # Convert to sorted tuple for deterministic ordering
-            try:
-                return tuple(sorted(_normalize_value(item) for item in value))
-            except TypeError:
-                # Items might not be sortable, fall back to repr-based sorting
-                return tuple(
-                    sorted((_normalize_value(item) for item in value), key=str)
-                )
+            # Sort by string representation for a deterministic ordering that
+            # also works across heterogeneous (non-comparable) item types.
+            return tuple(
+                sorted((_normalize_value(item) for item in value), key=str)
+            )
         elif isinstance(value, dict):
             # Convert to tuple of sorted (key, value) pairs with recursive normalization
             normalized_items = []
@@ -252,6 +249,19 @@ class CacheEntry[V]:
         return self.value
 
 
+class _CacheMiss:
+    """Typed sentinel for SmartCache misses (distinct from cached None values)."""
+
+
+def _is_cached[T](value: T | _CacheMiss) -> TypeGuard[T]:
+    """Return True when *value* is a cache hit (not the _CacheMiss sentinel)."""
+    return not isinstance(value, _CacheMiss)
+
+
+#: Public alias exposing the cache-hit narrowing helper to SmartCache consumers.
+is_cache_hit = _is_cached
+
+
 class SmartCache[K: Hashable, V]:
     """Intelligent caching system with multiple eviction policies.
 
@@ -261,8 +271,8 @@ class SmartCache[K: Hashable, V]:
     - LRU: OrderedDict for O(1) move_to_end and eviction
     """
 
-    # Sentinel object to distinguish between miss and cached None
-    MISS = object()
+    # Sentinel object (typed) to distinguish between miss and cached None
+    MISS: ClassVar[_CacheMiss] = _CacheMiss()
 
     def __init__(
         self,
@@ -290,7 +300,7 @@ class SmartCache[K: Hashable, V]:
         # For FIFO: OrderedDict for O(1) insert/delete
         self._fifo_order: OrderedDict[K, None] = OrderedDict()
 
-    def get(self, key: K) -> V | object:
+    def get(self, key: K) -> V | _CacheMiss:
         """Get value from cache with policy-aware access tracking."""
         with self._lock:
             entry = self._cache.get(key)
@@ -473,7 +483,7 @@ class DynamicRegistry[T]:
             start_time = time.perf_counter()
             cached_result = self._cache.get(cache_key)
 
-            if cached_result is not self._cache.MISS:
+            if _is_cached(cached_result):
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self._metrics[key].record_operation(duration_ms, cache_hit=True)
                 return cached_result
@@ -543,7 +553,7 @@ class DecisionTreeNode[T]:
         # Check cache first if available
         if self.cache is not None:
             cached_result = self.cache.get(context_key)
-            if cached_result is not self.cache.MISS:
+            if _is_cached(cached_result):
                 return cached_result
 
         # Evaluate condition
@@ -618,7 +628,7 @@ class StrategyRegistry[T]:
 
         # Check cache
         cached_strategy = self._cache.get(context_key)
-        if cached_strategy is not self._cache.MISS:
+        if _is_cached(cached_strategy):
             duration_ms = (time.perf_counter() - start_time) * 1000
             self._metrics.record_operation(duration_ms, cache_hit=True)
             return cached_strategy
@@ -694,7 +704,7 @@ def memoize(cache_size: int = 128, ttl_seconds: float | None = None):
 
             # Check cache
             cached_result = cache.get(cache_key)
-            if cached_result is not cache.MISS:
+            if _is_cached(cached_result):
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 metrics.record_operation(duration_ms, cache_hit=True)
                 return cached_result
@@ -708,10 +718,13 @@ def memoize(cache_size: int = 128, ttl_seconds: float | None = None):
 
             return result
 
-        # Attach cache management methods
-        wrapper.clear_cache = cache.clear
-        wrapper.cache_stats = cache.stats
-        wrapper.metrics = lambda: metrics
+        # Attach cache management methods through an Any-typed alias: mypy
+        # cannot verify dynamically attached attributes on function objects
+        # (and ruff B009 rejects constant setattr()).
+        wrapper_alias: Any = wrapper
+        wrapper_alias.clear_cache = cache.clear
+        wrapper_alias.cache_stats = cache.stats
+        wrapper_alias.metrics = lambda: metrics
 
         return wrapper
 
@@ -738,7 +751,8 @@ def performance_monitor(operation_name: str | None = None):
                 metrics.record_operation(duration_ms)
                 raise
 
-        wrapper.get_metrics = lambda: metrics
+        wrapper_alias: Any = wrapper
+        wrapper_alias.get_metrics = lambda: metrics
         return wrapper
 
     return decorator
@@ -777,7 +791,7 @@ class DynamicFactory[T]:
 
             # Check cache first
             cached_result = self._cache.get(cache_key)
-            if cached_result is not self._cache.MISS:
+            if _is_cached(cached_result):
                 return cached_result
 
         creator = self._creators.get(type_name)

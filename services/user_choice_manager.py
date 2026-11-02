@@ -425,7 +425,7 @@ class UserChoiceManager:
         Returns:
             List of (neologism, suggested_choice) tuples
         """
-        results = []
+        results: list[tuple[DetectedNeologism, UserChoice | None]] = []
 
         for neologism in neologisms:
             suggested_choice = self.get_choice_for_neologism(neologism, session_id)
@@ -467,7 +467,7 @@ class UserChoiceManager:
         Returns:
             Dictionary with applied choices and statistics
         """
-        results = {
+        results: dict[str, Any] = {
             "total_neologisms": len(analysis.detected_neologisms),
             "choices_found": 0,
             "choices_applied": 0,
@@ -627,7 +627,7 @@ class UserChoiceManager:
 
     def validate_data_integrity(self) -> dict[str, Any]:
         """Validate data integrity and return report."""
-        report = {
+        report: dict[str, Any] = {
             "total_issues": 0,
             "orphaned_contexts": 0,
             "missing_choices": 0,
@@ -820,7 +820,7 @@ class UserChoiceManager:
 
             # Get all choices grouped by term
             all_choices = self.db.get_all_choices()
-            term_groups = {}
+            term_groups: dict[str, list[UserChoice]] = {}
 
             # Group choices by term
             for choice in all_choices:
@@ -832,7 +832,7 @@ class UserChoiceManager:
             for term, choices in term_groups.items():
                 if len(choices) > 1:
                     # Check for same context hash
-                    context_hashes = {}
+                    context_hashes: dict[str, list[str]] = {}
                     for choice in choices:
                         context_hash = choice.context.generate_context_hash()
                         if context_hash not in context_hashes:
@@ -856,7 +856,7 @@ class UserChoiceManager:
 
             # Get all choices grouped by term
             all_choices = self.db.get_all_choices()
-            term_groups = {}
+            term_groups: dict[str, list[UserChoice]] = {}
 
             # Group choices by term
             for choice in all_choices:
@@ -941,7 +941,7 @@ class UserChoiceManager:
         Returns:
             Dictionary with recommendation details
         """
-        recommendation = {
+        recommendation: dict[str, Any] = {
             "term": neologism.term,
             "confidence": neologism.confidence,
             "suggested_action": "review",

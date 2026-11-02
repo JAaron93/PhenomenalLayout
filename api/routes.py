@@ -100,8 +100,8 @@ TerminologyResponse = dict[str, str]
 async def philosophy_interface(request: Request) -> HTMLResponse:
     """Philosophy-enhanced translation interface."""
     return templates.TemplateResponse(
-        "philosophy_interface.html",
-        {"request": request},
+        request=request,
+        name="philosophy_interface.html",
     )
 
 
@@ -428,12 +428,11 @@ async def export_user_choices(
     try:
         session_id: str | None = export_data.get("session_id")
 
+        export_file_path: str | None
         if session_id:
-            export_file_path: str | None = user_choice_manager.export_session_choices(
-                session_id
-            )
+            export_file_path = user_choice_manager.export_session_choices(session_id)
         else:
-            export_file_path: str | None = user_choice_manager.export_all_choices()
+            export_file_path = user_choice_manager.export_all_choices()
 
         if export_file_path:
             return FileResponse(
@@ -627,9 +626,9 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
                 "error_code": DOC_SERVICE_UNAVAILABLE,
                 "message": get_error_message(DOC_SERVICE_UNAVAILABLE),
                 "timestamp": datetime.now(UTC).isoformat(),
-                "filename": Path(file.filename).name
-                if getattr(file, "filename", None)
-                else None,
+                "filename": (
+                    Path(file.filename).name if file.filename is not None else None
+                ),
             },
         ) from e
 
@@ -1109,7 +1108,7 @@ async def set_byok_credentials(
             user_id=user_id,
             project_id=project_id,
             bucket_name=bucket_name,
-            service_account_json=sa_json,
+            sa_json_content=sa_json,
         )
         val = mgr.validate_credentials(user_id)
         is_valid = getattr(val, "is_valid", getattr(val, "status", "") == "VALID")
@@ -1306,11 +1305,7 @@ async def get_user_vocabulary_endpoint(
     _verify_resource_ownership(user_id, current_user)
     try:
         store = get_user_vocabulary_store()
-        prefs = (
-            store.get_user_preferences(user_id)
-            if hasattr(store, "get_user_preferences")
-            else store.get_preferences(user_id)
-        )
+        prefs = store.get_user_preferences(user_id)
         return {
             k: v.to_dict() if hasattr(v, "to_dict") else v.__dict__
             for k, v in prefs.items()
@@ -1706,10 +1701,7 @@ async def download_translated_book_endpoint(
         _verify_job_ownership(session_id, user_id, orch)
         if hasattr(orch, "download_translated_book"):
             res = orch.download_translated_book(user_id=user_id, session_id=session_id)
-            if isinstance(res, tuple):
-                stream_or_bytes, filename = res
-            else:
-                stream_or_bytes, filename = res, f"{session_id}_translated.pdf"
+            stream_or_bytes, filename = res
             if isinstance(stream_or_bytes, (bytes, bytearray)):
                 return Response(
                     content=bytes(stream_or_bytes),

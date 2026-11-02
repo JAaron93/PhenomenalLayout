@@ -28,6 +28,7 @@ from core.state_manager import state, translation_jobs
 from services.enhanced_document_processor import EnhancedDocumentProcessor
 from services.neologism_detector import NeologismDetector
 from services.philosophy_enhanced_translation_service import (
+    NeologismPreservationResult,
     PhilosophyEnhancedTranslationService,
 )
 from services.translation_service import TranslationService
@@ -312,7 +313,14 @@ def process_file_upload_sync(file: Any) -> ProcessFileUploadResult:
             return asyncio.run(process_file_upload(file))
     except Exception as e:
         logger.error(f"Sync wrapper error: {e!s}")
-        return "", f"❌ Processing failed: {e!s}", "", "", ""
+        return ProcessFileUploadResult(
+            preview="",
+            status=f"❌ Processing failed: {e!s}",
+            detected_language="",
+            preprocessing_info="",
+            processing_details="",
+            success=False,
+        )
 
 
 async def start_translation(
@@ -458,7 +466,7 @@ async def translate_content(
                 continue
 
             logger.info(
-                f"Translating page {page_num + 1}/{total_pages} "
+                f"Translating page {int(page_num) + 1}/{total_pages} "
                 f"({len(page_texts)} elements)"
             )
 
@@ -474,7 +482,7 @@ async def translate_content(
             else:
                 # Batch translate text elements for efficiency
                 batch_size: int = 20
-                translated_texts: list[str | None] = [None] * len(page_texts)
+                pending_translated: list[str | None] = [None] * len(page_texts)
 
                 # Identify non-empty text indices to translate
                 indices_to_translate: list[int] = [
@@ -498,20 +506,22 @@ async def translate_content(
                             f"Batch translation failed for page {page_num} "
                             f"(indices {batch_indices}): {e}"
                         )
-                        batch_translated: list[str] = (
-                            batch_texts  # Fallback to original
-                        )
+                        batch_translated = batch_texts  # Fallback to original
 
                     # Map translated texts back to their original positions
                     for idx, translated in zip(
                         batch_indices, batch_translated, strict=False
                     ):
-                        translated_texts[idx] = translated
+                        pending_translated[idx] = translated
 
                 # Fill untranslated (empty) slots with the original text
                 for idx, original in enumerate(page_texts):
-                    if translated_texts[idx] is None:
-                        translated_texts[idx] = original
+                    if pending_translated[idx] is None:
+                        pending_translated[idx] = original
+
+                # Every slot is now filled; expose a list[str] like the
+                # philosophy-mode branch.
+                translated_texts = [t or "" for t in pending_translated]
 
             translated_by_page[page_num] = translated_texts
 
@@ -564,16 +574,22 @@ async def _translate_page_texts_concurrently(
             raise asyncio.CancelledError()
         try:
             async with sem:
-                result: dict[
-                    str, Any
-                ] = await philosophy_translation_service.translate_text_with_neologism_handling_async(
-                    text=text,
-                    source_lang=source_language,
-                    target_lang=target_language,
-                    provider="auto",
-                    session_id=session_id,
+                service = philosophy_translation_service
+                result: NeologismPreservationResult | dict[str, str] = await (
+                    service.translate_text_with_neologism_handling_async(
+                        text=text,
+                        source_lang=source_language,
+                        target_lang=target_language,
+                        provider="auto",
+                        session_id=session_id,
+                    )
                 )
-                return idx, result.get("translated_text", text)
+                if isinstance(result, dict):
+                    # Test doubles may supply dict-shaped results.
+                    translated = result.get("translated_text", text)
+                else:
+                    translated = result.translated_text
+                return idx, translated
         except asyncio.CancelledError:
             # propagate cancellation immediately
             raise
@@ -613,7 +629,11 @@ async def perform_advanced_translation() -> None:
             f"{state.target_language}"
         )
 
-        content: ContentDict = state.current_content
+        content: ContentDict | None = state.current_content
+        if content is None:
+            raise ValueError(
+                "No extracted content available. Upload and extract a PDF first."
+            )
         content["file_path"] = state.current_file
 
         # Define progress callback
@@ -626,8 +646,8 @@ async def perform_advanced_translation() -> None:
         output_filename: str
         translated_by_page, output_filename = await translate_content(
             content=content,
-            source_language=state.source_language,
-            target_language=state.target_language,
+            source_language=state.source_language or "de",
+            target_language=state.target_language or "en",
             max_pages=max_pages,
             progress_callback=update_progress,
             philosophy_mode=state.philosophy_mode,
@@ -887,11 +907,11 @@ async def _show_pdf_preprocessing_steps(
         return f"❌ Preprocessing analysis failed: {error_msg}"
 
     except ValueError as e:
-        error_msg: str = f"PDF file is corrupted or invalid: {file_path}"
+        error_msg = f"PDF file is corrupted or invalid: {file_path}"
         logger.error(f"Preprocessing error - {error_msg}: {e}")
         return f"❌ Preprocessing analysis failed: {error_msg}"
 
     except Exception as e:
-        error_msg: str = "Unexpected error during PDF analysis"
-        logger.error(f"Preprocessing error - {error_msg}: {e}")
+        error_msg = f"Unexpected error during PDF analysis: {e!s}"
+        logger.error(f"Preprocessing error - {error_msg}")
         return f"❌ Preprocessing analysis failed: {error_msg}"

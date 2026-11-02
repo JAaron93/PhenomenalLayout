@@ -109,8 +109,8 @@ class McpLingoClient:
     def __init__(self, config: McpLingoConfig):
         """Initialize the client with its configuration."""
         self._config = config
-        self._stdio_ctx: asyncio.AbstractAsyncContextManager | None = None
-        self._session_ctx: asyncio.AbstractAsyncContextManager | None = None
+        self._stdio_ctx: contextlib.AbstractAsyncContextManager[Any] | None = None
+        self._session_ctx: contextlib.AbstractAsyncContextManager[Any] | None = None
         self._session: ClientSession | None = None
         self._tool_name: str | None = None
         self._tool_schema: dict[str, Any] | None = None
@@ -401,7 +401,6 @@ class McpLingoClient:
 
         Behavior:
         - Determines single vs batch mode (based on provided payloads)
-        - Normalizes list provided via `text` into `texts` for batch mode
         - Uses current set of supported key synonyms for payload and language fields
         - Drops None values and deduplicates by key+type signature to reduce retries
 
@@ -434,16 +433,7 @@ class McpLingoClient:
           maintain backward compatibility.
         """
         # Determine mode
-        mode = (
-            "batch"
-            if (texts and len(texts) > 0) or isinstance(text, list)
-            else "single"
-        )
-
-        # Normalize list provided as `text` for batch mode
-        if mode == "batch" and not texts and isinstance(text, list):
-            texts = list(text)
-            text = None
+        mode = "batch" if (texts and len(texts) > 0) else "single"
 
         # Define templates using existing synonyms (preserve current ones)
         single_shapes_templates: list[dict[str, object]] = [
