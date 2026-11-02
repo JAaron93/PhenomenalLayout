@@ -1,6 +1,7 @@
 /**
  * Philosophy Interface JavaScript
  * Interactive neologism detection and user choice management
+ * Parse-integrity regression gate: tests/test_static_js_syntax.py (node --check).
  */
 
 class PhilosophyInterface {
