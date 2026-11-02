@@ -161,8 +161,8 @@ class TestNeologismDetector:
         consciousness_text = "Das Bewusstsein und der Geist sind mental verbunden."
         existence_text = "Das Sein und die Existenz definieren die Realität."
 
-        field1 = detector._identify_semantic_field("Bewusstsein", consciousness_text)
-        field2 = detector._identify_semantic_field("Sein", existence_text)
+        field1 = detector._identify_semantic_field(consciousness_text)
+        field2 = detector._identify_semantic_field(existence_text)
 
         # Update assertions to match actual implementation behavior
         assert field1 in [

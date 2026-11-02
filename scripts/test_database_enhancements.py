@@ -12,15 +12,15 @@ import tempfile
 import time
 import traceback
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 
 # Ensure project root is on sys.path for package imports when running from scripts/
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from database.choice_database import ChoiceDatabase
-from models.user_choice_models import (
+from database.choice_database import ChoiceDatabase  # noqa: E402  (sys.path bootstrap above)
+from models.user_choice_models import (  # noqa: E402  (sys.path bootstrap above)
     ChoiceScope,
     ChoiceSession,
     ChoiceType,
@@ -242,7 +242,7 @@ def test_batch_import_optimization():
 
     # Test 3: Export to JSON
     export_data = {
-        "export_timestamp": datetime.now().isoformat(),
+        "export_timestamp": datetime.now(UTC).isoformat(),
         "session_id": "test_batch_session",
         "total_choices": len(test_choices),
         "choices": [choice.to_dict() for choice in test_choices],

@@ -59,7 +59,7 @@ class ConfidenceScorer:
     # - Rationale: prevents unbounded penalization of very long words
     LENGTH_PENALTY_MIN: float = 0.25
 
-    # LENGTH_NORM_FACTOR: length in characters
+    # LENGTH_NORM_FACTOR -- length in characters
     # - Meaning: normalization scale for long-word penalty
     # - Example: words longer than ~30 chars hit the max length penalty
     # - Rationale: keeps length effect moderate and interpretable

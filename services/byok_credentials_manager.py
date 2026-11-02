@@ -70,6 +70,7 @@ class CredentialNotFoundError(KeyError):
     """
 
     def __init__(self, user_id: str) -> None:
+        """Record the user_id whose credentials were not found."""
         super().__init__(f"No credentials stored for user_id={user_id!r}")
         self.user_id: str = user_id
 
@@ -100,6 +101,7 @@ class ValidationResult:
     error_details: str | None = None
 
     def __post_init__(self) -> None:
+        """Validate the result status invariant."""
         if self.status not in {"VALID", "INVALID"}:
             raise ValueError(f"status must be 'VALID' or 'INVALID', got {self.status!r}")
 

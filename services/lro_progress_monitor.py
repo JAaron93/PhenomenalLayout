@@ -317,7 +317,7 @@ class LROProgressMonitor:
         #   * already a string (test stubs).
         # ------------------------------------------------------------------
         raw_state: Any = getattr(parsed, "state", None)
-        state_str: str = _normalise_state(raw_state, parsed)
+        state_str: str = _normalise_state(raw_state)
 
         # ------------------------------------------------------------------
         # Compute derived fields.
@@ -383,7 +383,7 @@ class LROProgressMonitor:
                     "LROProgressMonitor: deserialised metadata via Stage A (bytes)."
                 )
                 return parsed
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.debug(
                     "LROProgressMonitor: Stage A deserialisation failed (%s); "
                     "falling back to Stage B.",
@@ -484,7 +484,7 @@ def _get_str_attr(obj: Any, *attr_names: str) -> str | None:
     return None
 
 
-def _normalise_state(raw_state: Any, metadata_obj: Any) -> str:
+def _normalise_state(raw_state: Any) -> str:
     """Coerce a raw ``state`` value into a validated state name string.
 
     Handles three representations:
@@ -498,8 +498,6 @@ def _normalise_state(raw_state: Any, metadata_obj: Any) -> str:
 
     Args:
         raw_state: The ``state`` attribute value from the metadata object.
-        metadata_obj: The metadata object itself (used to access the enum
-            descriptor when ``raw_state`` is an integer).
 
     Returns:
         A validated state name from :data:`_ALL_STATES`, defaulting to
@@ -528,7 +526,7 @@ def _normalise_state(raw_state: Any, metadata_obj: Any) -> str:
         upper_resolved: str = resolved_name.upper()
         if upper_resolved in _ALL_STATES:
             return upper_resolved
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
     logger.warning(

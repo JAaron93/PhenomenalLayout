@@ -8,13 +8,13 @@ import re
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 # Import spaCy for German linguistic analysis
 try:
-    import spacy  # type: ignore
+    import spacy
 
     SPACY_AVAILABLE = True
 except ImportError:
@@ -75,9 +75,9 @@ class NeologismDetector:
         # Lazy loading attributes - models are loaded only when first accessed
         self._nlp = None
         self._nlp_lock = threading.Lock()
-        self._terminology_map = None
-        self._philosophical_indicators = None
-        self._german_morphological_patterns = None
+        self._terminology_map: dict[str, str] | None = None
+        self._philosophical_indicators: set[str] | None = None
+        self._german_morphological_patterns: dict[str, list[str]] | None = None
 
         # Component analyzers with dependency injection support
         self._morphological_analyzer = morphological_analyzer
@@ -306,7 +306,7 @@ class NeologismDetector:
         # Add terminology terms as indicators (avoid circular dependency)
         # Only add if terminology is already loaded, don't trigger lazy loading
         if self._terminology_map is not None:
-            indicators.update(term.lower() for term in self._terminology_map.keys())
+            indicators.update(term.lower() for term in self._terminology_map)
 
         return indicators
 
@@ -333,7 +333,7 @@ class NeologismDetector:
         # Initialize analysis
         analysis = NeologismAnalysis(
             text_id=text_id,
-            analysis_timestamp=datetime.now().isoformat(),
+            analysis_timestamp=datetime.now(UTC).isoformat(),
             total_tokens=len(text.split()),
             analyzed_chunks=0,
         )
@@ -343,7 +343,7 @@ class NeologismDetector:
             chunks = self._chunk_text(text, chunk_size)
             analysis.analyzed_chunks = len(chunks)
 
-            for chunk_idx, chunk in enumerate(chunks):
+            for _chunk_idx, chunk in enumerate(chunks):
                 chunk_neologisms = self._analyze_chunk(chunk)
 
                 for neologism in chunk_neologisms:
@@ -459,7 +459,7 @@ class NeologismDetector:
                     morphological_analysis=morphological_analysis,
                     philosophical_context=philosophical_context,
                     confidence_factors=confidence_factors,
-                    detection_timestamp=datetime.now().isoformat(),
+                    detection_timestamp=datetime.now(UTC).isoformat(),
                 )
 
                 neologisms.append(neologism)
@@ -843,7 +843,7 @@ class NeologismDetector:
                     "neologism_type": neologism_type.value if neologism_type else None,
                 },
                 "debug_metadata": {
-                    "analysis_timestamp": datetime.now().isoformat(),
+                    "analysis_timestamp": datetime.now(UTC).isoformat(),
                     "detector_config": {
                         "philosophical_threshold": self.philosophical_threshold,
                         "spacy_model": self.spacy_model if self.nlp else None,
@@ -893,8 +893,8 @@ class NeologismDetector:
         """Extract philosophical keywords from text."""
         return self.philosophical_context_analyzer.extract_philosophical_keywords(text)
 
-    def _identify_semantic_field(self, term: str, context: str) -> str:
-        """Identify semantic field of a term."""
+    def _identify_semantic_field(self, context: str) -> str:
+        """Identify semantic field from surrounding context."""
         return self.philosophical_context_analyzer._identify_semantic_field(context)
 
     def _extract_context_window(

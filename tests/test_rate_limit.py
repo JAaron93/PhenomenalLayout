@@ -1,13 +1,14 @@
 """Tests for the rate limit decorator functionality."""
 
 import pytest
-from fastapi.testclient import TestClient
 from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+
 from api.rate_limit import (
+    RATE_LIMITS,
+    get_rate_limiter,
     rate_limit,
     shutdown_rate_limiter,
-    get_rate_limiter,
-    RATE_LIMITS,
 )
 
 
@@ -35,7 +36,7 @@ def test_app_sync():
 
     @app.get("/sync-endpoint")
     @rate_limit("read")
-    def sync_endpoint(request: Request):
+    def sync_endpoint(request: Request):  # noqa: ARG001  (rate_limit wrapper reads kwargs["request"] by name)
         return {"message": "Success"}
 
     return app
@@ -48,7 +49,7 @@ def test_app_async():
 
     @app.get("/async-endpoint")
     @rate_limit("write")
-    async def async_endpoint(request: Request):
+    async def async_endpoint(request: Request):  # noqa: ARG001  (rate_limit wrapper reads kwargs["request"] by name)
         return {"message": "Success"}
 
     return app

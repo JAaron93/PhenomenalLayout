@@ -15,7 +15,7 @@ import os
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 # Optional dependency detection without importing at module import time
 LANGDETECT_AVAILABLE: bool = importlib.util.find_spec("langdetect") is not None
@@ -83,6 +83,10 @@ class LanguagePattern(TypedDict):
     chars: list[str]
     word_weight: float
     char_weight: float
+    # Optional scoring-mix weights; defaulted by consumers
+    # (core/dynamic_language_engine.py :: _compile_pattern).
+    word_pattern_weight: NotRequired[float]
+    char_pattern_weight: NotRequired[float]
 
 
 LANGUAGE_PATTERNS: dict[str, LanguagePattern] = {
@@ -180,33 +184,43 @@ class LanguageDetector:
         if self._langdetect_initialized:
             return
 
-        # Use lock to prevent race conditions during initialization
+        # Initialization must happen under the module lock to prevent race
+        # conditions in multi-threaded environments.
         with _LANGDETECT_LOCK:
-            # Second check inside lock (double-checked locking pattern)
-            if self._langdetect_initialized:
-                return
+            self._init_langdetect_locked()
 
-            # Set initialized if langdetect is confirmed unavailable
-            if not LANGDETECT_AVAILABLE:
-                self._langdetect_initialized = True
-                return
+    def _init_langdetect_locked(self) -> None:
+        """Initialize langdetect while holding ``_LANGDETECT_LOCK``.
 
-            try:
-                mod: Any = importlib.import_module("langdetect")
-                fallback_exc: type = type(
-                    "LocalLangDetectException", (RuntimeError,), {}
-                )
-                # Get LangDetectException from the top-level module instead of importing submodule
-                exc: Any = getattr(mod, "LangDetectException", fallback_exc)
-                detect_func: Any | None = getattr(mod, "detect", None)
-                self._langdetect_mod = mod
-                self._langdetect_exception = exc
-                self._detect_func = detect_func
-                # Only mark as initialized after successful import and caching
-                self._langdetect_initialized = True
-            except (ModuleNotFoundError, ImportError, AttributeError) as err:
-                logger.debug("langdetect import failed: %s", err)
-                # Don't set initialized flag on import errors to allow retry on transient failures
+        Re-checks the flag first (double-checked locking pattern) because
+        another thread may have completed initialization while this thread
+        was waiting for the lock.
+        """
+        # Second check inside lock (double-checked locking pattern)
+        if self._langdetect_initialized:
+            return
+
+        # Set initialized if langdetect is confirmed unavailable
+        if not LANGDETECT_AVAILABLE:
+            self._langdetect_initialized = True
+            return
+
+        try:
+            mod: Any = importlib.import_module("langdetect")
+            fallback_exc: type = type(
+                "LocalLangDetectException", (RuntimeError,), {}
+            )
+            # Get LangDetectException from the top-level module instead of importing submodule
+            exc: Any = getattr(mod, "LangDetectException", fallback_exc)
+            detect_func: Any | None = getattr(mod, "detect", None)
+            self._langdetect_mod = mod
+            self._langdetect_exception = exc
+            self._detect_func = detect_func
+            # Only mark as initialized after successful import and caching
+            self._langdetect_initialized = True
+        except (ModuleNotFoundError, ImportError, AttributeError) as err:
+            logger.debug("langdetect import failed: %s", err)
+            # Don't set initialized flag on import errors to allow retry on transient failures
 
     def detect_language(
         self,
@@ -470,7 +484,7 @@ class LanguageDetector:
                 return self._simple_language_detection(text)
             try:
                 detected_code: str = detect_func(text)
-            except (lang_exc, ValueError) as e:  # type: ignore[misc]
+            except (lang_exc, ValueError) as e:
                 logger.warning("Language detection error: %s", e)
                 return "Unknown"
             mapped_lang = self.language_map.get(detected_code, detected_code.upper())

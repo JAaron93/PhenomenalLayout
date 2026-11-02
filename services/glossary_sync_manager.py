@@ -1,4 +1,5 @@
-"""services/glossary_sync_manager.py
+"""services/glossary_sync_manager.py.
+
 ====================================
 Track 2 — Dual-Tier Glossary Sync & Persistent User Vocabulary Store
 Traceability: FR-02, FR-06, NFR-04
@@ -47,7 +48,7 @@ _RETRYABLE_GCP_EXCEPTIONS: tuple[type[Exception], ...] = (
 T = TypeVar("T")
 
 
-def _retry_with_backoff(operation_desc: str, fn: Callable[[], T]) -> T:
+def _retry_with_backoff[T](operation_desc: str, fn: Callable[[], T]) -> T:
     """Execute *fn* with exponential backoff on retryable GCP exceptions."""
     from utils.gcp_helpers import retry_gcp_call
 
@@ -216,7 +217,6 @@ class GlossarySyncManager:
         return self._create_glossary_resource(
             user_id=user_id,
             project_id=project_id,
-            glossary_id=glossary_id,
             glossary_name=glossary_name,
             gcs_input_uri=gcs_uri,
         )
@@ -281,11 +281,7 @@ class GlossarySyncManager:
             g_id = g_name.split("/")[-1]
             # Match exact legacy candidates or exact session hash key / slots
             if (
-                g_id in legacy_candidates
-                or g_id == session_key
-                or g_id == slot_a
-                or g_id == slot_b
-                or g_id.startswith(f"{session_key}-")
+                g_id in legacy_candidates or g_id in (session_key, slot_a, slot_b) or g_id.startswith(f"{session_key}-")
             ):
                 matches.append(g)
                 continue
@@ -416,7 +412,6 @@ class GlossarySyncManager:
             new_resource_name = self._create_glossary_resource(
                 user_id=user_id,
                 project_id=project_id,
-                glossary_id=new_glossary_id,
                 glossary_name=new_glossary_name,
                 gcs_input_uri=gcs_uri,
             )
@@ -430,7 +425,6 @@ class GlossarySyncManager:
                     self._create_glossary_resource(
                         user_id=user_id,
                         project_id=project_id,
-                        glossary_id=new_glossary_id,
                         glossary_name=new_glossary_name,
                         gcs_input_uri=older_input_uri,
                     )
@@ -462,7 +456,6 @@ class GlossarySyncManager:
         self,
         user_id: str,
         project_id: str,
-        glossary_id: str,
         glossary_name: str,
         gcs_input_uri: str,
     ) -> str:

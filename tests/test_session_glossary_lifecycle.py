@@ -23,7 +23,6 @@ from google.cloud import translate_v3 as translate
 from services.byok_credentials_manager import BYOKCredentialsManager
 from services.session_glossary_lifecycle import (
     SessionGlossaryLifecycleManager,
-    SessionGlossaryRecord,
 )
 
 

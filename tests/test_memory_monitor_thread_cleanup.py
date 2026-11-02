@@ -8,17 +8,17 @@ import pytest
 
 # Import test dependencies at module level
 from utils.memory_monitor import (
-    MemoryMonitor, 
+    MemoryMonitor,
     cleanup_memory_monitor,
     get_memory_monitor,
-    start_memory_monitoring
+    start_memory_monitoring,
 )
 
 
 @pytest.fixture
 def monitor():
     """Pytest fixture providing a MemoryMonitor instance.
-    
+
     Creates a monitor with short interval for fast tests.
     Automatically stops monitoring after test completion.
     """
@@ -29,7 +29,7 @@ def monitor():
 @pytest.fixture
 def monitor_with_long_interval():
     """Pytest fixture providing a MemoryMonitor with long interval.
-    
+
     Used for responsive shutdown tests.
     Automatically stops monitoring after test completion.
     """
@@ -41,16 +41,16 @@ def monitor_with_long_interval():
 @pytest.fixture
 def _reset_memory_monitor_singleton():
     """Pytest fixture to reset the memory monitor singleton state.
-    
+
     This fixture ensures that each test gets a clean memory monitor instance
     by resetting the global singleton before and after each test.
     """
     # Clean up any existing monitor before the test
     cleanup_memory_monitor()
-    
+
     # Yield to let the test run
     yield
-    
+
     # Clean up after the test
     cleanup_memory_monitor()
 

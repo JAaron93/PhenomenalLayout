@@ -14,7 +14,7 @@ import os
 import sys
 import tempfile
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 # Local imports (must come before sys.path modification)
 from database.choice_database import ChoiceDatabase
@@ -38,10 +38,10 @@ _temp_files = []
 
 def _create_temp_db(prefix="test_db_"):
     """Create a temporary database file and track it for cleanup."""
-    temp_file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=".db", delete=False)
-    temp_file.close()
-    _temp_files.append(temp_file.name)
-    return temp_file.name
+    fd, temp_path = tempfile.mkstemp(prefix=prefix, suffix=".db")
+    os.close(fd)
+    _temp_files.append(temp_path)
+    return temp_path
 
 
 def cleanup_temp_files():
@@ -219,7 +219,7 @@ def demonstrate_batch_import():
 
     # Export to JSON for batch import
     export_data = {
-        "export_timestamp": datetime.now().isoformat(),
+        "export_timestamp": datetime.now(UTC).isoformat(),
         "version": "1.0",
         "total_choices": len(test_choices),
         "choices": [choice.to_dict() for choice in test_choices],

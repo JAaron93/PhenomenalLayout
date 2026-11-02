@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core.dynamic_programming import (
     DynamicRegistry,
@@ -20,6 +20,7 @@ from core.dynamic_programming import (
     SmartCache,
     StrategyPattern,
     StrategyRegistry,
+    is_cache_hit,
     memoize,
     performance_monitor,
 )
@@ -27,6 +28,9 @@ from models.user_choice_models import (
     ChoiceConflict,
     ConflictResolution,
 )
+
+if TYPE_CHECKING:
+    from services.user_choice_manager import UserChoiceManager
 
 
 class ConflictType(Enum):
@@ -154,6 +158,7 @@ class DynamicConflictResolutionEngine:
 
     def __init__(self, cache_size: int = 512):
         # Core components
+        """Initialize conflict-resolution strategies, registry, and caches."""
         self.resolution_table: dict[int, ResolutionStrategy] = {}
         self.strategy_registry: StrategyRegistry[str | None] = StrategyRegistry()
 
@@ -227,7 +232,7 @@ class DynamicConflictResolutionEngine:
 
             # Check cache
             cached_result = self.resolution_cache.get(cache_key)
-            if cached_result is not self.resolution_cache.MISS:
+            if is_cache_hit(cached_result):
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self.metrics.record_operation(duration_ms, cache_hit=True)
                 return cached_result
@@ -329,6 +334,8 @@ class OptimizedUserChoiceManager:
         session_expiry_hours: int = 24,
     ):
         # Import original manager for compatibility with fallback
+        """Initialize the optimized user-choice manager with its database backend."""
+        self.original_manager: UserChoiceManager | _UserChoiceManagerStub
         try:
             from services.user_choice_manager import UserChoiceManager
 
@@ -379,7 +386,10 @@ def get_conflict_resolver(
     """Get a conflict resolver instance."""
     if name == "default":
         return DynamicConflictResolutionEngine(**kwargs)
-    return CONFLICT_RESOLUTION_REGISTRY.get(name, **kwargs)
+    resolver = CONFLICT_RESOLUTION_REGISTRY.get(name, **kwargs)
+    if resolver is None:
+        raise KeyError(f"Conflict resolver '{name}' is not registered")
+    return resolver
 
 
 # Convenience functions for unified API

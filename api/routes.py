@@ -1,11 +1,11 @@
 """FastAPI route handlers for document translation API."""
 
+import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import json
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -24,21 +24,6 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from api.auth import UserRole, get_current_user_dependency, is_auth_enabled
-
-from services.byok_credentials_manager import (
-    BYOKCredentialsManager,
-    GuideStep,
-    ValidationResult,
-)
-from services.cost_estimator import CostQuote, GCPCostEstimator
-from services.user_vocabulary_store import TermPreference, UserVocabularyStore
-from services.book_translation_orchestrator import (
-    BookJobHandle,
-    BookScanResult,
-    BookTranslationOrchestrator,
-    CompletionSummary,
-)
-
 from api.memory_routes import router as memory_router
 from core.state_manager import state, translation_jobs
 from core.translation_handler import (
@@ -49,12 +34,6 @@ from core.translation_handler import (
     philosophy_translation_service,
     process_advanced_translation_job,
     user_choice_manager,
-)
-from utils.document_errors import (
-    DOC_ENCRYPTED_PDF,
-    DOC_INVALID_FORMAT,
-    DOC_SERVICE_UNAVAILABLE,
-    get_error_message,
 )
 from models.neologism_models import (
     ConfidenceFactors,
@@ -67,17 +46,31 @@ from models.user_choice_models import (
     ChoiceScope,
     ChoiceType,
 )
-from utils import pdf_validator
-from utils.language_utils import extract_text_sample_for_language_detection
-from utils.path_safety import resolve_managed_path
+from services.book_translation_orchestrator import (
+    BookTranslationOrchestrator,
+)
+from services.byok_credentials_manager import (
+    BYOKCredentialsManager,
+)
+from services.confidence_scorer import ConfidenceScorer
+from services.cost_estimator import GCPCostEstimator
+from services.neologism_detector import merge_neologism_analyses
+from services.pdf_quality_validator import PDFQualityValidator
 
 # Import services for configuration endpoints
 from services.philosophy_enhanced_translation_service import (
     translate_with_philosophy_awareness,
 )
-from services.neologism_detector import merge_neologism_analyses
-from services.pdf_quality_validator import PDFQualityValidator
-from services.confidence_scorer import ConfidenceScorer
+from services.user_vocabulary_store import UserVocabularyStore
+from utils import pdf_validator
+from utils.document_errors import (
+    DOC_ENCRYPTED_PDF,
+    DOC_INVALID_FORMAT,
+    DOC_SERVICE_UNAVAILABLE,
+    get_error_message,
+)
+from utils.language_utils import extract_text_sample_for_language_detection
+from utils.path_safety import resolve_managed_path
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -107,8 +100,8 @@ TerminologyResponse = dict[str, str]
 async def philosophy_interface(request: Request) -> HTMLResponse:
     """Philosophy-enhanced translation interface."""
     return templates.TemplateResponse(
-        "philosophy_interface.html",
-        {"request": request},
+        request=request,
+        name="philosophy_interface.html",
     )
 
 
@@ -127,7 +120,7 @@ async def get_terminology_map() -> dict[str, Any]:
         }
     except Exception as e:
         logger.error("Error getting terminology map: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/philosophy/terminology")
@@ -160,7 +153,7 @@ async def update_terminology_map(terminology_data: dict[str, Any]) -> dict[str, 
         raise
     except Exception as e:
         logger.error("Error updating terminology map: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Philosophy-Enhanced Translation Configuration Endpoints
@@ -184,7 +177,7 @@ async def get_philosophy_translation_config() -> dict[str, Any]:
         }
     except Exception as e:
         logger.error("Error getting philosophy translation config: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/philosophy/config")
@@ -220,7 +213,7 @@ async def update_philosophy_translation_config(
             }
     except Exception as e:
         logger.error("Error updating philosophy translation config: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/philosophy/translate")
@@ -258,7 +251,7 @@ async def translate_with_philosophy(
         raise
     except Exception as e:
         logger.error("Error in philosophy-aware translation: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Neologism Analysis Utilities
@@ -294,7 +287,7 @@ async def merge_neologism_analyses_endpoint(
         raise
     except Exception as e:
         logger.error("Error merging neologism analyses: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Philosophy API Endpoints
@@ -435,12 +428,11 @@ async def export_user_choices(
     try:
         session_id: str | None = export_data.get("session_id")
 
+        export_file_path: str | None
         if session_id:
-            export_file_path: str | None = user_choice_manager.export_session_choices(
-                session_id
-            )
+            export_file_path = user_choice_manager.export_session_choices(session_id)
         else:
-            export_file_path: str | None = user_choice_manager.export_all_choices()
+            export_file_path = user_choice_manager.export_all_choices()
 
         if export_file_path:
             return FileResponse(
@@ -504,7 +496,7 @@ async def get_terminology() -> TerminologyResponse:
 
 
 @api_router.post("/upload")
-async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: B008
+async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
     """Enhanced upload endpoint with advanced processing."""
     try:
         # Save file first so validators can inspect header and structure
@@ -565,11 +557,7 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
             if s.startswith(("/", "./", "../", "~")):
                 return True
             # Generic presence of separators suggesting a path (but not just a lone slash)
-            if ("/" in s or "\\" in s) and any(
-                part not in ("", ".", "..") for part in s.replace("\\", "/").split("/")
-            ):
-                return True
-            return False
+            return bool(("/" in s or "\\" in s) and any(part not in ("", ".", "..") for part in s.replace("\\", "/").split("/")))
 
         def sanitize_metadata(obj: Any) -> Any:
             """Recursively sanitize metadata by removing path-like keys and values."""
@@ -638,9 +626,9 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:  # noqa: 
                 "error_code": DOC_SERVICE_UNAVAILABLE,
                 "message": get_error_message(DOC_SERVICE_UNAVAILABLE),
                 "timestamp": datetime.now(UTC).isoformat(),
-                "filename": Path(file.filename).name
-                if getattr(file, "filename", None)
-                else None,
+                "filename": (
+                    Path(file.filename).name if file.filename is not None else None
+                ),
             },
         ) from e
 
@@ -785,7 +773,7 @@ async def validate_pdf_quality(
         raise
     except Exception as e:
         logger.error("Error validating PDF quality: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Confidence Scorer Endpoints
@@ -802,7 +790,7 @@ async def get_confidence_scorer_info() -> dict[str, Any]:
         }
     except Exception as e:
         logger.error("Error getting confidence scorer info: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/confidence/scorer-config")
@@ -853,7 +841,7 @@ async def update_confidence_scorer_config(
             }
     except Exception as e:
         logger.error("Error updating confidence scorer config: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @api_router.post("/confidence/calculate")
@@ -887,7 +875,7 @@ async def calculate_confidence(
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid morphological or philosophical data: {e}",
-            )
+            ) from e
         factors = scorer.calculate_confidence_factors(term, morph, phil)
 
         # Get final confidence and breakdown
@@ -906,7 +894,7 @@ async def calculate_confidence(
         raise
     except Exception as e:
         logger.error("Error calculating confidence: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ===========================================================================
@@ -984,10 +972,10 @@ async def estimate_cost(
     except HTTPException:
         raise
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Error calculating cost estimate: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/byok/onboarding-guide")
@@ -1026,7 +1014,7 @@ async def get_onboarding_guide() -> dict[str, Any]:
         }
     except Exception as exc:
         logger.error("Error retrieving onboarding guide: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _verify_resource_ownership(
@@ -1120,7 +1108,7 @@ async def set_byok_credentials(
             user_id=user_id,
             project_id=project_id,
             bucket_name=bucket_name,
-            service_account_json=sa_json,
+            sa_json_content=sa_json,
         )
         val = mgr.validate_credentials(user_id)
         is_valid = getattr(val, "is_valid", getattr(val, "status", "") == "VALID")
@@ -1152,7 +1140,7 @@ async def set_byok_credentials(
         raise
     except Exception as exc:
         logger.error("Error setting BYOK credentials: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/byok/validate")
@@ -1180,14 +1168,14 @@ async def validate_byok_credentials(
         proj = getattr(
             val,
             "project_id",
-            getattr(mgr, "get_project_id", lambda u: "")(user_id)
+            getattr(mgr, "get_project_id", lambda _u: "")(user_id)
             if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
             else "",
         )
         bkt = getattr(
             val,
             "bucket_name",
-            getattr(mgr, "get_bucket_name", lambda u: "")(user_id)
+            getattr(mgr, "get_bucket_name", lambda _u: "")(user_id)
             if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
             else "",
         )
@@ -1206,7 +1194,7 @@ async def validate_byok_credentials(
         raise
     except Exception as exc:
         logger.error("Error validating credentials for %s: %s", user_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.delete("/byok/credentials")
@@ -1225,7 +1213,7 @@ async def clear_byok_credentials(
         raise
     except Exception as exc:
         logger.error("Error clearing credentials: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/pre-scan")
@@ -1291,7 +1279,7 @@ async def pre_scan_book_endpoint(
                 getattr(
                     n,
                     "to_dict",
-                    lambda: n.__dict__ if hasattr(n, "__dict__") else str(n),
+                    lambda n=n: n.__dict__ if hasattr(n, "__dict__") else str(n),
                 )()
                 for n in result.detected_neologisms
             ],
@@ -1302,10 +1290,10 @@ async def pre_scan_book_endpoint(
     except HTTPException:
         raise
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Pre-scan failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/vocabulary/{user_id}")
@@ -1317,11 +1305,7 @@ async def get_user_vocabulary_endpoint(
     _verify_resource_ownership(user_id, current_user)
     try:
         store = get_user_vocabulary_store()
-        prefs = (
-            store.get_user_preferences(user_id)
-            if hasattr(store, "get_user_preferences")
-            else store.get_preferences(user_id)
-        )
+        prefs = store.get_user_preferences(user_id)
         return {
             k: v.to_dict() if hasattr(v, "to_dict") else v.__dict__
             for k, v in prefs.items()
@@ -1330,7 +1314,7 @@ async def get_user_vocabulary_endpoint(
         raise
     except Exception as exc:
         logger.error("Error fetching vocabulary for %s: %s", user_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/vocabulary/{user_id}")
@@ -1379,7 +1363,7 @@ async def save_user_vocabulary_endpoint(
         raise
     except Exception as exc:
         logger.error("Error saving vocabulary preference: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/vocabulary/{user_id}/bulk")
@@ -1402,7 +1386,7 @@ async def bulk_save_vocabulary_endpoint(
         raise
     except Exception as exc:
         logger.error("Error in bulk saving preferences: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/vocabulary/{user_id}/import")
@@ -1437,7 +1421,7 @@ async def import_vocabulary_tsv_endpoint(
         raise
     except Exception as exc:
         logger.error("Error importing TSV vocabulary: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/vocabulary/{user_id}/export")
@@ -1466,7 +1450,7 @@ async def export_vocabulary_tsv_endpoint(
         raise
     except Exception as exc:
         logger.error("Error exporting TSV vocabulary: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/translate")
@@ -1505,12 +1489,12 @@ async def start_batch_translation_endpoint(
     except HTTPException:
         raise
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Failed starting book batch translation: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _verify_job_ownership(session_id: str, requested_user_id: str, orch: Any) -> None:
@@ -1527,12 +1511,15 @@ def _verify_job_ownership(session_id: str, requested_user_id: str, orch: Any) ->
                 res = finder(session_id)
                 if isinstance(res, tuple) and len(res) >= 2:
                     _path, state = res[0], res[1]
-                    if state is not None and getattr(state, "user_id", None):
-                        if state.user_id != requested_user_id:
-                            raise HTTPException(
-                                status_code=status.HTTP_403_FORBIDDEN,
-                                detail=f"Access denied: Job session '{session_id}' belongs to another user",
-                            )
+                    if (
+                        state is not None
+                        and getattr(state, "user_id", None)
+                        and state.user_id != requested_user_id
+                    ):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"Access denied: Job session '{session_id}' belongs to another user",
+                        )
             except HTTPException:
                 raise
             except Exception:
@@ -1569,7 +1556,7 @@ async def get_book_status_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Error polling progress for %s: %s", session_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/book/resume/{session_id}")
@@ -1603,7 +1590,7 @@ async def resume_book_job_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Error resuming job %s for user %s: %s", session_id, user_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/book/jobs/{user_id}")
@@ -1629,7 +1616,7 @@ async def list_user_jobs_endpoint(
         raise
     except Exception as exc:
         logger.error("Error listing jobs for %s: %s", user_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/complete/{session_id}")
@@ -1653,7 +1640,7 @@ async def complete_job_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Error handling completion for %s: %s", session_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/export-drive")
@@ -1698,7 +1685,7 @@ async def export_to_drive_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Drive export failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.get("/book/download/{session_id}")
@@ -1714,10 +1701,7 @@ async def download_translated_book_endpoint(
         _verify_job_ownership(session_id, user_id, orch)
         if hasattr(orch, "download_translated_book"):
             res = orch.download_translated_book(user_id=user_id, session_id=session_id)
-            if isinstance(res, tuple):
-                stream_or_bytes, filename = res
-            else:
-                stream_or_bytes, filename = res, f"{session_id}_translated.pdf"
+            stream_or_bytes, filename = res
             if isinstance(stream_or_bytes, (bytes, bytearray)):
                 return Response(
                     content=bytes(stream_or_bytes),
@@ -1751,7 +1735,7 @@ async def download_translated_book_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Download failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @api_router.post("/book/dual-pane/{session_id}")
@@ -1796,4 +1780,4 @@ async def dual_pane_endpoint(
         ) from exc
     except Exception as exc:
         logger.error("Dual-pane view error: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

@@ -428,9 +428,8 @@ class TestTranslationServiceWithLingo:
 
     def test_service_initialization_without_api_key(self):
         """Test service initialization failure without API key."""
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="LINGO_API_KEY not found"):
-                TranslationService()
+        with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="LINGO_API_KEY not found"):
+            TranslationService()
 
     @pytest.mark.asyncio
     async def test_no_providers_available_error(self):

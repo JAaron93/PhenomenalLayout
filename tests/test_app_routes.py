@@ -12,15 +12,13 @@ Traceability: FR-01 to FR-15
 
 from __future__ import annotations
 
-import io
-from urllib.parse import urlparse
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.conftest import build_test_pdf
 from api.auth import UserRole
 from api.routes import api_router
 from services.batch_job_recovery import ActiveJobState
@@ -35,6 +33,7 @@ from services.fraktur_classifier import OCRConfidence, ScriptAnalysisResult, Scr
 from services.google_drive_exporter import DriveExportResult
 from services.lro_progress_monitor import ProgressUpdate
 from services.user_vocabulary_store import TermPreference
+from tests.conftest import build_test_pdf
 
 
 def _create_minimal_pdf_bytes(text: str = "Test Philosophical Document", pages: int = 1) -> bytes:

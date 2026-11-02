@@ -6,6 +6,7 @@ This module provides a drop-in replacement for the standard translation service
 with significant performance improvements for large documents.
 """
 
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -17,7 +18,7 @@ from services.parallel_translation_service import (
     ParallelTranslationService,
 )
 
-from .translation_service import TranslationService
+from .translation_service import LingoTranslator, TranslationService
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,12 @@ class EnhancedTranslationService(TranslationService):
                     exist or is not readable.
             ``json.JSONDecodeError``: If the terminology file contains invalid JSON.
         """
-        super().__init__(terminology_path)
+        terminology_map: dict[str, str] | None = None
+        if terminology_path is not None:
+            with open(terminology_path, encoding="utf-8") as fh:
+                terminology_map = dict(json.load(fh))
+
+        super().__init__(terminology_map)
 
         # Parallel processing configuration
         self.parallel_config = ParallelTranslationConfig.from_config()
@@ -82,7 +88,7 @@ class EnhancedTranslationService(TranslationService):
     def _get_lingo_api_key(self) -> str:
         """Extract Lingo API key from existing providers."""
         lingo_provider = self.providers.get("lingo")
-        if not lingo_provider:
+        if not isinstance(lingo_provider, LingoTranslator):
             raise ValueError("Lingo provider not initialized")
 
         return lingo_provider.api_key
@@ -223,7 +229,7 @@ class EnhancedTranslationService(TranslationService):
             "average_request_time": 0.0,
         }
 
-    async def close(self) -> None:
+    def close(self) -> None:
         """Close the enhanced translation service and cleanup resources."""
         if self._parallel_service:
             # ParallelTranslationService is designed to be used as an async context manager

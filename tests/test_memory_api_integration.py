@@ -86,12 +86,12 @@ def reload_app_with_env():
         patch_obj = patch.dict("os.environ", test_env)
         patch_obj.start()
         active_patches.append(patch_obj)
-        
+
         # Remove modules from sys.modules to ensure fresh imports
         for name in MODULE_NAMES:
             if name in sys.modules:
                 del sys.modules[name]
-        
+
         # Import fresh modules
         for name in MODULE_NAMES:
             __import__(name)

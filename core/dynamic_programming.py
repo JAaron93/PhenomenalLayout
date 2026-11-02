@@ -8,27 +8,28 @@ that can be used across the codebase for performance optimization.
 
 from __future__ import annotations
 
-import warnings
-
-warnings.warn(
-    "core.dynamic_programming has been retired and deprecated under ADR 0001 / Track 4. "
-    "Core caching and metric utilities are retained for backward compatibility.",
-    DeprecationWarning,
-    stacklevel=2,
-)
-
 import dataclasses
 import functools
 import hashlib
 import heapq
 import threading
 import time
+import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, ClassVar, TypeGuard, TypeVar
+
+# Retired under ADR 0001 / Track 4; notice emitted after the import block so the
+# module keeps all imports at the top.
+warnings.warn(
+    "core.dynamic_programming has been retired and deprecated under ADR 0001 / Track 4. "
+    "Core caching and metric utilities are retained for backward compatibility.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def _normalize_value(value: Any) -> Hashable:
@@ -51,14 +52,11 @@ def _normalize_value(value: Any) -> Hashable:
         if isinstance(value, list):
             return tuple(_normalize_value(item) for item in value)
         elif isinstance(value, set):
-            # Convert to sorted tuple for deterministic ordering
-            try:
-                return tuple(sorted(_normalize_value(item) for item in value))
-            except TypeError:
-                # Items might not be sortable, fall back to repr-based sorting
-                return tuple(
-                    sorted((_normalize_value(item) for item in value), key=str)
-                )
+            # Sort by string representation for a deterministic ordering that
+            # also works across heterogeneous (non-comparable) item types.
+            return tuple(
+                sorted((_normalize_value(item) for item in value), key=str)
+            )
         elif isinstance(value, dict):
             # Convert to tuple of sorted (key, value) pairs with recursive normalization
             normalized_items = []
@@ -95,12 +93,12 @@ def _normalize_value(value: Any) -> Hashable:
 
 def _create_cache_key_from_args(key: str, args: tuple, kwargs: dict) -> tuple:
     """Create a hashable cache key from arguments.
-    
+
     Args:
         key: Base key for the cache entry
         args: Positional arguments to normalize and include in the cache key
         kwargs: Keyword arguments to normalize and include in the cache key
-        
+
     Returns:
         Tuple containing the normalized cache key components:
         (key, normalized_args, normalized_kwargs_tuple)
@@ -234,10 +232,11 @@ class PerformanceMetrics:
         self.avg_duration_ms = self.total_duration_ms / self.total_calls
 
 
-class CacheEntry(Generic[V]):
+class CacheEntry[V]:
     """Generic cache entry with metadata."""
 
     def __init__(self, value: V, timestamp: float | None = None, access_count: int = 0):
+        """Create a cache entry wrapping the stored value."""
         self.value = value
         self.timestamp = timestamp or time.time()
         self.access_count = access_count
@@ -250,7 +249,20 @@ class CacheEntry(Generic[V]):
         return self.value
 
 
-class SmartCache(Generic[K, V]):
+class _CacheMiss:
+    """Typed sentinel for SmartCache misses (distinct from cached None values)."""
+
+
+def _is_cached[T](value: T | _CacheMiss) -> TypeGuard[T]:
+    """Return True when *value* is a cache hit (not the _CacheMiss sentinel)."""
+    return not isinstance(value, _CacheMiss)
+
+
+#: Public alias exposing the cache-hit narrowing helper to SmartCache consumers.
+is_cache_hit = _is_cached
+
+
+class SmartCache[K: Hashable, V]:
     """Intelligent caching system with multiple eviction policies.
 
     Uses efficient auxiliary structures:
@@ -259,8 +271,8 @@ class SmartCache(Generic[K, V]):
     - LRU: OrderedDict for O(1) move_to_end and eviction
     """
 
-    # Sentinel object to distinguish between miss and cached None
-    MISS = object()
+    # Sentinel object (typed) to distinguish between miss and cached None
+    MISS: ClassVar[_CacheMiss] = _CacheMiss()
 
     def __init__(
         self,
@@ -268,6 +280,7 @@ class SmartCache(Generic[K, V]):
         policy: CachePolicy = CachePolicy.LRU,
         ttl_seconds: float | None = None,
     ):
+        """Initialize the cache with its size bound and eviction policy."""
         self.max_size = max_size
         self.policy = policy
         self.ttl_seconds = ttl_seconds
@@ -287,7 +300,7 @@ class SmartCache(Generic[K, V]):
         # For FIFO: OrderedDict for O(1) insert/delete
         self._fifo_order: OrderedDict[K, None] = OrderedDict()
 
-    def get(self, key: K) -> V | object:
+    def get(self, key: K) -> V | _CacheMiss:
         """Get value from cache with policy-aware access tracking."""
         with self._lock:
             entry = self._cache.get(key)
@@ -379,7 +392,7 @@ class SmartCache(Generic[K, V]):
         elif self.policy == CachePolicy.LFU:
             # O(log n) eviction using min-heap
             while self._lfu_heap:
-                access_count, insertion_order, key = heapq.heappop(self._lfu_heap)
+                access_count, _insertion_order, key = heapq.heappop(self._lfu_heap)
 
                 # Skip stale entries
                 if key in self._lfu_stale_keys:
@@ -392,12 +405,11 @@ class SmartCache(Generic[K, V]):
                     self._lfu_stale_keys.discard(key)  # Clean up just in case
                     break
 
-        elif self.policy == CachePolicy.FIFO:
+        elif self.policy == CachePolicy.FIFO and self._fifo_order:
             # O(1) eviction using OrderedDict
-            if self._fifo_order:
-                oldest_key, _ = self._fifo_order.popitem(last=False)
-                if oldest_key in self._cache:
-                    del self._cache[oldest_key]
+            oldest_key, _ = self._fifo_order.popitem(last=False)
+            if oldest_key in self._cache:
+                del self._cache[oldest_key]
 
     def clear(self) -> None:
         """Clear all cached entries and auxiliary structures."""
@@ -425,7 +437,7 @@ class SmartCache(Generic[K, V]):
             }
 
 
-class DynamicRegistry(Generic[T]):
+class DynamicRegistry[T]:
     """Generic registry with dynamic loading and intelligent caching."""
 
     def __init__(
@@ -434,6 +446,7 @@ class DynamicRegistry(Generic[T]):
         cache_policy: CachePolicy = CachePolicy.LRU,
         ttl_seconds: float | None = None,
     ):
+        """Initialize the registry's strategy cache."""
         self._registry: dict[str, Callable[..., T]] = {}
         self._cache: SmartCache[tuple, T] = SmartCache(
             max_size=cache_size, policy=cache_policy, ttl_seconds=ttl_seconds
@@ -452,13 +465,13 @@ class DynamicRegistry(Generic[T]):
 
     def get(self, key: str, *args, cache_enabled: bool | None = None, **kwargs) -> T | None:
         """Get or create instance with intelligent caching (optional).
-        
+
         Args:
             key: Registry key for the factory
             *args: Positional arguments to pass to the factory
             cache_enabled: Whether to use caching (None = use default, True = enable, False = disable)
             **kwargs: Keyword arguments to pass to the factory
-            
+
         Returns:
             Created instance or None if key not registered
         """
@@ -470,7 +483,7 @@ class DynamicRegistry(Generic[T]):
             start_time = time.perf_counter()
             cached_result = self._cache.get(cache_key)
 
-            if cached_result is not self._cache.MISS:
+            if _is_cached(cached_result):
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self._metrics[key].record_operation(duration_ms, cache_hit=True)
                 return cached_result
@@ -516,7 +529,7 @@ class DynamicRegistry(Generic[T]):
         return dict(self._metrics)
 
 
-class DecisionTreeNode(Generic[T]):
+class DecisionTreeNode[T]:
     """Node in a dynamic decision tree for pattern matching."""
 
     def __init__(
@@ -525,6 +538,7 @@ class DecisionTreeNode(Generic[T]):
         result: T | None = None,
         cache: SmartCache[str, T] | None = None,
     ):
+        """Create a decision-tree node with its predicate and optional result."""
         self.condition = condition
         self.result = result
         self.children: list[DecisionTreeNode[T]] = []
@@ -539,7 +553,7 @@ class DecisionTreeNode(Generic[T]):
         # Check cache first if available
         if self.cache is not None:
             cached_result = self.cache.get(context_key)
-            if cached_result is not self.cache.MISS:
+            if _is_cached(cached_result):
                 return cached_result
 
         # Evaluate condition
@@ -570,7 +584,7 @@ class DecisionTreeNode(Generic[T]):
         return hashlib.md5(context_str.encode(), usedforsecurity=False).hexdigest()[:16]
 
 
-class StrategyPattern(ABC, Generic[T]):
+class StrategyPattern[T](ABC):
     """Abstract base for strategy pattern implementation."""
 
     @abstractmethod
@@ -590,10 +604,11 @@ class StrategyPattern(ABC, Generic[T]):
         pass
 
 
-class StrategyRegistry(Generic[T]):
+class StrategyRegistry[T]:
     """Registry for strategy pattern with dynamic selection."""
 
     def __init__(self):
+        """Initialize the strategy list, selection cache, and metrics."""
         self._strategies: list[StrategyPattern[T]] = []
         self._cache: SmartCache[str, StrategyPattern[T]] = SmartCache(max_size=128)
         self._metrics = PerformanceMetrics("strategy_selection")
@@ -613,7 +628,7 @@ class StrategyRegistry(Generic[T]):
 
         # Check cache
         cached_strategy = self._cache.get(context_key)
-        if cached_strategy is not self._cache.MISS:
+        if _is_cached(cached_strategy):
             duration_ms = (time.perf_counter() - start_time) * 1000
             self._metrics.record_operation(duration_ms, cache_hit=True)
             return cached_strategy
@@ -689,7 +704,7 @@ def memoize(cache_size: int = 128, ttl_seconds: float | None = None):
 
             # Check cache
             cached_result = cache.get(cache_key)
-            if cached_result is not cache.MISS:
+            if _is_cached(cached_result):
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 metrics.record_operation(duration_ms, cache_hit=True)
                 return cached_result
@@ -703,10 +718,13 @@ def memoize(cache_size: int = 128, ttl_seconds: float | None = None):
 
             return result
 
-        # Attach cache management methods
-        wrapper.clear_cache = cache.clear
-        wrapper.cache_stats = cache.stats
-        wrapper.metrics = lambda: metrics
+        # Attach cache management methods through an Any-typed alias: mypy
+        # cannot verify dynamically attached attributes on function objects
+        # (and ruff B009 rejects constant setattr()).
+        wrapper_alias: Any = wrapper
+        wrapper_alias.clear_cache = cache.clear
+        wrapper_alias.cache_stats = cache.stats
+        wrapper_alias.metrics = lambda: metrics
 
         return wrapper
 
@@ -733,7 +751,8 @@ def performance_monitor(operation_name: str | None = None):
                 metrics.record_operation(duration_ms)
                 raise
 
-        wrapper.get_metrics = lambda: metrics
+        wrapper_alias: Any = wrapper
+        wrapper_alias.get_metrics = lambda: metrics
         return wrapper
 
     return decorator
@@ -742,10 +761,11 @@ def performance_monitor(operation_name: str | None = None):
 # Factory patterns for common use cases
 
 
-class DynamicFactory(Generic[T]):
+class DynamicFactory[T]:
     """Generic factory with dynamic type resolution and caching."""
 
     def __init__(self):
+        """Initialize the creator registry and instance cache."""
         self._creators: dict[str, Callable[..., T]] = {}
         self._cache: SmartCache[tuple, T] = SmartCache(max_size=64)
 
@@ -755,13 +775,13 @@ class DynamicFactory(Generic[T]):
 
     def create(self, type_name: str, *args, cache_enabled: bool | None = None, **kwargs) -> T | None:
         """Create an instance of the specified type with optional caching.
-        
+
         Args:
             type_name: Name of the type to create
             *args: Positional arguments to pass to the creator
             cache_enabled: Whether to use caching (None = use default, True = enable, False = disable)
             **kwargs: Keyword arguments to pass to the creator
-            
+
         Returns:
             Created instance or None if type not registered
         """
@@ -771,7 +791,7 @@ class DynamicFactory(Generic[T]):
 
             # Check cache first
             cached_result = self._cache.get(cache_key)
-            if cached_result is not self._cache.MISS:
+            if _is_cached(cached_result):
                 return cached_result
 
         creator = self._creators.get(type_name)
@@ -810,7 +830,7 @@ def get_registry(name: str, **kwargs) -> DynamicRegistry:
 
 def clear_all_registries(name: str | None = None) -> None:
     """Clear all global registries or a specific registry by name.
-    
+
     Args:
         name: Optional registry name to clear. If None, clears all registries.
     """

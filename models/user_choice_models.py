@@ -6,7 +6,7 @@ import hashlib
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -93,9 +93,6 @@ class TranslationContext:
 
     def calculate_similarity(self, other: TranslationContext) -> float:
         """Calculate similarity with another context."""
-        if not isinstance(other, TranslationContext):
-            return 0.0
-
         similarity_factors = []
 
         # Semantic field similarity
@@ -184,8 +181,8 @@ class UserChoice:
     user_notes: str = ""
 
     # Temporal information
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     last_used_at: str | None = None
 
     # Usage tracking
@@ -209,7 +206,7 @@ class UserChoice:
     def update_usage_stats(self, success: bool = True) -> None:
         """Update usage statistics."""
         self.usage_count += 1
-        self.last_used_at = datetime.now().isoformat()
+        self.last_used_at = datetime.now(UTC).isoformat()
 
         # Update success rate using exponential moving average
         alpha = 0.1  # Learning rate
@@ -218,7 +215,7 @@ class UserChoice:
         else:
             self.success_rate = self.success_rate * (1 - alpha)
 
-        self.updated_at = datetime.now().isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
     def is_applicable_to_context(self, target_context: TranslationContext) -> bool:
         """Check if choice is applicable to a given context."""
@@ -234,8 +231,6 @@ class UserChoice:
         if self.choice_scope == ChoiceScope.CONTEXTUAL:
             similarity = self.context.calculate_similarity(target_context)
             return similarity >= self.context.context_similarity_threshold
-
-        return False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
@@ -287,8 +282,8 @@ class ChoiceSession:
     target_language: str = ""
 
     # Temporal information
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     completed_at: str | None = None
 
     # Session statistics
@@ -332,13 +327,13 @@ class ChoiceSession:
                 + choice.confidence_level
             ) / self.total_choices
 
-        self.updated_at = datetime.now().isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
     def complete_session(self) -> None:
         """Mark session as completed."""
         self.status = SessionStatus.COMPLETED
-        self.completed_at = datetime.now().isoformat()
-        self.updated_at = datetime.now().isoformat()
+        self.completed_at = datetime.now(UTC).isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
     def calculate_consistency_score(self, choices: list[UserChoice]) -> float:
         """Calculate consistency score based on choices."""
@@ -346,7 +341,7 @@ class ChoiceSession:
             return 1.0
 
         # Group similar terms
-        term_groups = {}
+        term_groups: dict[str, list[UserChoice]] = {}
         for choice in choices:
             term_key = choice.neologism_term.lower()
             if term_key not in term_groups:
@@ -431,7 +426,7 @@ class ChoiceConflict:
     resolution_notes: str = ""
 
     # Temporal information
-    detected_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    detected_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     resolved_at: str | None = None
 
     # Metadata
@@ -485,7 +480,7 @@ class ChoiceConflict:
             self.resolved_choice_id = None
             self.resolution_notes = "Both choices kept for context-specific application"
 
-        self.resolved_at = datetime.now().isoformat()
+        self.resolved_at = datetime.now(UTC).isoformat()
         self.auto_resolved = True
 
         return self.resolved_choice_id
@@ -548,8 +543,8 @@ class TranslationPreference:
     include_statistics: bool = True
 
     # Temporal information
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def update_language_preference(
         self, source_lang: str, target_lang: str, preferences: dict[str, Any]
@@ -557,14 +552,14 @@ class TranslationPreference:
         """Update preferences for a specific language pair."""
         key = f"{source_lang}-{target_lang}"
         self.language_pair_preferences[key] = preferences
-        self.updated_at = datetime.now().isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
     def update_domain_preference(
         self, domain: str, preferences: dict[str, Any]
     ) -> None:
         """Update preferences for a specific domain."""
         self.domain_preferences[domain] = preferences
-        self.updated_at = datetime.now().isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
     def get_language_preference(
         self, source_lang: str, target_lang: str
@@ -607,13 +602,13 @@ class TranslationPreference:
 
 def create_choice_id(neologism_term: str, context_hash: str) -> str:
     """Create a unique choice ID."""
-    data = f"{neologism_term}:{context_hash}:{datetime.now().isoformat()}"
+    data = f"{neologism_term}:{context_hash}:{datetime.now(UTC).isoformat()}"
     return hashlib.sha256(data.encode()).hexdigest()[:16]
 
 
 def create_session_id() -> str:
     """Create a unique session ID."""
-    data = f"session:{datetime.now().isoformat()}"
+    data = f"session:{datetime.now(UTC).isoformat()}"
     return hashlib.sha256(data.encode()).hexdigest()[:16]
 
 

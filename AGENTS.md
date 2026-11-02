@@ -127,6 +127,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 | **Gradio Web Interface** (`ui/gradio_interface.py` [deleted under ADR 0002 / Track A]) | Upstream Pillow pinning (`pillow<13.0`) caused 41 open Dependabot alerts; duplicated API functionality. | Bespoke zero-build vanilla ES modules SPA (`static/`) served directly by FastAPI. |
 | **Local Fallback Translation Engine** (`services/fallback_translator.py` [deleted under ADR 0002 / Track B]) | High complexity TrueType font parsing, CMap unpacking, and ReportLab canvas drawing. | Google Cloud Document Translation is the sole translation pipeline; failed pages surfaced with re-run under `{book_id}-r2`. |
 | **`reportlab` in any `requirements*.txt`** (removed from `requirements-dev.txt` under PR #147) | `reportlab` declares `pillow` as a hard `Requires`, reintroducing Pillow transitively even after all runtime removals. | Use `build_test_pdf(pages: list[str]) -> bytes` from `tests/conftest.py` for all PDF test fixtures. This stdlib-only helper produces valid PDF 1.4 bytes using Helvetica Type1 / WinAnsiEncoding; `pypdf.page.extract_text()` recovers the embedded strings verbatim. |
+| **Legacy Generic Syntax** (`Generic[T]` base classes, manual `TypeVar` for intrinsic type parameters) | Python floor is 3.12+ (ADR 0003); ruff `UP047`/`UP049` are error-tier in the `UP` group and fail CI on legacy generics. | PEP 695 intrinsic type parameters — `class Foo[T]:` / `def f[T](...)`. See AGENTS.md §6.10. |
 
 ---
 
@@ -163,6 +164,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 * **Multi-Core Test Parallelization**: When running the full repository test suite (700+ tests), agents MUST leverage multi-core parallelism using `pytest -n auto` (or `-n <CPU_COUNT>`) via `pytest-xdist` to avoid multi-minute serial test timeouts and latency.
 * **Inner-Loop Targeted Runs**: During rapid TDD red-green cycles, run targeted test files with `--no-cov` to verify individual behaviors quickly (< 1s) before triggering full multi-module coverage runs (`--cov=services --cov=utils --cov=models`).
 * **Parallel-Failure Triage**: Under `-n auto` (xdist `dist=load`), worker scheduling is nondeterministic and failure sets rotate between runs. Before diagnosing a failure, rerun the failing test serially and diff the failure set against previous runs — a signature that appears once and moves between runs is environmental, not a regression. For state-leak repro, order node IDs in a single invocation (e.g., suspected polluter test first, victim test second): pytest runs node IDs in the order given.
+* **Pre-Push CI-Exact Serial Parity**: CI runs serially with `pytest --maxfail=1 --disable-warnings`; order-dependent pollution that xdist masks surfaces there. Before pushing, run the CI-exact serial command once — the conftest autouse `_os_environ_quarantine` and `_auth_config_cache_reset` fixtures (established in PR #153) guard environment-variable and `AuthConfig` cache leakage between tests in serial mode; never delete, conditionally skip, or work around these fixtures, and NEVER resolve pollution by reintroducing `importlib.reload` teardowns (see §6.2).
 
 ### 6.4 Frontend Polling Hygiene & Idle Deactivation Invariant (NFR-03)
 * **Bounded Polling**: Progress polling routines in the bespoke frontend (`static/js/polling.js`, `static/js/translate.js`) MUST use bounded intervals with exponential backoff on transient errors.
@@ -228,3 +230,16 @@ beyond `io`) that produces valid PDFs whose text is recoverable by
    encoding compatibility.
 
 Established in PR #147 — verified against 752-test suite at 70.75% coverage.
+
+### 6.10 Python 3.12+ Floor & PEP 695 Generic Syntax Invariant
+* **3.12+ is the supported floor** (`requires-python = ">=3.12"` in `pyproject.toml`; ADR 0003). Code that must parse on ≤ 3.11 is out of policy; do not "restore compatibility" by downverting PEP 695 syntax.
+* **PEP 695-only generics**: new generic classes/functions MUST use intrinsic type parameters (`class CacheEntry[V]:`, `def _run_coro_sync[T](...)`). Legacy `class Foo(Generic[T])` and manual `TypeVar` declarations are prohibited — ruff `UP047`/`UP049` (error tier, `UP` group in `[tool.ruff.lint] select`) fail CI on them. Live examples: `core/dynamic_programming.py`, `services/glossary_sync_manager.py`, `services/philosophy_enhanced_translation_service.py`.
+* **Coordinated version bumps only**: any Python minor-version bump must update ruff/black `target-version`, mypy `python_version`, CI `python-version`, `classifiers`, and `requires-python` together — drift between those five surfaces is what produced the ADR 0003 inconsistency. Same for README Prerequisites/Requirements and CONTRIBUTING "Development environment".
+
+### 6.11 Persisted Timestamp Normalization Invariant (Legacy Naive Rows)
+* **Legacy rows carry naive timestamps**: sessions/choices persisted before the UTC migration were written by `datetime.now()` (naive, UTC-encoding on Modal/CI hosts); post-migration writes are aware (`datetime.now(UTC).isoformat()`). Both formats coexist indefinitely in user databases.
+* **Normalize before arithmetic**: any subtraction/comparison of a *persisted* timestamp against a `datetime.now(UTC)` value MUST first coerce naive values via the `_ensure_utc_aware` pattern (`tzinfo is None → replace(tzinfo=UTC)`; see `services/user_choice_manager.py`, precedent `services/parallel_translation_service.py`). Never assume fresh deployments have only aware rows.
+* **Never treat comparison TypeError as a data-validity signal**: the pre-fix bug was an `except (ValueError, TypeError)` fallback that misread the aware-minus-naive `TypeError` as "invalid timestamp → expired", falsely expiring fresh ACTIVE sessions, and a `except ValueError` miss that emptied `_check_invalid_sessions` via the outer handler. Catching must be narrowed to what the operation actually raises after normalization.
+* **DB-level lexical comparisons**: `ChoiceDatabase.cleanup_expired_sessions` compares ISO strings in SQL; mixed aware/naive lexical ordering is only wrong at exact sub-second boundaries (immaterial for hour-scale expiry policies). Prefer manager-level normalization over row-level SQL timestamp surgery.
+
+Established in PR #153 — verified against the 761-test suite in both parallel (`-n auto`) and CI-exact serial modes.

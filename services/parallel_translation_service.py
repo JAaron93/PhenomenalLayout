@@ -470,7 +470,7 @@ class ParallelLingoTranslator:
         # Handle any exceptions that weren't caught
         final_results = []
         for i, result in enumerate(results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.error(
                     "Unhandled exception for task %s: %s", tasks[i].task_id, result
                 )

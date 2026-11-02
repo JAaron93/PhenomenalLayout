@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Test JWT token verification directly."""
 
-import importlib
 import sys
 from unittest.mock import patch
 
@@ -11,7 +10,7 @@ import pytest
 @pytest.fixture
 def auth_setup():
     """Fixture that sets up auth module with patched environment.
-    
+
     This fixture:
     1. Patches os.environ with required environment variables
     2. Reloads api.auth to pick up the patched environment
@@ -28,9 +27,13 @@ def auth_setup():
     original_module = sys.modules.get('api.auth')
 
     with patch.dict('os.environ', test_env):
-        # Reload to pick up patched environment
+        # Import auth module to expose it against the patched environment
         import api.auth
-        importlib.reload(api.auth)
+
+        # No importlib.reload: it would re-bind api.auth's function objects,
+        # desyncing from anything previously captured via Depends(); and
+        # AuthConfig reads MEMORY_API_* from the live environment at call
+        # time, so the patched dict alone is honored.
 
         # Yield module and its exports for tests
         yield {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# update-deps.sh - Update all dependencies using pip-tools
+# update-deps.sh - Update runtime dependencies via uv (requirements.in -> requirements.txt)
 # Usage: ./scripts/update-deps.sh
 
 set -euo pipefail
@@ -14,15 +14,18 @@ if [[ -z "$VIRTUAL_ENV" ]]; then
     exit 1
 fi
 
-# Ensure pip-tools is installed
-if ! command -v pip-compile &> /dev/null; then
-    echo "📥 Installing pip-tools..."
-    python -m pip install "pip-tools>=7.5,<8.0"
+# Ensure uv is available (requirements.txt is a uv pip compile artifact)
+if ! command -v uv &> /dev/null; then
+    echo "❌ Error: uv is not installed"
+    echo "   Install: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
 fi
 
 echo ""
 echo "🔄 Updating runtime dependencies..."
-pip-compile requirements.in --upgrade --strip-extras
+# --upgrade is mandatory: without it, uv pins resolver preference to the
+# versions installed in the active venv and silently reproduces the stale lock.
+uv pip compile requirements.in -o requirements.txt --upgrade
 
 echo ""
 echo "📋 Summary of changes:"

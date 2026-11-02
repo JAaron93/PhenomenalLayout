@@ -223,7 +223,7 @@ async def test_non_philosophy_path_unchanged(monkeypatch: pytest.MonkeyPatch):
     captured_batches: list[list[str]] = []
 
     async def _fake_batch(
-        texts: list[str], source_lang: str, target_lang: str
+        texts: list[str], _source_lang: str, _target_lang: str
     ) -> list[str]:
         # record what we actually receive
         captured_batches.append(list(texts))

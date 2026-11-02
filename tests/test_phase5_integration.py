@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 def _make_app() -> TestClient:
     """Create a test FastAPI app with the routes."""
     from api.routes import api_router, app_router
-    
+
     app = FastAPI()
     app.include_router(app_router)
     app.include_router(api_router, prefix="/api/v1")
@@ -24,10 +24,10 @@ class TestPhilosophyTerminologyEndpoints:
         """Test GET /philosophy/terminology returns terminology map."""
         client = _make_app()
         response = client.get("/api/v1/philosophy/terminology")
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "terminology_map" in data
         assert "term_count" in data
         assert isinstance(data["terminology_map"], dict)
@@ -40,28 +40,28 @@ class TestPhilosophyTerminologyEndpoints:
             "Dasein": "being-there",
             "Vorhandenheit": "presence-at-hand"
         }
-        
+
         response = client.post(
             "/api/v1/philosophy/terminology",
             json={"terminology": test_terms}
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data["success"] is True
         assert "Updated terminology map" in data["message"]
 
     def test_update_terminology_map_invalid(self):
         """Test POST /philosophy/terminology with invalid data."""
         client = _make_app()
-        
+
         # Send invalid data (not a dict)
         response = client.post(
             "/api/v1/philosophy/terminology",
             json={"terminology": "not-a-dict"}
         )
-        
+
         assert response.status_code == 400
 
 
@@ -72,10 +72,10 @@ class TestPhilosophyConfigEndpoints:
         """Test GET /philosophy/config returns configuration."""
         client = _make_app()
         response = client.get("/api/v1/philosophy/config")
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "preserve_neologisms_by_default" in data
         assert "neologism_confidence_threshold" in data
         assert "chunk_size" in data
@@ -84,7 +84,7 @@ class TestPhilosophyConfigEndpoints:
     def test_update_philosophy_config(self):
         """Test POST /philosophy/config updates configuration."""
         client = _make_app()
-        
+
         response = client.post(
             "/api/v1/philosophy/config",
             json={
@@ -92,10 +92,10 @@ class TestPhilosophyConfigEndpoints:
                 "neologism_confidence_threshold": 0.7
             }
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data["success"] is True
 
 
@@ -105,23 +105,23 @@ class TestNeologismMergeEndpoint:
     def test_merge_analyses_empty(self):
         """Test POST /philosophy/merge-analyses with empty list."""
         client = _make_app()
-        
+
         response = client.post(
             "/api/v1/philosophy/merge-analyses",
             json={"analyses": []}
         )
-        
+
         assert response.status_code == 400
 
     def test_merge_analyses_invalid_type(self):
         """Test POST /philosophy/merge-analyses with invalid type."""
         client = _make_app()
-        
+
         response = client.post(
             "/api/v1/philosophy/merge-analyses",
             json={"analyses": "not-a-list"}
         )
-        
+
         assert response.status_code == 400
 
 
@@ -131,24 +131,24 @@ class TestPDFQualityValidationEndpoint:
     def test_validate_quality_missing_original(self):
         """Test POST /pdf/validate-quality missing original_pdf."""
         client = _make_app()
-        
+
         response = client.post(
             "/api/v1/pdf/validate-quality",
             json={"reconstructed_pdf": "/path/to/reconstructed.pdf"}
         )
-        
+
         assert response.status_code == 400
         assert "original_pdf" in response.json()["detail"]
 
     def test_validate_quality_missing_reconstructed(self):
         """Test POST /pdf/validate-quality missing reconstructed_pdf."""
         client = _make_app()
-        
+
         response = client.post(
             "/api/v1/pdf/validate-quality",
             json={"original_pdf": "/path/to/original.pdf"}
         )
-        
+
         assert response.status_code == 400
         assert "reconstructed_pdf" in response.json()["detail"]
 
@@ -160,10 +160,10 @@ class TestConfidenceScorerEndpoints:
         """Test GET /confidence/scorer-info returns info."""
         client = _make_app()
         response = client.get("/api/v1/confidence/scorer-info")
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "confidence_threshold" in data
         assert "philosophical_indicators_count" in data
         assert "pattern_types" in data
@@ -171,40 +171,40 @@ class TestConfidenceScorerEndpoints:
     def test_update_confidence_scorer_config(self):
         """Test POST /confidence/scorer-config updates config."""
         client = _make_app()
-        
+
         response = client.post(
             "/api/v1/confidence/scorer-config",
             json={"confidence_threshold": 0.6}
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data["success"] is True
 
     def test_calculate_confidence_missing_term(self):
         """Test POST /confidence/calculate missing term."""
         client = _make_app()
-        
+
         response = client.post(
             "/api/v1/confidence/calculate",
             json={"term": ""}
         )
-        
+
         assert response.status_code == 400
 
     def test_calculate_confidence_valid_term(self):
         """Test POST /confidence/calculate with valid term."""
         client = _make_app()
-        
+
         response = client.post(
             "/api/v1/confidence/calculate",
             json={"term": "philosophy"}
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data["term"] == "philosophy"
         assert "final_confidence" in data
         assert "confidence_factors" in data

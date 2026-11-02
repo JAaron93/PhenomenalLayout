@@ -283,7 +283,9 @@ class UserVocabularyStore:
     def bulk_save_preferences(
         self,
         user_id: str,
-        preferences: list[TermPreference] | dict[str, Any],
+        preferences: list[TermPreference]
+        | list[dict[str, Any]]
+        | dict[str, Any],
     ) -> int:
         """Batch insert or update preferences for *user_id* in a single transaction."""
         if not user_id or not user_id.strip():

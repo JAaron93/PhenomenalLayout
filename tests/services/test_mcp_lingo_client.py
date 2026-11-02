@@ -87,7 +87,7 @@ async def test_batch_texts_uses_only_texts_shapes(make_client):
 
 
 @pytest.mark.asyncio
-async def test_both_text_and_texts_prefers_batch(make_client, caplog):
+async def test_both_text_and_texts_prefers_batch(make_client):
     client = make_client(
         succeed_on_call=2
     )  # ensure we see more than one attempt if first fails
@@ -102,8 +102,7 @@ async def test_both_text_and_texts_prefers_batch(make_client, caplog):
         assert "texts" in rec.arguments
         assert "text" not in rec.arguments
         assert rec.name == "translate"
-    # Optionally verify debug log message occurred (not strict)
-    # assert any("preferring batch" in m.message.lower() for m in caplog.records)
+    # The "preferring batch" debug log is best-effort; a strict assertion is intentionally omitted.
 
 
 @pytest.mark.asyncio

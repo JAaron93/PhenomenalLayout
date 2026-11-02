@@ -162,7 +162,7 @@ def test_gc_direct():
         raise AssertionError(
             f"Failed to parse timestamp '{timestamp_value}' "
             f"as ISO format: {e}"
-        )
+        ) from e
 
 
 def test_monitoring_status():

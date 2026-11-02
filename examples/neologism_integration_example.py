@@ -20,7 +20,7 @@ from services.translation_service import TranslationService
 # Determine repository root by searching for a marker file
 def find_project_root() -> Path:
     current: Path = Path(__file__).resolve()
-    for parent in [current] + list(current.parents):
+    for parent in [current, *list(current.parents)]:
         if (parent / "pyproject.toml").exists() or (parent / "setup.py").exists():
             return parent
     return current.parent.parent  # fallback to current behavior
@@ -116,7 +116,7 @@ class PhilosophyEnhancedTranslator:
         # Step 5: Generate translation suggestions for neologisms
         neologism_suggestions: list[
             dict[str, Any]
-        ] = self._generate_neologism_suggestions(neologism_analysis, target_lang)
+        ] = self._generate_neologism_suggestions(neologism_analysis)
 
         return {
             "original_text": text,
@@ -210,7 +210,7 @@ class PhilosophyEnhancedTranslator:
         return final_text
 
     def _generate_neologism_suggestions(
-        self, analysis: NeologismAnalysis, target_lang: str
+        self, analysis: NeologismAnalysis
     ) -> list[dict[str, Any]]:
         """
         Generate translation suggestions for detected neologisms.
@@ -232,7 +232,7 @@ class PhilosophyEnhancedTranslator:
 
             # Generate contextual suggestions
             contextual_suggestions: list[str] = self._generate_contextual_suggestions(
-                neologism, target_lang
+                neologism
             )
 
             suggestion: dict[str, Any] = {
@@ -276,7 +276,7 @@ class PhilosophyEnhancedTranslator:
         return breakdown
 
     def _generate_contextual_suggestions(
-        self, neologism: DetectedNeologism, target_lang: str
+        self, neologism: DetectedNeologism
     ) -> list[str]:
         """Generate contextual translation suggestions."""
         suggestions: list[str] = []

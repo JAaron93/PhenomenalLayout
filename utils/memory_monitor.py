@@ -1,13 +1,14 @@
 """Memory monitoring utilities for detecting memory leaks and resource usage."""
 
 import atexit
+import contextlib
 import gc
 import logging
 import os
 import threading
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import psutil
@@ -55,7 +56,7 @@ class MemoryMonitor:
         Args:
             check_interval: Seconds between memory checks (must be > 0 and <= 3600, enforced)
             alert_threshold_mb: Memory growth threshold in MB for alerts (must be between 0 and 10240, enforced)
-            
+
         Raises:
             ValueError: If check_interval <= 0 or > 3600, or alert_threshold_mb < 0 or > 10240
         """
@@ -161,7 +162,7 @@ class MemoryMonitor:
         # Log final stats with lock protection
         with self._lock:
             try:
-                final_memory = self._get_memory_usage_mb()
+                final_memory: float | str = self._get_memory_usage_mb()
             except MemoryMonitoringError as e:
                 logger.warning("Failed to get final memory stats: %s", e)
                 final_memory = "unknown"
@@ -178,10 +179,10 @@ class MemoryMonitor:
 
     def get_current_stats(self) -> dict[str, Any]:
         """Get current memory statistics.
-        
+
         Returns:
             Dictionary containing memory statistics
-            
+
         Raises:
             MemoryMonitoringError: If unable to get current memory usage
         """
@@ -241,8 +242,12 @@ class MemoryMonitor:
 
             except MemoryMonitoringError as e:
                 logger.error("Memory monitoring error: %s", e)
-                # Check shutdown flag before continuing
-                if not self._monitoring:
+                # Check shutdown flag before continuing; read it under lock since
+                # stop() clears the flag from a different thread. Wrap in bool()
+                # so the value is a fresh non-literal for the flag check.
+                with self._lock:
+                    monitoring_active: bool = bool(self._monitoring)
+                if not monitoring_active:
                     break
                 # Read check_interval under lock before sleeping
                 with self._lock:
@@ -279,7 +284,7 @@ class MemoryMonitor:
     @staticmethod
     def _get_memory_usage_mb() -> float:
         """Get current process memory usage in MB.
-        
+
         Raises:
             MemoryMonitoringError: If unable to get memory usage
         """
@@ -294,7 +299,7 @@ class MemoryMonitor:
     @property
     def is_monitoring(self) -> bool:
         """Check if memory monitoring is currently active.
-        
+
         Returns:
             True if monitoring is active, False otherwise
         """
@@ -304,7 +309,7 @@ class MemoryMonitor:
     @property
     def baseline_memory_mb(self) -> float | None:
         """Get the baseline memory usage in MB.
-        
+
         Returns:
             Baseline memory in MB, or None if not established
         """
@@ -319,7 +324,7 @@ class MemoryMonitor:
     @property
     def peak_memory_mb(self) -> float:
         """Get the peak memory usage recorded in MB.
-        
+
         Returns:
             Peak memory usage in MB
         """
@@ -333,7 +338,7 @@ class MemoryMonitor:
 
     def cleanup(self) -> None:
         """Clean up resources and stop monitoring.
-        
+
         This method should be called during application shutdown to ensure
         proper cleanup of monitoring thread and resources.
         """
@@ -351,11 +356,9 @@ class MemoryMonitor:
 
     def __del__(self):
         """Destructor to ensure cleanup on object deletion."""
-        try:
+        # Ignore errors during cleanup in destructor
+        with contextlib.suppress(Exception):
             self.cleanup()
-        except Exception:
-            # Ignore errors during cleanup in destructor
-            pass
 
 
 def force_garbage_collection() -> dict[str, Any]:
@@ -379,7 +382,7 @@ def force_garbage_collection() -> dict[str, Any]:
         "after_counts": after_stats["counts"],
         "before_stats": before_stats["stats"],
         "after_stats": after_stats["stats"],
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -399,11 +402,11 @@ def get_memory_monitor() -> MemoryMonitor:
 
 def start_memory_monitoring(check_interval: float = 60.0, alert_threshold_mb: float = 100.0) -> None:
     """Start global memory monitoring.
-    
+
     Args:
         check_interval: Seconds between memory checks (must be between 0.001 and 3600, enforced)
         alert_threshold_mb: Memory growth threshold in MB for alerts (must be between 0 and 10240, enforced)
-        
+
     Raises:
         ValueError: If check_interval <= 0 or > 3600, or alert_threshold_mb < 0 or > 10240
     """
@@ -420,7 +423,7 @@ def stop_memory_monitoring() -> None:
 
 def cleanup_memory_monitor() -> None:
     """Clean up global memory monitor during application shutdown.
-    
+
     This function stops monitoring, clears resources, and resets the global
     monitor reference to None, ensuring a clean state for subsequent tests
     or application restarts.
@@ -445,10 +448,10 @@ atexit.register(cleanup_memory_monitor)
 
 def get_memory_stats() -> dict[str, Any]:
     """Get current memory statistics.
-    
+
     Returns:
         Dictionary containing memory statistics
-        
+
     Raises:
         MemoryMonitoringError: If unable to get memory statistics
     """

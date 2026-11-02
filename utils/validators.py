@@ -129,6 +129,9 @@ class FileValidator:
 
             upload_file.file.seek(current_pos)  # Reset to original position
 
+            if upload_file.filename is None:
+                return {"valid": False, "error": "Missing filename"}
+
             # Validate using standard method
             return self.validate_file(upload_file.filename, file_size)
 

@@ -16,10 +16,10 @@ import requests
 
 try:
     # Prefer relative import when part of a package
-    from .mcp_lingo_client import McpLingoClient, McpLingoConfig  # type: ignore
+    from .mcp_lingo_client import McpLingoClient, McpLingoConfig
 except (ModuleNotFoundError, ImportError):  # pragma: no cover - fallback
     # Fallback absolute import when running as a flat module
-    from services.mcp_lingo_client import McpLingoClient, McpLingoConfig  # type: ignore
+    from services.mcp_lingo_client import McpLingoClient, McpLingoConfig
 
 # Translation service configuration
 TRANSLATION_DELAY: float = float(
@@ -30,6 +30,10 @@ TRANSLATION_DELAY: float = float(
 USER_AGENT: str = os.getenv("TRANSLATION_USER_AGENT", "PhenomenalLayout-Translate/2.0")
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+# Module-level holder for fire-and-forget close() tasks so they cannot be
+# garbage-collected before completing (asyncio dangling-task prevention).
+_CLOSE_TASKS: set[asyncio.Task] = set()
 
 
 class BaseTranslator(ABC):
@@ -197,6 +201,7 @@ class MCPLingoTranslator(BaseTranslator):
     async def translate_text(
         self, text: str, source_lang: str, target_lang: str
     ) -> str:
+        """Translate a single text via the MCP Lingo provider."""
         await self._ensure_started()
         try:
             return await self._client.translate_text(text, source_lang, target_lang)
@@ -207,6 +212,7 @@ class MCPLingoTranslator(BaseTranslator):
     async def translate_batch(
         self, texts: list[str], source_lang: str, target_lang: str
     ) -> list[str]:
+        """Translate a batch of texts via the MCP Lingo provider."""
         await self._ensure_started()
         try:
             return await self._client.translate_batch(texts, source_lang, target_lang)
@@ -246,7 +252,9 @@ class MCPLingoTranslator(BaseTranslator):
                 )
             return
 
-        loop.create_task(self.aclose())
+        task = loop.create_task(self.aclose())
+        task.add_done_callback(_CLOSE_TASKS.discard)
+        _CLOSE_TASKS.add(task)
 
 
 def _parse_positive_float_env(name: str, default: float) -> float:
@@ -576,12 +584,12 @@ class TranslationService:
                     for element in page["text_elements"]:
                         # Skip any null entries
                         if element:
-                            element_id: str | None = element.get("id")
+                            text_element_id: str | None = element.get("id")
                             if (
-                                element_id is not None
-                                and element_id in block_map[page_num]
+                                text_element_id is not None
+                                and text_element_id in block_map[page_num]
                             ):
-                                element["text"] = block_map[page_num][element_id]
+                                element["text"] = block_map[page_num][text_element_id]
 
         return translated_content
 

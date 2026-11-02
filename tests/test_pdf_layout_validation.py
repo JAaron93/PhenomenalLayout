@@ -11,7 +11,6 @@ from services.enhanced_document_processor import (
     validate_pdf_layout,
 )
 
-
 # ---------------------------------------------------------------------------
 # validate_pdf_layout
 # ---------------------------------------------------------------------------

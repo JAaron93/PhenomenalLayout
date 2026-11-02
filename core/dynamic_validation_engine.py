@@ -23,6 +23,7 @@ from core.dynamic_programming import (
     DynamicRegistry,
     PerformanceMetrics,
     SmartCache,
+    is_cache_hit,
     memoize,
 )
 from utils.path_safety import resolve_managed_path_or_none
@@ -187,7 +188,7 @@ class ValidatorProtocol(ABC):
 class FileExtensionValidator(ValidatorProtocol):
     """Validates file extensions."""
 
-    def __init__(self, allowed_extensions: set[str] = None):
+    def __init__(self, allowed_extensions: set[str] | None = None):
         self.allowed_extensions = allowed_extensions or {".pdf"}
 
     @property
@@ -441,7 +442,7 @@ class ValidationGraph:
 
         # Use heap-based priority queue for O(n log n) performance
         # Add monotonic tie-breaker counter for deterministic ordering when priorities tie
-        available = []
+        available: list[tuple[int, int, str]] = []
         tie_breaker = 0
         for validator_name, degree in in_degree.items():
             if degree == 0:
@@ -488,7 +489,7 @@ class ValidationGraph:
 
         # For simplicity, return path to first sink
         # In practice, might want to analyze all paths
-        critical_path = []
+        critical_path: list[str] = []
         current = sinks[0]
         visited = set()
 
@@ -516,6 +517,7 @@ class DynamicValidationEngine:
         enable_parallel: bool = False,
         fail_fast: bool = True,
     ):
+        """Configure validation caching and fail-fast behavior."""
         self.cache_size = cache_size
         self.enable_parallel = enable_parallel
         self.fail_fast = fail_fast
@@ -558,7 +560,7 @@ class DynamicValidationEngine:
 
             # Check cache
             cached_results = self.result_cache.get(context.cache_key)
-            if cached_results is not self.result_cache.MISS:
+            if is_cache_hit(cached_results):
                 # SmartCache handles TTL internally
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 self.metrics.record_operation(duration_ms, cache_hit=True)
@@ -599,7 +601,7 @@ class DynamicValidationEngine:
             managed_path = resolve_managed_path_or_none(file_path)
             if managed_path is not None and managed_path.exists():
                 file_size = managed_path.stat().st_size
-            
+
         file_ext = kwargs.pop("file_ext", file_path_obj.suffix.lower() if hasattr(file_path_obj, "suffix") else "")
 
         return ValidationContext(
@@ -616,7 +618,7 @@ class DynamicValidationEngine:
         """Execute validation pipeline with optimized ordering."""
         execution_order = self.graph.get_execution_order()
         results = {}
-        completed = set()
+        completed: set[str] = set()
 
         for validator_name in execution_order:
             validator = self.graph.validators[validator_name]
@@ -763,7 +765,7 @@ class DynamicValidationEngine:
         """Calculate execution levels for potential parallelization."""
         levels = []
         remaining = set(self.graph.validators.keys())
-        completed = set()
+        completed: set[str] = set()
 
         while remaining:
             current_level = []
@@ -864,6 +866,7 @@ class OptimizedFileValidator:
     """Drop-in replacement for FileValidator with dynamic programming optimizations."""
 
     def __init__(self):
+        """Wire the lazy file validator into the dynamic validation engine."""
         validator_class = _get_file_validator()
         if validator_class is None:
             raise RuntimeError("FileValidator could not be imported")
@@ -916,7 +919,10 @@ def get_validation_engine(name: str = "default", **kwargs) -> DynamicValidationE
     """Get a validation engine instance."""
     if name == "default":
         return DynamicValidationEngine(**kwargs)
-    return VALIDATION_ENGINE_REGISTRY.get(name, **kwargs)
+    engine = VALIDATION_ENGINE_REGISTRY.get(name, **kwargs)
+    if engine is None:
+        raise KeyError(f"Validation engine '{name}' is not registered")
+    return engine
 
 
 # Export for backward compatibility

@@ -3,7 +3,7 @@
 import json
 import os
 import tempfile
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -502,7 +502,7 @@ class TestChoiceDatabase:
     def test_cleanup_expired_sessions(self, temp_db):
         """Test cleanup of expired sessions."""
         # Create old session
-        old_time = datetime.now() - timedelta(hours=25)
+        old_time = datetime.now(UTC) - timedelta(hours=25)
         old_session = ChoiceSession(
             session_id="old_session",
             session_name="Old Session",
@@ -580,7 +580,7 @@ class TestChoiceDatabase:
         """Test importing choices from JSON."""
         # Create export data
         export_data = {
-            "export_timestamp": datetime.now().isoformat(),
+            "export_timestamp": datetime.now(UTC).isoformat(),
             "total_choices": 1,
             "choices": [sample_choice.to_dict()],
         }

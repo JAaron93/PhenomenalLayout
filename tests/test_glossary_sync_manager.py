@@ -363,11 +363,11 @@ class TestBookSessionGlossarySync:
         session_key = sync_mgr._session_id_prefix("book-101")
         slot_a = MagicMock()
         slot_a.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-a"
-        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
 
         slot_b = MagicMock()
         slot_b.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-b"
-        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.timezone.utc)
+        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.UTC)
 
         mock_trans.list_glossaries.return_value = [slot_a, slot_b]
 
@@ -400,12 +400,12 @@ class TestBookSessionGlossarySync:
         session_key = sync_mgr._session_id_prefix("book-101")
         slot_a = MagicMock()
         slot_a.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-a"
-        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+        slot_a.submit_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
         slot_a.input_config.gcs_source.input_uri = "gs://user-trans-bucket/glossaries/sessions/old_a.tsv"
 
         slot_b = MagicMock()
         slot_b.name = f"projects/test-project-123/locations/us-central1/glossaries/{session_key}-b"
-        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.timezone.utc)
+        slot_b.submit_time = datetime.datetime(2026, 1, 2, tzinfo=datetime.UTC)
 
         mock_trans.list_glossaries.return_value = [slot_a, slot_b]
 
@@ -503,9 +503,8 @@ class TestGlossaryDeletionAndEdgeCases:
         mock_trans = mock_creds_mgr.get_translation_client.return_value
         mock_trans.get_glossary.side_effect = gcp_exceptions.ServiceUnavailable("Down")
 
-        with patch("time.sleep", return_value=None):
-            with pytest.raises(gcp_exceptions.ServiceUnavailable):
-                sync_mgr.sync_base_glossary("user_1")
+        with patch("time.sleep", return_value=None), pytest.raises(gcp_exceptions.ServiceUnavailable):
+            sync_mgr.sync_base_glossary("user_1")
 
     def test_sanitize_empty_string(self) -> None:
         assert sanitize_glossary_id("") == "glossary"

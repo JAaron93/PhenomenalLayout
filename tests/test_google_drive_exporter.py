@@ -12,9 +12,9 @@ from __future__ import annotations
 import io
 from unittest.mock import MagicMock, patch
 
+import httplib2
 import pytest
 from googleapiclient.errors import HttpError
-import httplib2
 
 from services.google_drive_exporter import DriveExportResult, GoogleDriveExporter
 
@@ -30,7 +30,7 @@ class TestGoogleDriveExporterBDD:
     @patch("services.google_drive_exporter.build")
     @patch("services.google_drive_exporter.Credentials")
     def test_export_stream_to_drive_success_new_folder(
-        self, mock_creds_cls: MagicMock, mock_build: MagicMock, exporter: GoogleDriveExporter
+        self, _mock_creds_cls: MagicMock, mock_build: MagicMock, exporter: GoogleDriveExporter
     ) -> None:
         mock_service = MagicMock()
         mock_build.return_value = mock_service
@@ -70,7 +70,7 @@ class TestGoogleDriveExporterBDD:
     @patch("services.google_drive_exporter.build")
     @patch("services.google_drive_exporter.Credentials")
     def test_export_stream_to_drive_existing_folder(
-        self, mock_creds_cls: MagicMock, mock_build: MagicMock, exporter: GoogleDriveExporter
+        self, _mock_creds_cls: MagicMock, mock_build: MagicMock, exporter: GoogleDriveExporter
     ) -> None:
         mock_service = MagicMock()
         mock_build.return_value = mock_service
@@ -119,7 +119,7 @@ class TestGoogleDriveExporterValidationAndRetry:
     @patch("services.google_drive_exporter.build")
     @patch("services.google_drive_exporter.Credentials")
     def test_retry_on_transient_http_error(
-        self, mock_creds: MagicMock, mock_build: MagicMock, mock_sleep: MagicMock, exporter: GoogleDriveExporter
+        self, _mock_creds: MagicMock, mock_build: MagicMock, mock_sleep: MagicMock, exporter: GoogleDriveExporter
     ) -> None:
         mock_service = MagicMock()
         mock_build.return_value = mock_service

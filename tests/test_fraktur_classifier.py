@@ -15,13 +15,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import build_test_pdf
 from services.fraktur_classifier import (
     FrakturClassifier,
     OCRConfidence,
     ScriptAnalysisResult,
     ScriptType,
 )
+from tests.conftest import build_test_pdf
 
 
 def _create_minimal_pdf(pages_count: int = 1) -> bytes:

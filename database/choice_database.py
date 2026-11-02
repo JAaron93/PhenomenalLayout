@@ -6,7 +6,7 @@ import logging
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -313,7 +313,7 @@ class ChoiceDatabase:
             INSERT OR REPLACE INTO database_metadata (key, value, updated_at)
             VALUES ('schema_version', '1.0', ?)
         """,
-            (datetime.now().isoformat(),),
+            (datetime.now(UTC).isoformat(),),
         )
 
     def _create_indexes(self, conn: sqlite3.Connection) -> None:
@@ -573,8 +573,8 @@ class ChoiceDatabase:
                     (
                         new_count,
                         new_rate,
-                        datetime.now().isoformat(),
-                        datetime.now().isoformat(),
+                        datetime.now(UTC).isoformat(),
+                        datetime.now(UTC).isoformat(),
                         choice_id,
                     ),
                 )
@@ -719,7 +719,7 @@ class ChoiceDatabase:
         """Mark a session as completed."""
         try:
             with self._get_connection() as conn:
-                now = datetime.now().isoformat()
+                now = datetime.now(UTC).isoformat()
                 cursor = conn.execute(
                     """
                     UPDATE choice_sessions
@@ -847,7 +847,7 @@ class ChoiceDatabase:
         """Resolve a conflict."""
         try:
             with self._get_connection() as conn:
-                now = datetime.now().isoformat()
+                now = datetime.now(UTC).isoformat()
                 cursor = conn.execute(
                     """
                     UPDATE choice_conflicts
@@ -982,7 +982,7 @@ class ChoiceDatabase:
     def cleanup_expired_sessions(self, expiry_hours: int = 24) -> int:
         """Clean up expired sessions."""
         try:
-            expiry_time = datetime.now() - timedelta(hours=expiry_hours)
+            expiry_time = datetime.now(UTC) - timedelta(hours=expiry_hours)
             expiry_iso = expiry_time.isoformat()
 
             with self._get_connection() as conn:
@@ -993,7 +993,7 @@ class ChoiceDatabase:
                     SET status = 'expired', updated_at = ?
                     WHERE status = 'active' AND created_at < ?
                 """,
-                    (datetime.now().isoformat(), expiry_iso),
+                    (datetime.now(UTC).isoformat(), expiry_iso),
                 )
 
                 expired_count = cursor.rowcount
@@ -1073,7 +1073,7 @@ class ChoiceDatabase:
                     ]
 
             export_data = {
-                "export_timestamp": datetime.now().isoformat(),
+                "export_timestamp": datetime.now(UTC).isoformat(),
                 "session_id": session_id,
                 "total_choices": len(choices),
                 "choices": [choice.to_dict() for choice in choices],
@@ -1116,7 +1116,7 @@ class ChoiceDatabase:
 
             # Phase 1: Collect and validate all UserChoice objects in memory
             logger.info(f"Starting batch import of {len(choices_data)} choices...")
-            start_time = datetime.now()
+            start_time = datetime.now(UTC)
 
             validated_choices = []
             validation_errors = []
@@ -1146,7 +1146,7 @@ class ChoiceDatabase:
             imported_count = self._bulk_import_choices(validated_choices)
 
             # Log performance metrics
-            end_time = datetime.now()
+            end_time = datetime.now(UTC)
             duration = (end_time - start_time).total_seconds()
 
             logger.info(
@@ -1260,8 +1260,8 @@ class ChoiceDatabase:
             choice_scope=choice_scope,
             confidence_level=confidence_level,
             user_notes=choice_data.get("user_notes", ""),
-            created_at=choice_data.get("created_at", datetime.now().isoformat()),
-            updated_at=choice_data.get("updated_at", datetime.now().isoformat()),
+            created_at=choice_data.get("created_at", datetime.now(UTC).isoformat()),
+            updated_at=choice_data.get("updated_at", datetime.now(UTC).isoformat()),
             last_used_at=choice_data.get("last_used_at"),
             usage_count=usage_count,
             success_rate=success_rate,
@@ -1356,7 +1356,7 @@ class ChoiceDatabase:
         try:
             # Start savepoint transaction for the batch
             conn.execute("SAVEPOINT sp_batch")
-            
+
             # Prepare batch data for user_choices table
             choice_rows = []
             context_rows = []

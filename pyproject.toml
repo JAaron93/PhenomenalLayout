@@ -8,6 +8,7 @@ version = "1.0.0"
 description = "Advanced layout preservation engine for document translation - orchestrating Lingo.dev translation services with Google Cloud Document Translation for pixel-perfect formatting integrity"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
+requires-python = ">=3.12"
 authors = [
     {name = "PhenomenalLayout Development Team"}
 ]
@@ -15,10 +16,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
@@ -97,10 +94,11 @@ select = [
 ignore = [
     "E203",  # whitespace before ':'
     "E501",  # line too long (handled by Black)
+    "B008",  # function-call-in-default-argument: idiomatic FastAPI Depends(...) parameter signature; rewrites to Annotated would churn 30 DI call sites across api/
     "D100",  # Missing docstring in public module
     "D104",  # Missing docstring in public package
 ]
-allowed-confusables = ["ſ", "ﬅ", "ﬆ"]
+allowed-confusables = ["ſ", "ﬅ", "ﬆ", "–", "’", "×"]
 
 # Allow autofix for all enabled rules
 fixable = ["ALL"]
@@ -108,8 +106,13 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore specific rules for test files
-"tests/*" = ["D", "S101"]  # No docstrings required, assert allowed
+"tests/*" = ["D", "S101", "N806"]  # No docstrings required, assert allowed; tests rebind imported class names and set local constants
 "examples/*" = ["D", "E402"]  # No docstrings required, allow path manipulation before imports
+"scripts/test_linting_setup.py" = ["SIM102"]  # Intentionally non-compliant demo file for the linting walkthrough
+
+[tool.ruff.lint.flake8-unused-arguments]
+# *args/**kwargs are signature-parity stubs (mcp fallbacks, __getattr__ dispatch, test placeholder clients)
+ignore-variadic-names = true
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"  # or "numpy" based on project preference

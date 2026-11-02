@@ -4,8 +4,10 @@ import os
 import random
 import secrets
 import threading
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
+from typing import Any
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
@@ -280,14 +282,14 @@ def verify_api_key(api_key: str, config: AuthConfig | None = None) -> bool:
 
 
 async def get_current_user(
-    request: Request,
+    _request: Request,
     api_key: str | None = None,
     credentials: HTTPAuthorizationCredentials | None = None,
-) -> dict:
+) -> Mapping[str, Any]:
     """Get current user from authentication credentials.
 
     Args:
-        request: FastAPI request object
+        _request: FastAPI request object (injected for DI wiring; unused in body)
         api_key: API key from header
         credentials: Bearer token credentials
 
@@ -315,7 +317,7 @@ async def get_current_user(
         }
 
     # Check JWT token using dynamic scheme
-    if bearer_scheme and hasattr(credentials, "credentials"):
+    if bearer_scheme and credentials is not None:
         try:
             payload = verify_jwt_token(credentials.credentials)
             return {
@@ -329,7 +331,7 @@ async def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=str(e),
                 headers={"WWW-Authenticate": "Bearer"},
-            )
+            ) from e
 
     # No valid authentication provided
     raise HTTPException(
@@ -343,7 +345,7 @@ async def get_current_user_optional(
     request: Request,
     api_key: str | None = None,
     credentials: HTTPAuthorizationCredentials | None = None,
-) -> dict | None:
+) -> Mapping[str, Any] | None:
     """Get current user from authentication credentials (optional).
 
     Args:
@@ -428,7 +430,7 @@ async def _extract_credentials(
 
 
 # Authentication dependencies for FastAPI
-async def get_current_user_dependency(request: Request) -> dict:
+async def get_current_user_dependency(request: Request) -> Mapping[str, Any]:
     """FastAPI dependency for getting current user."""
     api_key, credentials = await _extract_credentials(request)
     user = await get_current_user(request, api_key, credentials)
@@ -438,7 +440,7 @@ async def get_current_user_dependency(request: Request) -> dict:
     return user
 
 
-async def get_current_user_optional_dependency(request: Request) -> dict | None:
+async def get_current_user_optional_dependency(request: Request) -> Mapping[str, Any] | None:
     """FastAPI dependency for getting current user (optional)."""
     api_key, credentials = await _extract_credentials(request)
     user = await get_current_user_optional(request, api_key, credentials)

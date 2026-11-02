@@ -1,7 +1,7 @@
 """User Choice Management System for neologism translation decisions."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from database.choice_database import ChoiceDatabase
@@ -23,6 +23,20 @@ from models.user_choice_models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_utc_aware(timestamp: datetime) -> datetime:
+    """Coerce a parsed timestamp to UTC-aware for aware/aware comparisons.
+
+    Sessions created before the UTC timestamp migration carry naive ISO
+    strings (written by ``datetime.now()``). Model/CI hosts run in UTC, so
+    naive values are normalized as UTC — the same convention as
+    ``services/parallel_translation_service.py`` — preventing
+    ``TypeError`` from subtracting/comparing naive and aware datetimes.
+    """
+    if timestamp.tzinfo is None:
+        return timestamp.replace(tzinfo=UTC)
+    return timestamp
 
 
 class UserChoiceManager:
@@ -90,7 +104,7 @@ class UserChoiceManager:
         session = ChoiceSession(
             session_id=session_id,
             session_name=session_name
-            or f"Session {datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            or f"Session {datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
             document_id=document_id,
             document_name=document_name,
             user_id=user_id,
@@ -221,7 +235,7 @@ class UserChoiceManager:
             raise RuntimeError(f"Failed to save choice: {choice_id}")
 
     def get_choice_for_neologism(
-        self, neologism: DetectedNeologism, session_id: str | None = None
+        self, neologism: DetectedNeologism, session_id: str | None = None  # noqa: ARG002  (public API; internal callers pass session_id positionally)
     ) -> UserChoice | None:
         """Get the best matching choice for a detected neologism.
 
@@ -300,7 +314,7 @@ class UserChoiceManager:
             if hasattr(choice, field):
                 setattr(choice, field, value)
 
-        choice.updated_at = datetime.now().isoformat()
+        choice.updated_at = datetime.now(UTC).isoformat()
 
         # Mark as used if requested
         if mark_as_used:
@@ -322,7 +336,7 @@ class UserChoiceManager:
             return []
 
         # Create list including the new choice
-        all_choices = existing_choices + [new_choice]
+        all_choices = [*existing_choices, new_choice]
 
         # Detect conflicts
         conflicts = detect_choice_conflicts(all_choices)
@@ -425,7 +439,7 @@ class UserChoiceManager:
         Returns:
             List of (neologism, suggested_choice) tuples
         """
-        results = []
+        results: list[tuple[DetectedNeologism, UserChoice | None]] = []
 
         for neologism in neologisms:
             suggested_choice = self.get_choice_for_neologism(neologism, session_id)
@@ -467,7 +481,7 @@ class UserChoiceManager:
         Returns:
             Dictionary with applied choices and statistics
         """
-        results = {
+        results: dict[str, Any] = {
             "total_neologisms": len(analysis.detected_neologisms),
             "choices_found": 0,
             "choices_applied": 0,
@@ -627,7 +641,7 @@ class UserChoiceManager:
 
     def validate_data_integrity(self) -> dict[str, Any]:
         """Validate data integrity and return report."""
-        report = {
+        report: dict[str, Any] = {
             "total_issues": 0,
             "orphaned_contexts": 0,
             "missing_choices": 0,
@@ -794,8 +808,12 @@ class UserChoiceManager:
                 # Check 2: Session has inconsistent timestamps
                 if session.completed_at and session.created_at:
                     try:
-                        created = datetime.fromisoformat(session.created_at)
-                        completed = datetime.fromisoformat(session.completed_at)
+                        created = _ensure_utc_aware(
+                            datetime.fromisoformat(session.created_at)
+                        )
+                        completed = _ensure_utc_aware(
+                            datetime.fromisoformat(session.completed_at)
+                        )
                         if completed < created:
                             is_invalid = True
                     except ValueError:
@@ -820,7 +838,7 @@ class UserChoiceManager:
 
             # Get all choices grouped by term
             all_choices = self.db.get_all_choices()
-            term_groups = {}
+            term_groups: dict[str, list[UserChoice]] = {}
 
             # Group choices by term
             for choice in all_choices:
@@ -832,7 +850,7 @@ class UserChoiceManager:
             for term, choices in term_groups.items():
                 if len(choices) > 1:
                     # Check for same context hash
-                    context_hashes = {}
+                    context_hashes: dict[str, list[str]] = {}
                     for choice in choices:
                         context_hash = choice.context.generate_context_hash()
                         if context_hash not in context_hashes:
@@ -856,7 +874,7 @@ class UserChoiceManager:
 
             # Get all choices grouped by term
             all_choices = self.db.get_all_choices()
-            term_groups = {}
+            term_groups: dict[str, list[UserChoice]] = {}
 
             # Group choices by term
             for choice in all_choices:
@@ -893,7 +911,7 @@ class UserChoiceManager:
         """Check for expired sessions that should be cleaned up."""
         try:
             expired_sessions = []
-            current_time = datetime.now()
+            current_time = datetime.now(UTC)
 
             # Get all active sessions
             all_sessions = self.db.get_all_sessions()
@@ -901,7 +919,9 @@ class UserChoiceManager:
             for session in all_sessions:
                 if session.status == SessionStatus.ACTIVE:
                     try:
-                        created_time = datetime.fromisoformat(session.created_at)
+                        created_time = _ensure_utc_aware(
+                            datetime.fromisoformat(session.created_at)
+                        )
                         hours_since_created = (
                             current_time - created_time
                         ).total_seconds() / 3600
@@ -941,7 +961,7 @@ class UserChoiceManager:
         Returns:
             Dictionary with recommendation details
         """
-        recommendation = {
+        recommendation: dict[str, Any] = {
             "term": neologism.term,
             "confidence": neologism.confidence,
             "suggested_action": "review",
@@ -1016,8 +1036,8 @@ class UserChoiceManager:
 # Convenience functions for integration
 
 # NOTE: create_session_for_document has been moved to core.dynamic_choice_engine
-# for API consolidation. Import from there for unified API access:
-#   from core.dynamic_choice_engine import create_session_for_document
+# for API consolidation. Unified API access: import create_session_for_document
+# from core.dynamic_choice_engine.
 
 
 def create_choice_manager(db_path: str = "user_choices.db") -> UserChoiceManager:

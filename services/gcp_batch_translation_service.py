@@ -1,5 +1,5 @@
-"""
-services/gcp_batch_translation_service.py
+"""services/gcp_batch_translation_service.py.
+
 ==========================================
 Track 1 — GCP Batch Translation Migration  (FR-03, FR-10, NFR-01, NFR-02, NFR-07)
 
@@ -58,7 +58,7 @@ _RETRYABLE_GCP_EXCEPTIONS: tuple[type[Exception], ...] = (
 class BatchJobHandle:
     """Lightweight handle returned after a successful batch job submission.
 
-    Attributes
+    Attributes:
     ----------
     operation_name:
         The fully-qualified LRO name returned by GCP, e.g.
@@ -108,7 +108,7 @@ class GCPBatchTranslationService:
     location:
         GCP region for Translation API operations (default ``"us-central1"``).
 
-    Example
+    Example:
     -------
     ::
 
@@ -139,6 +139,7 @@ class GCPBatchTranslationService:
         project_id: str | None = None,
         location: str = "us-central1",
     ) -> None:
+        """Initialize the service with BYOK credentials and location overrides."""
         self._creds_manager = credentials_manager
         self._project_id = project_id
         self._location = location
@@ -163,7 +164,7 @@ class GCPBatchTranslationService:
         user_id:
             The end-user whose BYOK credentials should be used.
 
-        Returns
+        Returns:
         -------
         storage.Client
             An authenticated GCS client scoped to the user's credentials.
@@ -180,7 +181,7 @@ class GCPBatchTranslationService:
         user_id:
             The end-user whose BYOK credentials should be used.
 
-        Returns
+        Returns:
         -------
         translate.TranslationServiceClient
             An authenticated Translation v3 client.
@@ -251,13 +252,13 @@ class GCPBatchTranslationService:
         gcs_destination_uri:
             Target ``gs://bucket/path/to/file.pdf`` URI.
 
-        Returns
+        Returns:
         -------
         str
             The fully-qualified ``gs://…`` URI of the uploaded object, identical
             to *gcs_destination_uri*.
 
-        Raises
+        Raises:
         ------
         ValueError
             If *gcs_destination_uri* is malformed.
@@ -269,17 +270,16 @@ class GCPBatchTranslationService:
         bucket_name, blob_name = self._parse_gcs_uri(gcs_destination_uri)
 
         # Enforce 7-day auto-delete staging lifecycle policy if uploaded to staging prefix
-        if blob_name.startswith("inputs/"):
-            if not self.ensure_staging_lifecycle_policy(
-                user_id=user_id,
-                bucket_name=bucket_name,
-                staging_prefix="inputs/",
-                age_days=7,
-            ):
-                raise RuntimeError(
-                    f"Failed to ensure 7-day auto-delete staging lifecycle policy on bucket '{bucket_name}' "
-                    f"for staging object '{blob_name}'."
-                )
+        if blob_name.startswith("inputs/") and not self.ensure_staging_lifecycle_policy(
+            user_id=user_id,
+            bucket_name=bucket_name,
+            staging_prefix="inputs/",
+            age_days=7,
+        ):
+            raise RuntimeError(
+                f"Failed to ensure 7-day auto-delete staging lifecycle policy on bucket '{bucket_name}' "
+                f"for staging object '{blob_name}'."
+            )
 
         storage_client = self._get_storage_client(user_id)
         bucket = storage_client.bucket(bucket_name)
@@ -344,14 +344,14 @@ class GCPBatchTranslationService:
             Number of days after which matching objects are deleted
             (default ``7``).
 
-        Returns
+        Returns:
         -------
         bool
             ``True`` if the lifecycle policy already existed or was successfully
             applied; ``False`` if an unexpected error prevented the patch
             (callers should treat ``False`` as a non-fatal warning).
 
-        Raises
+        Raises:
         ------
         google.cloud.exceptions.GoogleCloudError
             On unrecoverable GCS errors when fetching or patching the bucket.
@@ -449,30 +449,29 @@ class GCPBatchTranslationService:
             When provided, the glossary is attached to every target-language
             config in the request.
 
-        Returns
+        Returns:
         -------
         str
             The fully-qualified LRO operation name returned by GCP, e.g.
             ``"projects/my-project/locations/us-central1/operations/abc123"``.
 
-        Raises
+        Raises:
         ------
         google.api_core.exceptions.GoogleAPICallError
             If all retry attempts are exhausted or the error is non-retryable.
         """
         # Enforce 7-day auto-delete staging lifecycle policy if input is in staging prefix
         in_bucket, in_blob = self._parse_gcs_uri(gcs_input_uri)
-        if in_blob.startswith("inputs/"):
-            if not self.ensure_staging_lifecycle_policy(
-                user_id=user_id,
-                bucket_name=in_bucket,
-                staging_prefix="inputs/",
-                age_days=7,
-            ):
-                raise RuntimeError(
-                    f"Failed to ensure 7-day auto-delete staging lifecycle policy on bucket '{in_bucket}' "
-                    f"for staging input '{in_blob}'."
-                )
+        if in_blob.startswith("inputs/") and not self.ensure_staging_lifecycle_policy(
+            user_id=user_id,
+            bucket_name=in_bucket,
+            staging_prefix="inputs/",
+            age_days=7,
+        ):
+            raise RuntimeError(
+                f"Failed to ensure 7-day auto-delete staging lifecycle policy on bucket '{in_bucket}' "
+                f"for staging input '{in_blob}'."
+            )
 
         translate_client = self._get_translate_client(user_id)
         project_id = self._get_project_id(user_id)
@@ -561,13 +560,13 @@ class GCPBatchTranslationService:
         gcs_output_uri:
             ``gs://`` URI of the translated PDF object.
 
-        Returns
+        Returns:
         -------
         BinaryIO
             A readable, non-seekable binary stream backed by GCS.  Callers are
             responsible for closing the stream when finished.
 
-        Raises
+        Raises:
         ------
         ValueError
             If *gcs_output_uri* is malformed.
@@ -576,7 +575,7 @@ class GCPBatchTranslationService:
         google.cloud.exceptions.GoogleCloudError
             On other unrecoverable GCS errors.
 
-        Notes
+        Notes:
         -----
         The returned stream is **not** seekable.  If random-access is required
         the caller must buffer the stream themselves.
@@ -594,4 +593,4 @@ class GCPBatchTranslationService:
 
         # blob.open('rb') returns a google.cloud.storage.fileio.BlobReader which
         # satisfies the BinaryIO protocol and reads in lazy chunks from GCS.
-        return blob.open("rb")  # type: ignore[return-value]
+        return blob.open("rb")

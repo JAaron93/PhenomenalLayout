@@ -101,7 +101,7 @@ def test_thread_safety():
         try:
             barrier.wait()
         except threading.BrokenBarrierError as e:
-            raise AssertionError(f"Barrier broken or timed out: {e}")
+            raise AssertionError(f"Barrier broken or timed out: {e}") from e
         for _ in range(ITERATIONS):
             increment_cache_hit()
             increment_cache_miss()

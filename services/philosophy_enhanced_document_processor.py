@@ -8,7 +8,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -245,7 +245,6 @@ class PhilosophyEnhancedDocumentProcessor:
         provider: str = "auto",
         user_id: str | None = None,
         session_id: str | None = None,
-        philosophy_mode: bool = True,
         progress_callback: Callable[[PhilosophyProcessingProgress], None] | None = None,
     ) -> PhilosophyDocumentResult:
         """Process document with comprehensive philosophy-aware translation.
@@ -257,7 +256,6 @@ class PhilosophyEnhancedDocumentProcessor:
             provider: Translation provider to use
             user_id: User ID for session management
             session_id: Existing session ID or None to create new
-            philosophy_mode: Enable philosophy-aware processing features
             progress_callback: Optional progress callback
 
         Returns:
@@ -581,7 +579,7 @@ class PhilosophyEnhancedDocumentProcessor:
             ],
             "total_neologisms_detected": neologism_results["total_neologisms"],
             "total_choices_applied": choice_results["total_choices_applied"],
-            "processing_timestamp": datetime.now().isoformat(),
+            "processing_timestamp": datetime.now(UTC).isoformat(),
         }
 
         progress.reconstruction_progress = 100

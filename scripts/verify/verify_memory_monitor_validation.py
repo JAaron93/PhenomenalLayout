@@ -15,11 +15,11 @@ from utils.memory_monitor import MemoryMonitor, start_memory_monitoring
 
 def expect_value_error(description: str, func: Callable[[], Any]) -> bool:
     """Helper function to test if a callable raises ValueError with appropriate error handling.
-    
+
     Args:
         description: Description of the test case
         func: Zero-argument callable to test
-        
+
     Returns:
         True if ValueError was raised and handled correctly, False otherwise
     """

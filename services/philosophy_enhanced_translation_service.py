@@ -13,7 +13,7 @@ import time
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, TypeVar
+from typing import Any
 
 from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceManager
 from models.neologism_models import DetectedNeologism, NeologismAnalysis
@@ -23,8 +23,6 @@ from .neologism_detector import NeologismDetector
 from .translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
-
-_T = TypeVar("_T")
 
 
 @functools.cache
@@ -50,10 +48,8 @@ def _shutdown_executor(executor: concurrent.futures.ThreadPoolExecutor) -> None:
     executor.shutdown(wait=True)
 
 
-def _run_coro_sync(coro: Coroutine[Any, Any, _T]) -> _T:
-    """Run a coroutine synchronously, handling both cases with and without a
-    running loop.
-    
+def _run_coro_sync[T](coro: Coroutine[Any, Any, T]) -> T:
+    """Run a coroutine synchronously with or without a running event loop.
 
     Note: When running the coroutine on a different thread, this creates a
     fresh event loop and will not propagate contextvars/task-local state.
@@ -349,8 +345,6 @@ class PhilosophyEnhancedTranslationService:
             final_translation = await self._restore_preserved_neologisms_async(
                 translated_text,
                 preservation_data,
-                progress,
-                progress_callback,
             )
 
             # Update statistics
@@ -382,13 +376,15 @@ class PhilosophyEnhancedTranslationService:
                 raise
             # Otherwise, fallback to regular translation (handle sync/async translator)
             try:
-                maybe_coro = self.translation_service.translate_text(
+                # Tests may inject a MagicMock translator whose translate_text
+                # returns a non-awaitable; keep the sync fallback reachable.
+                maybe_coro: Any = self.translation_service.translate_text(
                     text, source_lang, target_lang, provider
                 )
                 if asyncio.iscoroutine(maybe_coro):
                     fallback_translation = await maybe_coro
                 else:
-                    fallback_translation = maybe_coro  # type: ignore[assignment]
+                    fallback_translation = maybe_coro
             except Exception:
                 fallback_translation = text
 
@@ -533,13 +529,15 @@ class PhilosophyEnhancedTranslationService:
 
         # Step 2: Perform batch translation (supports sync/async providers)
         try:
-            maybe_coro = self.translation_service.translate_batch(
+            # Tests may inject a MagicMock translator; keep the sync fallback
+            # reachable via Any.
+            maybe_coro: Any = self.translation_service.translate_batch(
                 modified_texts, source_lang, target_lang, provider
             )
             if asyncio.iscoroutine(maybe_coro):
                 translated_texts = await maybe_coro
             else:
-                translated_texts = maybe_coro  # type: ignore[assignment]
+                translated_texts = maybe_coro
         except Exception as e:  # pragma: no cover - defensive
             logger.error(f"Batch translation failed: {e}")
             translated_texts = modified_texts
@@ -552,8 +550,6 @@ class PhilosophyEnhancedTranslationService:
             restored = await self._restore_preserved_neologisms_async(
                 translated,
                 preservation_data,
-                progress,
-                progress_callback,
             )
             results.append(
                 NeologismPreservationResult(
@@ -682,20 +678,9 @@ class PhilosophyEnhancedTranslationService:
             else:
                 return text, None
 
-        elif choice.choice_type == ChoiceType.CONTEXT_DEPENDENT:
-            # Apply context-dependent logic
-            if choice.translation_result:
-                marker = self._create_preservation_marker(choice.translation_result)
-                modified_text = self._replace_term_with_marker(text, neologism, marker)
-                return modified_text, marker
-            else:
-                # Default to preserve
-                marker = self._create_preservation_marker(neologism.term)
-                modified_text = self._replace_term_with_marker(text, neologism, marker)
-                return modified_text, marker
-
         else:
-            # Default behavior
+            # Default behavior (ChoiceType has no CONTEXT_DEPENDENT member;
+            # evaluating that reference previously crashed on SKIP choices)
             return text, None
 
     def _create_preservation_marker(self, term: str) -> str:
@@ -769,14 +754,16 @@ class PhilosophyEnhancedTranslationService:
         | None = None,
     ) -> str:
         """Translate text with preserved markers."""
-        # Use the existing translation service (supports sync/async)
-        maybe_coro = self.translation_service.translate_text(
+        # Use the existing translation service (supports sync/async).
+        # Tests may inject a MagicMock translator; keep the sync fallback
+        # reachable via Any.
+        maybe_coro: Any = self.translation_service.translate_text(
             text, source_lang, target_lang, provider
         )
         if asyncio.iscoroutine(maybe_coro):
             translated_text = await maybe_coro
         else:
-            translated_text = maybe_coro  # type: ignore[assignment]
+            translated_text = maybe_coro
 
         # Update progress
         progress.translation_progress = 100
@@ -789,9 +776,6 @@ class PhilosophyEnhancedTranslationService:
         self,
         translated_text: str,
         preservation_data: PreservationData,
-        progress: PhilosophyTranslationProgress,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None]
-        | None = None,
     ) -> str:
         """Restore preserved neologisms in translated text."""
         restored_text = translated_text
@@ -879,8 +863,6 @@ class PhilosophyEnhancedTranslationService:
                     restored_text = await self._restore_preserved_neologisms_async(
                         translated_text,
                         preservation_data,
-                        progress,
-                        progress_callback,
                     )
 
                     # Update block with translation
@@ -929,13 +911,21 @@ class PhilosophyEnhancedTranslationService:
             logger.error(f"Error in document translation with neologism handling: {e}")
             # Fallback to regular document translation
             # Fallback (support sync/async)
-            maybe_coro = self.translation_service.translate_document(
-                content, source_lang, target_lang, provider, progress_callback
+            def _doc_progress(percent: int) -> None:
+                """Adapt document progress (int percent) to philosophy progress."""
+                progress.translation_progress = percent
+                if progress_callback is not None:
+                    progress_callback(progress)
+
+            # Tests may inject a MagicMock translator whose translate_document
+            # returns a non-awaitable; keep the sync fallback reachable.
+            maybe_coro: Any = self.translation_service.translate_document(
+                content, source_lang, target_lang, provider, _doc_progress
             )
             if asyncio.iscoroutine(maybe_coro):
                 fallback_result = await maybe_coro
             else:
-                fallback_result = maybe_coro  # type: ignore[assignment]
+                fallback_result = maybe_coro
 
             return {
                 "translated_content": fallback_result,
@@ -1018,8 +1008,9 @@ class PhilosophyEnhancedTranslationService:
     def get_available_providers(self) -> list[str]:
         """Get list of available translation providers."""
         try:
-            prov = self.translation_service.get_available_providers()  # type: ignore[attr-defined]
-            # Some tests inject MagicMocks; coerce to sensible default
+            # Tests may inject MagicMocks whose attribute access is not a
+            # list; keep the coercion branch reachable via Any.
+            prov: Any = self.translation_service.get_available_providers()
             if not isinstance(prov, list):
                 return ["lingo"]
             return prov

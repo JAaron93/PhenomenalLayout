@@ -58,9 +58,8 @@ def setup_test_client_with_env(test_env):
         finally:
             # Clean up any new modules imported during the test
             for module in list(sys.modules.keys()):
-                if module.startswith("api.") or module == "app":
-                    if module not in saved_modules:
-                        del sys.modules[module]
+                if (module.startswith("api.") or module == "app") and module not in saved_modules:
+                    del sys.modules[module]
             # Restore saved modules
             sys.modules.update(saved_modules)
 
@@ -98,7 +97,7 @@ def test_endpoints_with_auth(test_env, expected_status):
     )
     print(f"\n=== Test: Direct import with auth {auth_state} ===")
 
-    with setup_test_client_with_env(test_env) as (client, enable_auth):
+    with setup_test_client_with_env(test_env) as (client, _enable_auth):
         # Test the endpoint
         response = client.get("/api/v1/memory/stats")
         print(f"\nGET /api/v1/memory/stats response: {response.status_code}")

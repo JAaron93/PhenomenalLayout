@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Test auth dependencies directly."""
 
-import importlib
 import sys
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
@@ -41,10 +40,13 @@ def auth_module():
         import api.auth
         import app
 
-        importlib.reload(api.auth)
-        importlib.reload(app)
+        # No importlib.reload: it would re-bind api.auth/app function
+        # objects away from anything previously imported (e.g. the router's
+        # captured auth dependency), desyncing dependency_overrides keys.
+        # AuthConfig reads MEMORY_API_* from the live environment at call
+        # time, so the patched dict alone is honored.
 
-        # Yield the needed components from the reloaded module
+        # Yield the needed components from the module
         yield (
             api.auth.AuthConfig,
             api.auth.UserRole,
@@ -58,7 +60,7 @@ def auth_module():
     else:
         # Remove so next import loads with actual environment
         sys.modules.pop('api.auth', None)
-        
+
     if original_app_module is not None:
         sys.modules['app'] = original_app_module
     else:
@@ -69,7 +71,7 @@ def auth_module():
 def test_auth_direct(auth_module):
     """Test auth dependencies directly."""
     AuthConfig, UserRole, create_jwt_token, create_app = auth_module
-    
+
     # Create app with test configuration
     client = TestClient(create_app(TEST_CONFIG))
 
@@ -157,7 +159,7 @@ def test_auth_malformed_jwt(auth_module):
 
 def test_auth_expired_token(auth_module):
     """Test that expired JWT returns 401."""
-    AuthConfig, UserRole, create_jwt_token, create_app = auth_module
+    AuthConfig, UserRole, _create_jwt_token, create_app = auth_module
     client = TestClient(create_app(TEST_CONFIG))
     auth_config = AuthConfig(TEST_CONFIG)
 

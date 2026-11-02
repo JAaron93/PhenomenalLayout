@@ -34,10 +34,6 @@ def validate_pdf_layout(layout: dict[str, Any], expected_page_count: int) -> boo
     Returns:
         bool: True if layout is valid, False otherwise
     """
-    if not isinstance(layout, dict):
-        logger.warning("PDF layout must be a dictionary")
-        return False
-
     if "pages" not in layout:
         logger.warning("PDF layout missing 'pages' key")
         return False
@@ -74,7 +70,7 @@ def _get_pdf_page_count(pdf_path: str) -> int | None:
     skip any page-count-based validation.
     """
     try:
-        import pypdf  # type: ignore[import-untyped]
+        import pypdf
 
         reader = pypdf.PdfReader(pdf_path)
         return len(reader.pages)
@@ -203,7 +199,7 @@ class EnhancedDocumentProcessor:
     def create_translated_document(
         self,
         original_content: dict[str, Any],
-        translated_texts: dict[int, list[str]],
+        translated_texts: dict[str, list[str]] | dict[int, list[str]],
         output_filename: str,
     ) -> str:
         """Create translated document preserving original formatting."""

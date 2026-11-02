@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 from collections.abc import Sequence
@@ -15,7 +16,8 @@ except Exception:  # pragma: no cover - optional dependency not present in tests
     ClientSession = object  # type: ignore
     StdioServerParameters = object  # type: ignore
 
-    def stdio_client(*args, **kwargs):  # type: ignore
+    def stdio_client(*args, **kwargs):
+        """Fallback stub for stdio_client when the optional mcp package is unavailable."""
         raise RuntimeError("mcp package is not installed")
 
     class _DummyTypes:  # Minimal stand-ins for typing/instance checks
@@ -93,8 +95,9 @@ class McpLingoConfig:
 
 
 class McpLingoClient:
-    """Thin wrapper that launches the Lingo.dev MCP server via stdio and exposes
-    convenience methods to call its translation tool.
+    """Thin wrapper that launches the Lingo.dev MCP server via stdio.
+
+    Exposes convenience methods to call its translation tool.
 
     Usage:
         client = McpLingoClient(McpLingoConfig(api_key=...))
@@ -104,9 +107,10 @@ class McpLingoClient:
     """
 
     def __init__(self, config: McpLingoConfig):
+        """Initialize the client with its configuration."""
         self._config = config
-        self._stdio_ctx: asyncio.AbstractAsyncContextManager | None = None
-        self._session_ctx: asyncio.AbstractAsyncContextManager | None = None
+        self._stdio_ctx: contextlib.AbstractAsyncContextManager[Any] | None = None
+        self._session_ctx: contextlib.AbstractAsyncContextManager[Any] | None = None
         self._session: ClientSession | None = None
         self._tool_name: str | None = None
         self._tool_schema: dict[str, Any] | None = None
@@ -117,6 +121,7 @@ class McpLingoClient:
         return self._config
 
     async def start(self) -> None:
+        """Start the MCP server session and cache the session and tool name."""
         if self._session is not None:
             return
 
@@ -272,6 +277,7 @@ class McpLingoClient:
     async def translate_text(
         self, text: str, source_lang: str, target_lang: str
     ) -> str:
+        """Translate a single text via the MCP tool, retrying transient errors."""
         if not text:
             return ""
         # Try a few times in case of transient server errors
@@ -291,6 +297,7 @@ class McpLingoClient:
     async def translate_batch(
         self, texts: Sequence[str], source_lang: str, target_lang: str
     ) -> list[str]:
+        """Translate a batch of texts, using the batch tool when supported."""
         if not texts:
             return []
         # Call once if tool supports batch; otherwise call per-item
@@ -330,7 +337,7 @@ class McpLingoClient:
         """
         if not lang:
             return None
-        l = lang.strip().lower()
+        code = lang.strip().lower()
         # Common language-name to code mapping
         name_map = {
             "english": "en",
@@ -349,17 +356,17 @@ class McpLingoClient:
             "chinese": "zh",
             "中文": "zh",
         }
-        if l in name_map:
-            return name_map[l]
+        if code in name_map:
+            return name_map[code]
         # Normalize underscore to hyphen and casing like en-us -> en-US
-        l = l.replace("_", "-")
-        parts = l.split("-")
+        code = code.replace("_", "-")
+        parts = code.split("-")
         if len(parts) == 2 and len(parts[0]) == 2 and len(parts[1]) == 2:
             return f"{parts[0]}-{parts[1].upper()}"
         # Fallback: use two-letter code if available
-        if len(l) >= 2:
-            return l[:2]
-        return l
+        if len(code) >= 2:
+            return code[:2]
+        return code
 
     def _filter_args_by_schema(self, args: dict[str, Any]) -> dict[str, Any]:
         """Filter a payload to only include keys declared in the tool schema.
@@ -394,7 +401,6 @@ class McpLingoClient:
 
         Behavior:
         - Determines single vs batch mode (based on provided payloads)
-        - Normalizes list provided via `text` into `texts` for batch mode
         - Uses current set of supported key synonyms for payload and language fields
         - Drops None values and deduplicates by key+type signature to reduce retries
 
@@ -427,16 +433,7 @@ class McpLingoClient:
           maintain backward compatibility.
         """
         # Determine mode
-        mode = (
-            "batch"
-            if (texts and len(texts) > 0) or isinstance(text, list)
-            else "single"
-        )
-
-        # Normalize list provided as `text` for batch mode
-        if mode == "batch" and not texts and isinstance(text, list):
-            texts = list(text)
-            text = None
+        mode = "batch" if (texts and len(texts) > 0) else "single"
 
         # Define templates using existing synonyms (preserve current ones)
         single_shapes_templates: list[dict[str, object]] = [
@@ -470,32 +467,32 @@ class McpLingoClient:
             attempt: dict[str, object] = dict(tpl)
             # Fill payload
             if "text" in attempt:
-                attempt["text"] = text  # type: ignore[assignment]
+                attempt["text"] = text
             if "texts" in attempt:
-                attempt["texts"] = texts  # type: ignore[assignment]
+                attempt["texts"] = texts
             if "inputs" in attempt:
-                attempt["inputs"] = texts  # type: ignore[assignment]
+                attempt["inputs"] = texts
             # Fill languages
             if "targetLocale" in attempt:
-                attempt["targetLocale"] = target  # type: ignore[assignment]
+                attempt["targetLocale"] = target
             if "sourceLocale" in attempt:
-                attempt["sourceLocale"] = source  # type: ignore[assignment]
+                attempt["sourceLocale"] = source
             if "target_lang" in attempt:
-                attempt["target_lang"] = target  # type: ignore[assignment]
+                attempt["target_lang"] = target
             if "source_lang" in attempt:
-                attempt["source_lang"] = source  # type: ignore[assignment]
+                attempt["source_lang"] = source
             if "target" in attempt:
-                attempt["target"] = target  # type: ignore[assignment]
+                attempt["target"] = target
             if "source" in attempt:
-                attempt["source"] = source  # type: ignore[assignment]
+                attempt["source"] = source
             if "to" in attempt:
-                attempt["to"] = target  # type: ignore[assignment]
+                attempt["to"] = target
             if "from" in attempt:
-                attempt["from"] = source  # type: ignore[assignment]
+                attempt["from"] = source
             if "targetLanguage" in attempt:
-                attempt["targetLanguage"] = target  # type: ignore[assignment]
+                attempt["targetLanguage"] = target
             if "sourceLanguage" in attempt:
-                attempt["sourceLanguage"] = source  # type: ignore[assignment]
+                attempt["sourceLanguage"] = source
 
             # Drop None values
             attempt = _drop_none(attempt)
@@ -634,7 +631,7 @@ class McpLingoClient:
             try:
                 filtered = self._filter_args_by_schema(args)
                 # Structured logging for observability
-                try:
+                with contextlib.suppress(Exception):
                     logger.info(
                         "mcp_translate_attempt",
                         extra={
@@ -645,13 +642,11 @@ class McpLingoClient:
                             "keys": sorted(filtered.keys()),
                         },
                     )
-                except Exception:
-                    pass
                 call = self._session.call_tool(self._tool_name, arguments=filtered)
                 result = await asyncio.wait_for(
                     call, timeout=self._config.call_timeout_s
                 )
-                try:
+                with contextlib.suppress(Exception):
                     logger.info(
                         "mcp_translate_success",
                         extra={
@@ -662,13 +657,11 @@ class McpLingoClient:
                             "keys": sorted(filtered.keys()),
                         },
                     )
-                except Exception:
-                    pass
                 return result
             except Exception as e:
                 errors.append(e)
                 last_err = e
-                try:
+                with contextlib.suppress(Exception):
                     logger.warning(
                         "mcp_translate_failure",
                         extra={
@@ -680,8 +673,6 @@ class McpLingoClient:
                             "error": str(e),
                         },
                     )
-                except Exception:
-                    pass
                 continue
         # If we get here, all attempts failed
         attempted_key_sets = []

@@ -1,5 +1,5 @@
-"""
-services/google_drive_exporter.py
+"""services/google_drive_exporter.py.
+
 ==================================
 TASK-1.6 — FR-09, FR-10, NFR-03, NFR-07, NFR-09
 
@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from typing import BinaryIO
 
 from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.discovery import Resource, build
+from googleapiclient.http import HttpRequest, MediaIoBaseUpload
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 class DriveExportResult:
     """Immutable result returned after a successful Drive export.
 
-    Attributes
+    Attributes:
     ----------
     file_id:
         The opaque Drive file identifier assigned by the API.
@@ -113,7 +113,7 @@ class GoogleDriveExporter:
     retries on transient HTTP status codes (429, 500, 503) up to
     :data:`MAX_RETRIES` times with exponential backoff and full jitter.
 
-    Example
+    Example:
     -------
     ::
 
@@ -167,12 +167,12 @@ class GoogleDriveExporter:
             Name of the destination Drive folder.  Created if absent.
             Defaults to ``"PhenomenalLayout Translations"``.
 
-        Returns
+        Returns:
         -------
         DriveExportResult
             Metadata about the newly created Drive file.
 
-        Raises
+        Raises:
         ------
         googleapiclient.errors.HttpError
             Re-raised after all retry attempts are exhausted for
@@ -235,7 +235,7 @@ class GoogleDriveExporter:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_authenticated_service(self, access_token: str) -> object:
+    def _get_authenticated_service(self, access_token: str) -> Resource:
         """Build and return a Drive v3 service resource.
 
         The service is constructed from a :class:`google.oauth2.credentials.Credentials`
@@ -248,7 +248,7 @@ class GoogleDriveExporter:
         access_token:
             Short-lived GIS OAuth bearer token.  **Never** logged.
 
-        Returns
+        Returns:
         -------
         googleapiclient.discovery.Resource
             Authenticated Drive v3 service resource.
@@ -266,7 +266,7 @@ class GoogleDriveExporter:
 
     def _resolve_or_create_folder(
         self,
-        service: object,  # googleapiclient.discovery.Resource
+        service: Resource,
         folder_name: str,
     ) -> str:
         """Return the Drive ID of *folder_name*, creating it if absent.
@@ -282,7 +282,7 @@ class GoogleDriveExporter:
         folder_name:
             Human-readable folder name to look up or create.
 
-        Returns
+        Returns:
         -------
         str
             The Drive folder ID.
@@ -298,7 +298,7 @@ class GoogleDriveExporter:
         logger.debug("Searching Drive for folder: '%s'.", folder_name)
 
         list_response: dict[str, object] = self._call_with_backoff(
-            service.files().list(  # type: ignore[attr-defined]
+            service.files().list(
                 q=query,
                 fields="files(id,name)",
                 pageSize=1,
@@ -319,7 +319,7 @@ class GoogleDriveExporter:
         # Folder not found — create it.
         logger.info("Drive folder '%s' not found; creating it.", folder_name)
         create_response: dict[str, object] = self._call_with_backoff(
-            service.files().create(  # type: ignore[attr-defined]
+            service.files().create(
                 body={
                     "name": folder_name,
                     "mimeType": _DRIVE_FOLDER_MIME,
@@ -336,7 +336,7 @@ class GoogleDriveExporter:
         return new_folder_id
 
     @staticmethod
-    def _call_with_backoff(request: object) -> dict[str, object]:
+    def _call_with_backoff(request: HttpRequest) -> dict[str, object]:
         """Execute a Drive API *request* with exponential backoff.
 
         Delegates to :func:`utils.gcp_helpers.retry_gcp_call`.
@@ -344,7 +344,7 @@ class GoogleDriveExporter:
         from utils.gcp_helpers import retry_gcp_call
 
         def _do_execute() -> dict[str, object]:
-            return request.execute()  # type: ignore[union-attr]
+            return request.execute()
 
         return retry_gcp_call(
             _do_execute,

@@ -23,9 +23,9 @@ def test_endpoint_debugging():
     }
 
     with patch.dict("os.environ", test_env):
-        from app import create_app
         # Import api.auth before create_app() to ensure same module ref
         import api.auth
+        from app import create_app
 
         with TestClient(create_app()) as client:
             assert not api.auth.is_auth_enabled(), (
