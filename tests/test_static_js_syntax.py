@@ -5,6 +5,12 @@ extraction diagnostics for any ``static/*.js`` file that fails to parse
 (e.g. ``Invalid left-hand side in assignment`` from an optional-chain
 assignment). Orphaned modules are never fetched by a browser, so the
 error is invisible at runtime — this gate pins it at test time.
+
+Every asset is an ES module, so the gate checks them through
+``node --input-type=module --check`` (stdin) instead of file mode —
+file mode depends on the host Node's module auto-detection defaults
+(``--check`` assumed CommonJS before ``detect-module``), while the
+stdin form is deterministic on any Node that ships the flags.
 """
 
 from __future__ import annotations
@@ -19,14 +25,18 @@ _STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 
 
 def test_all_static_js_modules_parse() -> None:
-    """Every static/*.js asset must pass Node's syntax check."""
+    """Every static/*.js asset must parse as an ES module via Node's syntax check."""
+    if shutil.which("node") is None:
+        pytest.skip("node not installed; parse-integrity gate not enforceable on this host")
+
     js_files = sorted(_STATIC_DIR.rglob("*.js"))
     assert js_files, "static/ must exist with ES-module assets"
 
     failures: list[str] = []
     for js_file in js_files:
         proc = subprocess.run(
-            ["node", "--check", str(js_file)],
+            ["node", "--input-type=module", "--check"],
+            input=js_file.read_text(encoding="utf-8"),
             capture_output=True,
             text=True,
             check=False,
@@ -42,9 +52,3 @@ def test_all_static_js_modules_parse() -> None:
     assert (
         not failures
     ), "Unparseable static JS assets (skipped by CodeQL extraction): " + "; ".join(failures)
-
-
-def test_parse_gate_requires_node_or_skips_cleanly() -> None:
-    """Document the skip contract when node is unavailable."""
-    if shutil.which("node") is None:
-        pytest.skip("node not installed; parse-integrity gate not enforceable on this host")
