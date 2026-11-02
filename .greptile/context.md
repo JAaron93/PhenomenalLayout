@@ -6,7 +6,7 @@ PhenomenalLayout translates full-length philosophical treatises (e.g. Ludwig Kla
 ## 2. Technical Stack & Deployment
 * **Deployment & Hosting**: Serverless on **Modal Labs** (`modal>=0.60.0`, `modal_app.py` deployment specification under `TASK-5.3`) with automatic scale-to-zero when idle, operating within Modal's $30/mo free compute tier.
 * **Storage Invariant (Zero Host Storage)**: Modal backend stores **zero book PDFs**. The source and translated PDFs reside strictly in the **user's GCS bucket** (`gs://<user_bucket>/`) or personal **Google Drive**. Modal Volume (`modal.Volume.from_name("phenomenal-user-data")`) mounted at `/data` is reserved strictly for lightweight user metadata, neologism dictionaries, and session recovery handles ($\le 5\text{MB}$).
-* **Language & Runtime**: Python 3.11 / 3.12, FastAPI, Gradio UI.
+* **Language & Runtime**: Python 3.12+ (3.13 in CI; `requires-python = ">=3.12"` — ADR 0003), FastAPI, bespoke zero-build vanilla ES modules SPA (`static/`; Gradio retired under ADR 0002).
 * **Translation & Document Engine**: Google Cloud Translation API v3 (`google-cloud-translate>=3.15.0`).
   - `batchTranslateDocument`: Primary default asynchronous pipeline using Google Cloud Storage (`google-cloud-storage>=2.14.0`).
   - `translateDocument`: Secondary synchronous pipeline for rapid 1–3 page sample previews.

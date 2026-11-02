@@ -293,7 +293,7 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 ### Requirements
 
 - Python 3.12 or 3.13 supported (3.13 recommended; enforced via `requires-python = ">=3.12"` in `pyproject.toml`).
-- Core libs are pinned in `requirements.txt` (e.g., `fastapi==0.143.0`, `starlette==1.6.0`, `pypdf==6.21.3`, `google-cloud-translate==3.28.0`, `google-cloud-storage==3.17.0`).
+- Core libs are pinned in `requirements.txt` (e.g., `fastapi==0.162.0`, `starlette==1.10.0`, `pypdf==6.21.4`, `google-cloud-translate==3.28.0`, `google-cloud-storage==3.17.1`).
 - Poppler & OCR runtimes: Retired under ADR 0002. OCR and document layout parsing are outsourced directly to Google Cloud Document Translation Advanced v3.
 - Client/Server: `fastapi`, `uvicorn`, `httpx`, `starlette>=1.0.0`
 - UI: Bespoke zero-build vanilla ES modules single-page application served directly from `static/`

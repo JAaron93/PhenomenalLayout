@@ -23,13 +23,13 @@ This project uses pinned dev tooling and automation to keep CI stable and reprod
 - Pytest is configured in `pytest.ini`:
   - `asyncio_mode = auto` for `pytest-asyncio>=1.4` on pytest 9.x.
   - Markers: `slow`, `load`. Run only non-slow and non-load tests with `pytest -q -m "not slow and not load"`.
-  - Coverage gates ($\ge 85\%$) are applied by default; set `FOCUSED=1` to disable locally for focused test runs.
+  - Coverage gate is applied by default at $\ge 70\%$ (pytest.ini `--cov-fail-under=70`); set `FOCUSED=1` to disable locally for focused test runs.
 - Ruff and mypy live in `pyproject.toml` under `[tool.ruff]` and `[tool.mypy]` so local and CI share rules.
 - Runtime deps: `requirements.txt` (compiled from `requirements.in`). Dev-only pins: `requirements-dev.txt`.
 
 ## Development environment
 
-Prerequisite: Python 3.11 or 3.12 (match CI). Verify with: `python3 --version`
+Prerequisite: Python 3.12 or later (3.13 recommended — matches CI). The floor is `requires-python = ">=3.12"` in `pyproject.toml`; PEP 695 generic syntax is required and Python 3.11 is not importable (see [ADR 0003](docs/adr/0003-python-312-floor-and-runtime-dependency-refresh.md)). Verify with: `python3 --version`
 
 ```bash
 python3 -m venv .venv
@@ -44,7 +44,7 @@ python -m pip install -r requirements.txt -r requirements-dev.txt
 
 ### Manual Quality Checks
 
-Run the complete multi-track GCP migration test suite (235 tests across Tracks 1–4):
+Run the complete multi-track GCP migration test suite (Tracks 1–4; file list below is authoritative):
 
 ```bash
 pytest -o addopts="" tests/test_dry_helpers.py tests/test_gcp_settings.py \
