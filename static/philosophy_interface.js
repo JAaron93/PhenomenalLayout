@@ -446,9 +446,12 @@ class PhilosophyInterface {
         this.updateProgressBar('choice-progress', choicesMade, totalNeologisms);
 
         // Update statistics
-        document.getElementById('total-neologisms')?.textContent = totalNeologisms;
-        document.getElementById('choices-made')?.textContent = choicesMade;
-        document.getElementById('remaining-choices')?.textContent = totalNeologisms - choicesMade;
+        const totalEl = document.getElementById('total-neologisms');
+        const choicesEl = document.getElementById('choices-made');
+        const remainingEl = document.getElementById('remaining-choices');
+        if (totalEl) totalEl.textContent = totalNeologisms;
+        if (choicesEl) choicesEl.textContent = choicesMade;
+        if (remainingEl) remainingEl.textContent = totalNeologisms - choicesMade;
 
         // Update overall progress
         const overallProgress = totalNeologisms > 0 ? (choicesMade / totalNeologisms) * 100 : 0;
