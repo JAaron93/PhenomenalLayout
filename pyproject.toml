@@ -8,6 +8,7 @@ version = "1.0.0"
 description = "Advanced layout preservation engine for document translation - orchestrating Lingo.dev translation services with Google Cloud Document Translation for pixel-perfect formatting integrity"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
+requires-python = ">=3.12"
 authors = [
     {name = "PhenomenalLayout Development Team"}
 ]
@@ -15,10 +16,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
