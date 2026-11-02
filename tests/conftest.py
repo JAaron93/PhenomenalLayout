@@ -2,6 +2,7 @@ import io
 import logging
 import os
 from collections.abc import Iterator
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -213,6 +214,77 @@ def pytest_configure(config: pytest.Config) -> None:
     # addopts
     if os.getenv("FOCUSED"):
         config.option.quiet = max(getattr(config.option, "quiet", 0), 1)
+
+
+@pytest.fixture(autouse=True)
+def _os_environ_quarantine() -> Iterator[None]:
+    """Restore test-time os.environ residue after every test (ordering invariant).
+
+    Several fixtures patch the environment with values OTHER than the
+    conftest-canonical seeds (e.g. alternate JWT secrets / API keys). When a
+    ``patch.dict`` or manual restore fails to unwind — or unwinds in an
+    unexpected order relative to module re-imports — the patched values leak
+    into the worker process and every later default-config verification
+    reads the leaked value, producing order-dependent 401 "Invalid token"
+    failures in serial runs that never manifest under xdist scheduling.
+    Snapshotting the environment around each test makes the residue
+    invisible to every subsequent test regardless of fixture behavior,
+    execution order, or xdist scheduling.
+
+    pytest-internal bookkeeping keys (``PYTEST_CURRENT_TEST``) are excluded:
+    pytest itself sets and removes them around each test.
+    """
+    _pytest_internal_prefix = "PYTEST_"
+    snapshot = dict(os.environ)
+    yield
+    # Restore values for keys present in the snapshot when they changed.
+    for key, value in snapshot.items():
+        if key.startswith(_pytest_internal_prefix):
+            continue
+        if os.environ.get(key) != value:
+            os.environ[key] = value
+    # Remove keys a test added without restoring.
+    for key in list(os.environ):
+        if key not in snapshot and not key.startswith(_pytest_internal_prefix):
+            del os.environ[key]
+
+
+@pytest.fixture(autouse=True)
+def _auth_config_cache_reset():
+    """Keep AuthConfig's once-cached secrets test-scoped (ordering invariant).
+
+    AuthConfig caches jwt_secret/api_key on first read (double-checked
+    locking), so whichever test first touches ``_default_config`` while an
+    env patch or fixture is active freezes that value for every later test
+    in the process. A test running with alternate secrets (e.g. a JWT
+    secret other than the conftest-canonical ``test-secret-key``) then
+    poisons default-config verification for all subsequent tests,
+    producing order-dependent 401 "Invalid token" failures in serial CI
+    runs that never manifest under xdist scheduling. Clearing the caches
+    around each test makes every test re-read the live environment (which
+    ``pytest_configure`` seeds with canonical values), keeping sign/verify
+    pairs consistent regardless of execution order.
+
+    Note: identity-safe — reloads are NOT used here (they would re-bind
+    the function objects api.routes' router already captured); only the
+    instance's cached secret attributes are cleared.
+    """
+
+    def _clear() -> None:
+        config = _default_auth_config()
+        config._jwt_secret = None
+        config._api_key = None
+
+    _clear()
+    yield
+    _clear()
+
+
+def _default_auth_config() -> Any:
+    """Import api.auth lazily and return the global AuthConfig instance."""
+    import api.auth
+
+    return api.auth._default_config
 
 
 @pytest.fixture(scope="module")

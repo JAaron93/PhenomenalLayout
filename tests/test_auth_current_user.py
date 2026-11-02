@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Test get_current_user function directly."""
 
-import importlib
 import sys
 from unittest.mock import patch
 
@@ -27,12 +26,15 @@ def auth_module():
     original_module = sys.modules.get('api.auth')
 
     with patch.dict('os.environ', test_env):
-        # Import and reload auth module to pick up patched environment
+        # Import auth module to expose it against the patched environment
         import api.auth
 
-        importlib.reload(api.auth)
+        # No importlib.reload: it would re-bind api.auth's function objects,
+        # desyncing from anything previously captured via Depends(); and
+        # AuthConfig reads MEMORY_API_* from the live environment at call
+        # time, so the patched dict alone is honored.
 
-        # Yield the needed components from the reloaded module
+        # Yield the needed components from the module
         yield (
             api.auth.create_jwt_token,
             api.auth.get_current_user,

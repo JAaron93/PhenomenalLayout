@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Simple test to verify fixture is working."""
 
-import importlib
 import logging
 import sys
 from unittest.mock import patch
@@ -26,11 +25,15 @@ def test_client():
     original_app = sys.modules.get('app')
 
     with patch.dict('os.environ', test_env):
-        import api.auth
         import app
-        importlib.reload(api.auth)
-        importlib.reload(app)
 
+        # No importlib.reload here: reload re-executes api/auth.py in place
+        # and re-binds get_current_user_dependency — desyncing it from the
+        # object api.routes' router already captured via Depends() at import
+        # time, which silently kills later app.dependency_overrides on /byok
+        # routes (tests/test_app_routes.py). AuthConfig re-reads MEMORY_API_*
+        # from the live environment at call time, so this patched dict alone
+        # is honored without a reload.
         client = TestClient(app.create_app())
         logger.debug("Created test client for testing")
         yield client

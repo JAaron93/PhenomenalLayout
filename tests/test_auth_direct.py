@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Test auth dependencies directly."""
 
-import importlib
 import sys
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
@@ -41,10 +40,13 @@ def auth_module():
         import api.auth
         import app
 
-        importlib.reload(api.auth)
-        importlib.reload(app)
+        # No importlib.reload: it would re-bind api.auth/app function
+        # objects away from anything previously imported (e.g. the router's
+        # captured auth dependency), desyncing dependency_overrides keys.
+        # AuthConfig reads MEMORY_API_* from the live environment at call
+        # time, so the patched dict alone is honored.
 
-        # Yield the needed components from the reloaded module
+        # Yield the needed components from the module
         yield (
             api.auth.AuthConfig,
             api.auth.UserRole,
