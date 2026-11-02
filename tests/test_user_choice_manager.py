@@ -14,7 +14,12 @@ from models.neologism_models import (
     NeologismType,
     PhilosophicalContext,
 )
-from models.user_choice_models import ChoiceScope, ChoiceType, SessionStatus
+from models.user_choice_models import (
+    ChoiceScope,
+    ChoiceSession,
+    ChoiceType,
+    SessionStatus,
+)
 from services.user_choice_manager import (
     UserChoiceManager,
     create_choice_manager,
@@ -709,6 +714,99 @@ class TestErrorHandling:
         assert choice is not None
         assert choice.neologism_term == "test"
         assert choice.translation_result == "test-translation"
+
+
+class TestLegacyNaiveTimestampSessions:
+    """Regression tests for sessions persisted before the UTC migration.
+
+    Pre-migration rows carry naive ISO timestamps (written by
+    ``datetime.now()``); the comparison sites in ``_check_expired_sessions``
+    and ``_check_invalid_sessions`` previously raised ``TypeError`` when
+    mixing them with ``datetime.now(UTC)``, silently expiring active
+    sessions and emptying the integrity report.
+    """
+
+    @staticmethod
+    def _legacy_naive_iso() -> str:
+        """Return the naive ISO string format written by the old default."""
+        return datetime.now(UTC).replace(tzinfo=None).isoformat()
+
+    def test_legacy_naive_created_active_session_not_expired(self, temp_manager):
+        """Test that legacy naive timestamps on fresh ACTIVE sessions do not
+        trigger the "invalid timestamp = expired" fallback."""
+        legacy_session = ChoiceSession(
+            session_id="legacy-naive-fresh",
+            session_name="Legacy Active Session",
+            document_name="legacy.pdf",
+            created_at=self._legacy_naive_iso(),
+            updated_at=self._legacy_naive_iso(),
+        )
+        assert temp_manager.db.save_session(legacy_session)
+
+        expired = temp_manager._check_expired_sessions()
+        assert "legacy-naive-fresh" not in expired
+
+    def test_old_aware_session_still_expires(self, temp_manager):
+        """Test that genuinely old aware timestamps are still expired."""
+        old_session = ChoiceSession(
+            session_id="aware-stale-active",
+            session_name="Stale Aware Session",
+            document_name="stale.pdf",
+            created_at=(datetime.now(UTC) - timedelta(hours=25)).isoformat(),
+            updated_at=(datetime.now(UTC) - timedelta(hours=25)).isoformat(),
+        )
+        assert temp_manager.db.save_session(old_session)
+
+        expired = temp_manager._check_expired_sessions()
+        assert "aware-stale-active" in expired
+
+    def test_invalid_sessions_not_emptied_by_mixed_timestamps(
+        self, temp_manager, sample_neologism
+    ):
+        """Test that a legacy-naive created_at with an aware completed_at on
+        one session does not abort the whole invalid-session check."""
+        # Session A: realistic legacy flow — session created pre-migration
+        # (naive created_at), then choices recorded and the session completed
+        # post-migration (aware completed_at).
+        mixed_session = temp_manager.create_session(
+            session_name="Legacy Mixed Formats", document_name="mixed.pdf"
+        )
+        temp_manager.make_choice(
+            neologism=sample_neologism,
+            choice_type=ChoiceType.TRANSLATE,
+            translation_result="being-there",
+            session_id=mixed_session.session_id,
+        )
+        persisted = temp_manager.db.get_session(mixed_session.session_id)
+        assert persisted is not None
+
+        legacy_created = (
+            datetime.now(UTC) - timedelta(seconds=5)
+        ).replace(tzinfo=None)
+        persisted.created_at = legacy_created.isoformat()
+        persisted.updated_at = legacy_created.isoformat()
+        persisted.complete_session()  # post-migration: aware completed_at
+        assert temp_manager.db.save_session(persisted)
+
+        # Session B: control that IS invalid (completed before created).
+        now_aware = datetime.now(UTC)
+        control_session = ChoiceSession(
+            session_id="control-reversed-order",
+            session_name="Reversed Timestamps",
+            document_name="control.pdf",
+            status=SessionStatus.COMPLETED,
+            created_at=(now_aware - timedelta(minutes=5)).isoformat(),
+            updated_at=(now_aware - timedelta(minutes=10)).isoformat(),
+            completed_at=(now_aware - timedelta(minutes=10)).isoformat(),
+        )
+        assert temp_manager.db.save_session(control_session)
+
+        invalid = temp_manager._check_invalid_sessions()
+
+        # B still invalidated by the check itself
+        assert "control-reversed-order" in invalid
+        # and the mixed-format session (valid, with choices) is not flagged
+        assert mixed_session.session_id not in invalid
 
 
 if __name__ == "__main__":

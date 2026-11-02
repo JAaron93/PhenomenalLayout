@@ -25,6 +25,20 @@ from models.user_choice_models import (
 logger = logging.getLogger(__name__)
 
 
+def _ensure_utc_aware(timestamp: datetime) -> datetime:
+    """Coerce a parsed timestamp to UTC-aware for aware/aware comparisons.
+
+    Sessions created before the UTC timestamp migration carry naive ISO
+    strings (written by ``datetime.now()``). Model/CI hosts run in UTC, so
+    naive values are normalized as UTC — the same convention as
+    ``services/parallel_translation_service.py`` — preventing
+    ``TypeError`` from subtracting/comparing naive and aware datetimes.
+    """
+    if timestamp.tzinfo is None:
+        return timestamp.replace(tzinfo=UTC)
+    return timestamp
+
+
 class UserChoiceManager:
     """Main service for managing user translation choices."""
 
@@ -794,8 +808,12 @@ class UserChoiceManager:
                 # Check 2: Session has inconsistent timestamps
                 if session.completed_at and session.created_at:
                     try:
-                        created = datetime.fromisoformat(session.created_at)
-                        completed = datetime.fromisoformat(session.completed_at)
+                        created = _ensure_utc_aware(
+                            datetime.fromisoformat(session.created_at)
+                        )
+                        completed = _ensure_utc_aware(
+                            datetime.fromisoformat(session.completed_at)
+                        )
                         if completed < created:
                             is_invalid = True
                     except ValueError:
@@ -901,7 +919,9 @@ class UserChoiceManager:
             for session in all_sessions:
                 if session.status == SessionStatus.ACTIVE:
                     try:
-                        created_time = datetime.fromisoformat(session.created_at)
+                        created_time = _ensure_utc_aware(
+                            datetime.fromisoformat(session.created_at)
+                        )
                         hours_since_created = (
                             current_time - created_time
                         ).total_seconds() / 3600
