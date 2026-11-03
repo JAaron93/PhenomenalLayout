@@ -9,7 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from core.dynamic_programming import _normalize_value  # noqa: E402  (sys.path bootstrap above)
 
 
-class TestEnum(Enum):
+class SampleEnum(Enum):
     VALUE1 = 1
     VALUE2 = 2
 
@@ -17,11 +17,11 @@ class TestEnum(Enum):
 class TestEnumHash:
     def test_enum_instances_are_hashable(self):
         """Verify that Enum instances can be used as dictionary keys."""
-        hash_value = hash(TestEnum.VALUE1)
+        hash_value = hash(SampleEnum.VALUE1)
         assert isinstance(hash_value, int)
 
     def test_normalize_value_handles_enum(self):
         """Verify _normalize_value correctly processes Enum members."""
-        result = _normalize_value(TestEnum.VALUE1)
+        result = _normalize_value(SampleEnum.VALUE1)
         # Add appropriate assertion based on expected behavior
         assert result is not None  # Replace with actual expected value

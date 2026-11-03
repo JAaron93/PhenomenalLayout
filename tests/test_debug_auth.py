@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +12,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-@pytest.mark.forked
 def test_endpoint_debugging():
     """Test that endpoints are accessible when authentication is disabled."""
     test_env = {
@@ -60,5 +58,5 @@ def test_endpoint_debugging():
             )
 
 
-# Note: This test must be run via pytest to ensure proper @pytest.mark.forked behavior
-# and avoid module-state leakage. Run with: pytest tests/test_debug_auth.py -v
+# Note: This test patches the environment and imports app.create_app directly,
+# so run it via pytest to avoid module-state leakage: pytest tests/test_debug_auth.py -v
