@@ -4,6 +4,11 @@ This module implements the fundamental dynamic programming infrastructure
 to replace static if-else conditional chains with data-driven decision systems.
 It provides generic registry patterns, factory systems, and caching mechanisms
 that can be used across the codebase for performance optimization.
+
+Retired under ADR 0001 / Track 4: the wider dynamic-layout engine was deleted,
+but these core caching, registry, and metric utilities remain live internal
+dependencies (language, validation, choice, and middleware engines) and are
+not intended for new external consumers.
 """
 
 from __future__ import annotations
@@ -14,22 +19,12 @@ import hashlib
 import heapq
 import threading
 import time
-import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, ClassVar, TypeGuard, TypeVar
-
-# Retired under ADR 0001 / Track 4; notice emitted after the import block so the
-# module keeps all imports at the top.
-warnings.warn(
-    "core.dynamic_programming has been retired and deprecated under ADR 0001 / Track 4. "
-    "Core caching and metric utilities are retained for backward compatibility.",
-    DeprecationWarning,
-    stacklevel=2,
-)
 
 
 def _normalize_value(value: Any) -> Hashable:

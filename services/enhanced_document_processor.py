@@ -1,23 +1,22 @@
-"""Enhanced PDF document processor (PDF-only)."""
+"""Enhanced PDF document processor (PDF-only).
+
+Retired under ADR 0001 / Track 4 and superseded by
+``services.gcp_batch_translation_service.GCPBatchTranslationService``;
+retained only for live internal consumers
+(``services.philosophy_enhanced_document_processor``) and not intended
+for new external use.
+"""
 
 from __future__ import annotations
 
 import logging
 import os
 import time
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from utils.path_safety import resolve_managed_path
-
-warnings.warn(
-    "services.enhanced_document_processor is deprecated and retired under ADR 0001 / Track 4. "
-    "Use services.gcp_batch_translation_service.GCPBatchTranslationService instead.",
-    DeprecationWarning,
-    stacklevel=2,
-)
 
 # Layout preservation is handled natively by Google Cloud Document Translation.
 
