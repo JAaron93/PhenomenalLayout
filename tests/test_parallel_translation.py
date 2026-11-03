@@ -8,6 +8,8 @@ rate limiting, error handling, and performance improvements.
 import asyncio
 import os
 import time
+import tomllib
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -19,7 +21,20 @@ from services.parallel_translation_service import (
     ParallelTranslationService,
     RateLimiter,
     TranslationTask,
+    _get_version,
 )
+
+
+class TestGetVersion:
+    """The version helper must resolve the live package version."""
+
+    def test_get_version_matches_pyproject(self):
+        """_get_version() must return the pyproject [project] version, not a stale default."""
+        pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+        with pyproject.open("rb") as f:
+            expected = tomllib.load(f)["project"]["version"]
+
+        assert _get_version() == expected
 
 
 class TestRateLimiter:

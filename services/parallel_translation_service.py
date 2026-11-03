@@ -35,31 +35,29 @@ logger = logging.getLogger(__name__)
 
 
 def _get_version() -> str:
-    """Get version from pyproject.toml or fallback to default."""
+    """Resolve the package version for the parallel-translation user agent.
+
+    Resolution order: installed package metadata (importlib.metadata), then
+    pyproject.toml ``[project].version`` for source checkouts, then the
+    ``APP_VERSION`` environment variable, then a static default.
+    """
     try:
-        # Try to get version from pyproject.toml
-        import toml
+        from importlib.metadata import version
 
-        project_root = Path(__file__).parent.parent
-        pyproject_path = project_root / "pyproject.toml"
-
-        if pyproject_path.exists():
-            with open(pyproject_path, encoding="utf-8") as f:
-                pyproject_data = toml.load(f)
-                version = (
-                    pyproject_data.get("tool", {}).get("poetry", {}).get("version")
-                )
-                if version:
-                    return version
-    except (ImportError, Exception):
+        return version("PhenomenalLayout")
+    except Exception:
         pass
 
     try:
-        # Fallback to pkg_resources
-        import pkg_resources
+        import tomllib
 
-        return pkg_resources.get_distribution("PhenomenalLayout").version
-    except (ImportError, Exception):
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        if pyproject_path.exists():
+            with pyproject_path.open("rb") as f:
+                project_version = tomllib.load(f).get("project", {}).get("version")
+            if project_version:
+                return str(project_version)
+    except Exception:
         pass
 
     # Final fallback to environment variable or default
