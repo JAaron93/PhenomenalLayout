@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 # Shared test configuration for all auth tests
 TEST_CONFIG = {
     "MEMORY_API_ENABLE_AUTH": "true",
-    "MEMORY_API_JWT_SECRET": "test-secret-key",
+    "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
     "MEMORY_API_KEY": "test-admin-key"
 }
 
@@ -27,7 +27,7 @@ def auth_module():
     """
     test_env = {
         "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
         "MEMORY_API_KEY": "test-admin-key"
     }
 

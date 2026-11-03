@@ -202,10 +202,10 @@ def pytest_configure(config: pytest.Config) -> None:
     # Set DEBUG=True for tests to enable auto-generated SECRET_KEY
     os.environ.setdefault("DEBUG", "true")
     # Provide a deterministic SECRET_KEY for tests to ensure consistency across workers
-    os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only!")
+    os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only-please-rotate")
     # Set memory API security environment variables
     os.environ.setdefault("MEMORY_API_ENABLE_AUTH", "true")
-    os.environ.setdefault("MEMORY_API_JWT_SECRET", "test-secret-key")
+    os.environ.setdefault("MEMORY_API_JWT_SECRET", "test-secret-key-for-memory-api-hs256-auth-tests")
     os.environ.setdefault("MEMORY_API_KEY", "test-admin-key")
     # Set mock Lingo API key to ensure safe collection for legacy translation services
     os.environ.setdefault("LINGO_API_KEY", "mock_lingo_api_key_for_tests")
@@ -296,7 +296,7 @@ def test_client():
     """
     test_env = {
         "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
         "MEMORY_API_KEY": "test-admin-key",
         "MEMORY_API_READ_RATE_LIMIT": "100",
         "MEMORY_API_WRITE_RATE_LIMIT": "100",

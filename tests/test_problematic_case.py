@@ -12,7 +12,7 @@ def test_problematic_case_fixed(
 
     test_env = {
         "MEMORY_API_ENABLE_AUTH": auth_enabled,
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
         "MEMORY_API_KEY": "test-admin-key",
         "MEMORY_API_READ_RATE_LIMIT": "100",
         "MEMORY_API_WRITE_RATE_LIMIT": "100",
