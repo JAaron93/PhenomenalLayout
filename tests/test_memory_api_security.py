@@ -30,7 +30,7 @@ def auth_module():
     """
     test_env = {
         "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
         "MEMORY_API_KEY": "test-admin-key"
     }
 
@@ -265,7 +265,7 @@ def test_authentication_disabled():
     # Set environment to disable auth, but also provide required secret to avoid error on reload
     with patch.dict(os.environ, {
         "MEMORY_API_ENABLE_AUTH": "false",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
         "MEMORY_API_KEY": "test-admin-key"
     }):
         # Reload the module to pick up new environment variable
@@ -291,7 +291,7 @@ def test_authentication_disabled():
     # Restore auth module to original state with proper environment variables
     with patch.dict(os.environ, {
         "MEMORY_API_ENABLE_AUTH": "true",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
         "MEMORY_API_KEY": "test-admin-key"
     }):
         sys.modules[api.auth.__name__] = api.auth

@@ -49,12 +49,15 @@ def _ensure_required_dirs() -> list[str]:
 # Create directories early
 _created_early: list[str] = _ensure_required_dirs()
 
-# Configure logging (logs/ exists now)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("logs/app.log"), logging.StreamHandler()],
-)
+# Configure logging (logs/ exists now). Skip when the root logger already has
+# handlers (e.g. pytest capture): basicConfig would no-op after eagerly opening
+# logs/app.log, orphaning the file handle and triggering ResourceWarning.
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler("logs/app.log"), logging.StreamHandler()],
+    )
 logger = logging.getLogger(__name__)
 
 # Report any directories created prior to logger setup to keep visibility

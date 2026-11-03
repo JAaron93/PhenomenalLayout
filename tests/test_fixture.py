@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 def test_reload_fixture(reload_app_with_env):
     test_env = {
         "MEMORY_API_ENABLE_AUTH": "false",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
         "MEMORY_API_KEY": "test-admin-key",
         "MEMORY_API_READ_RATE_LIMIT": "100",
         "MEMORY_API_WRITE_RATE_LIMIT": "100",

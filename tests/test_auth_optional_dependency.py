@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def _auth_env(monkeypatch):
     """Provide authentication environment variables for tests."""
-    monkeypatch.setenv("MEMORY_API_JWT_SECRET", "test-secret-key-for-testing")
+    monkeypatch.setenv("MEMORY_API_JWT_SECRET", "test-secret-key-for-memory-api-hs256-auth-tests")
     monkeypatch.setenv("MEMORY_API_KEY", "test-admin-key-for-testing")
     monkeypatch.setenv("MEMORY_API_ENABLE_AUTH", "true")
 

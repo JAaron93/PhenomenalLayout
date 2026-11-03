@@ -222,7 +222,7 @@ def test_memory_endpoints_no_auth(reload_app_with_env, auth_enabled):
     # Set environment for the desired auth mode
     test_env = {
         "MEMORY_API_ENABLE_AUTH": auth_enabled,
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
         "MEMORY_API_KEY": TEST_ADMIN_API_KEY,
         "MEMORY_API_READ_RATE_LIMIT": "100",
         "MEMORY_API_WRITE_RATE_LIMIT": "100",
@@ -272,7 +272,7 @@ def test_rate_limiting_headers(reload_app_with_env, rate_limiting):
     test_env = {
         "MEMORY_API_ENABLE_RATE_LIMITING": rate_limiting,
         "MEMORY_API_ENABLE_AUTH": "false",
-        "MEMORY_API_JWT_SECRET": "test-secret-key",
+        "MEMORY_API_JWT_SECRET": "test-secret-key-for-memory-api-hs256-auth-tests",
         "MEMORY_API_KEY": TEST_ADMIN_API_KEY,
         "MEMORY_API_READ_RATE_LIMIT": "100"  # Set explicit value to distinguish from default
     }

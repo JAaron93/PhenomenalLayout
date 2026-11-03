@@ -32,7 +32,7 @@ def poorly_formatted_function(arg1, arg2, _arg3=None):  # _arg3 unused to test A
 
 
 # Test class with various issues
-class TestClass:
+class LintProbeClass:
     """Class docstring."""
 
     def __init__(self, value):
