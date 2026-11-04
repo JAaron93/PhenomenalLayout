@@ -26,12 +26,15 @@ from core.dynamic_validation_engine import (
 )
 from core.state_manager import state, translation_jobs
 from services.enhanced_document_processor import EnhancedDocumentProcessor
+from services.gcp_sync_translation_service import (
+    GcpSyncCredentialsRequiredError,
+    GcpSyncTranslationService,
+)
 from services.neologism_detector import NeologismDetector
 from services.philosophy_enhanced_translation_service import (
     NeologismPreservationResult,
     PhilosophyEnhancedTranslationService,
 )
-from services.translation_service import TranslationService
 from utils.file_handler import FileHandler
 from utils.language_utils import extract_text_sample_for_language_detection
 from utils.path_safety import resolve_managed_path
@@ -39,12 +42,14 @@ from utils.path_safety import resolve_managed_path
 
 class ProcessFileUploadResult(TypedDict):
     """Structured result for file upload processing."""
+
     preview: str
     status: str
     detected_language: str
     preprocessing_info: str
     processing_details: str
     success: bool
+
 
 # PDF preprocessing constants
 PDF_PREPROCESSING_DPI: int = (
@@ -59,18 +64,19 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 # Initialize services
 settings: Settings = Settings()
-translation_service: TranslationService = TranslationService()
 document_processor: EnhancedDocumentProcessor = EnhancedDocumentProcessor(
     dpi=getattr(settings, "PDF_DPI", 300),
     preserve_images=getattr(settings, "PRESERVE_IMAGES", True),
 )
 
-# Initialize philosophy-enhanced services
+# Initialize philosophy-enhanced services. The module-level philosophy
+# singleton carries NO credentials (ADR 0004 D2): its engine is the unbound
+# fail-closed stub, and real translations wrap a user-bound engine obtained
+# via :func:`build_philosophy_service` + ``translation_service.translator_for_user``.
 neologism_detector: NeologismDetector = NeologismDetector()
 user_choice_manager: UserChoiceManager = UserChoiceManager()
 philosophy_translation_service: PhilosophyEnhancedTranslationService = (
     PhilosophyEnhancedTranslationService(
-        translation_service=translation_service,
         neologism_detector=neologism_detector,
         user_choice_manager=user_choice_manager,
     )
@@ -78,6 +84,106 @@ philosophy_translation_service: PhilosophyEnhancedTranslationService = (
 
 language_detector: LanguageDetector = LanguageDetector()
 file_handler: FileHandler = FileHandler()
+
+# --------------------------------------------------------------------------
+# GCP sync translation facade (ADR 0004 Track B / T-2.2)
+# --------------------------------------------------------------------------
+#
+# The historical eager ``TranslationService()`` singleton is replaced by a
+# NON-TRANSLATING statistics/config facade (:class:`GcpSyncTranslationService`)
+# built lazily around the SHARED BYOK vault owned by
+# ``api.routes.get_byok_credentials_manager`` — never a second manager, so
+# credentials stored through ``/byok/*`` are visible to the content tier.
+
+_translation_facade: GcpSyncTranslationService | None = None
+
+
+def get_translation_facade() -> GcpSyncTranslationService:
+    """Return the singleton GCP-sync translation facade (shared BYOK vault).
+
+    The ``api`` import is deferred to first call — routes imports this module
+    eagerly, so an import-time vault lookup would deadlock mid-import.
+
+    Returns:
+        The :class:`GcpSyncTranslationService` facade over the shared vault.
+    """
+    global _translation_facade
+    if _translation_facade is None:
+        from api.routes import get_byok_credentials_manager
+
+        _translation_facade = GcpSyncTranslationService(get_byok_credentials_manager())
+    return _translation_facade
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve module attributes lazily (PEP 562).
+
+    ``translation_service`` keeps its historical name for compatibility
+    (``app.py`` shutdown hook, test patch points) and materializes as the
+    non-translating GCP-sync facade on first access.
+
+    Args:
+        name: Requested module attribute name.
+
+    Returns:
+        The lazily materialized attribute value.
+
+    Raises:
+        AttributeError: For any name other than ``translation_service``.
+    """
+    if name == "translation_service":
+        facade: GcpSyncTranslationService = get_translation_facade()
+        globals()["translation_service"] = facade
+        return facade
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def build_philosophy_service(
+    translator: Any, session_terminology: dict[str, str] | None = None
+) -> PhilosophyEnhancedTranslationService:
+    """Wrap a user-bound engine in a request-scoped philosophy service.
+
+    Shares module-level singletons for neologism detection and user-choice
+    management; only the engine binding is per-request (ADR 0004 D4).
+
+    Args:
+        translator: The user-bound :class:`GcpSyncTranslator`.
+        session_terminology: Optional terminology map override forwarded to
+            the service constructor context.
+
+    Returns:
+        The request-scoped philosophy-enhanced service.
+    """
+    _ = session_terminology  # philosophy layer handles its own terminology
+    service = PhilosophyEnhancedTranslationService(
+        translation_service=translator,
+        neologism_detector=neologism_detector,
+        user_choice_manager=user_choice_manager,
+    )
+    # Mirror the module singleton's tuning so per-request wrappers behave
+    # identically. Tolerant of injected test doubles lacking the config
+    # surface (update_configuration/values) — only real GCP binding is
+    # fail-closed; configuration mirroring is best-effort.
+    try:
+        defaults: dict[str, Any] = {
+            "preserve_neologisms_by_default": (
+                philosophy_translation_service.preserve_neologisms_by_default
+            ),
+            "neologism_confidence_threshold": (
+                philosophy_translation_service.neologism_confidence_threshold
+            ),
+            "chunk_size": philosophy_translation_service.chunk_size,
+        }
+        if hasattr(service, "update_configuration"):
+            service.update_configuration(**defaults)
+    except AttributeError:
+        logger.debug(
+            "Request philosophy service lacks configuration surface; "
+            "using constructor defaults."
+        )
+    return service
+
+
 file_validator: FileValidator = FileValidator()
 
 # Type aliases for better readability
@@ -122,6 +228,7 @@ class TranslationStatusResult:
         if index == 4:
             return self.output_file
         raise IndexError("TranslationStatusResult index out of range")
+
 
 def extract_file_info(file: FileObject) -> tuple[str, str, int]:
     """Extract file information from various Gradio file formats.
@@ -224,9 +331,7 @@ async def process_file_upload(file: Any) -> ProcessFileUploadResult:
         )
 
         # Extract content with advanced processing
-        content: ContentDict = await document_processor.extract_content(
-            file_path
-        )
+        content: ContentDict = await document_processor.extract_content(file_path)
         state.current_content = content
 
         # Generate preview
@@ -234,9 +339,7 @@ async def process_file_upload(file: Any) -> ProcessFileUploadResult:
 
         # Detect language using the centralized utility function
         sample_text: str = extract_text_sample_for_language_detection(content)
-        detected_lang: str = language_detector.detect_language_from_text(
-            sample_text
-        )
+        detected_lang: str = language_detector.detect_language_from_text(sample_text)
         state.source_language = detected_lang
 
         # Store processing info
@@ -347,7 +450,7 @@ async def start_translation(
             logger.warning(f"Failed to convert max_pages to int: {e}, using default 0")
             state.max_pages = 0
 
-        # Create session for philosophy mode
+            # Create session for philosophy mode
             session = user_choice_manager.create_session(
                 session_name=(
                     f"Philosophy Translation {datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
@@ -422,6 +525,8 @@ async def translate_content(
     progress_callback: ProgressCallback | None = None,
     philosophy_mode: bool = False,
     session_id: str | None = None,
+    user_id: str | None = None,
+    translator: Any | None = None,
 ) -> tuple[TranslatedPageDict, str]:
     """Core translation function that handles text extraction and translation.
 
@@ -433,9 +538,18 @@ async def translate_content(
         progress_callback: Optional callback function for progress updates
         philosophy_mode: Whether to use philosophy-enhanced translation
         session_id: Optional session ID for philosophy mode
+        user_id: Owner of the BYOK credentials the engine must use. Without
+            ``translator`` a translation cannot start (fail closed).
+        translator: Optional user-bound engine (``GcpSyncTranslator``)
+            resolved at submission time; task closures never re-resolve
+            identity (ADR 0004 D4).
 
     Returns:
         Tuple of (translated_by_page dict, output_filename)
+
+    Raises:
+        GcpSyncCredentialsRequiredError: If no bound engine or user identity
+            is available, or the engine reports unusable credentials.
     """
     try:
         # Extract text for translation based on content type
@@ -472,14 +586,44 @@ async def translate_content(
 
             # Choose translation service based on mode
             if philosophy_mode and session_id:
+                # Philosophy path: wrap a user-bound engine in a request-scoped
+                # philosophy service when identity is available; without any
+                # binding the module-level (unbound-stub) singleton stays the
+                # test patch point and fails closed on real calls.
+                service: PhilosophyEnhancedTranslationService = (
+                    philosophy_translation_service
+                )
+                if translator is not None:
+                    engine: Any = translator
+                    service = build_philosophy_service(engine)
+                elif user_id:
+                    # Narrowed to str here: the facade resolves the bound
+                    # engine or fails closed (unknown user → typed error).
+                    service = build_philosophy_service(
+                        get_translation_facade().translator_for_user(user_id)
+                    )
                 # Use philosophy-enhanced translation with bounded concurrency via helper
                 translated_texts: list[str] = await _translate_page_texts_concurrently(
                     page_texts=page_texts,
                     source_language=source_language,
                     target_language=target_language,
                     session_id=session_id,
+                    service=service,
                 )
             else:
+                # Non-philosophy path: strictly credential-bound batch engine.
+                engine_any: Any = (
+                    translator
+                    if translator is not None
+                    else (
+                        get_translation_facade().translator_for_user(user_id)
+                        if user_id
+                        else None
+                    )
+                )
+                if engine_any is None:
+                    raise GcpSyncCredentialsRequiredError(user_id or "<unbound>")
+
                 # Batch translate text elements for efficiency
                 batch_size: int = 20
                 pending_translated: list[str | None] = [None] * len(page_texts)
@@ -496,11 +640,13 @@ async def translate_content(
                     batch_texts: list[str] = [page_texts[idx] for idx in batch_indices]
 
                     try:
-                        batch_translated: list[
-                            str
-                        ] = await translation_service.translate_batch(
+                        batch_translated: list[str] = await engine_any.translate_batch(
                             batch_texts, source_language, target_language
                         )
+                    except GcpSyncCredentialsRequiredError:
+                        # Fail closed: never mask unusable credentials with
+                        # silent fallback text (ADR 0004 D3).
+                        raise
                     except Exception as e:
                         logger.warning(
                             f"Batch translation failed for page {page_num} "
@@ -548,10 +694,13 @@ async def _translate_page_texts_concurrently(
     source_language: str,
     target_language: str,
     session_id: str,
+    service: PhilosophyEnhancedTranslationService | None = None,
 ) -> list[str]:
     """Translate page texts concurrently with bounded concurrency and safe fallbacks.
 
     - Respects settings.TRANSLATION_CONCURRENCY_LIMIT (fallback 8)
+    - Uses the request-scoped philosophy *service* when provided; the
+      module-level singleton stays the fallback/test patch point
     - Skips empty/whitespace-only texts without calling the service
     - Preserves original ordering
     - Returns the original text on per-item failure, but propagates cancellation
@@ -574,9 +723,11 @@ async def _translate_page_texts_concurrently(
             raise asyncio.CancelledError()
         try:
             async with sem:
-                service = philosophy_translation_service
-                result: NeologismPreservationResult | dict[str, str] = await (
-                    service.translate_text_with_neologism_handling_async(
+                active_service = (
+                    service if service is not None else philosophy_translation_service
+                )
+                result: NeologismPreservationResult | dict[str, str] = (
+                    await active_service.translate_text_with_neologism_handling_async(
                         text=text,
                         source_lang=source_language,
                         target_lang=target_language,
@@ -593,6 +744,11 @@ async def _translate_page_texts_concurrently(
         except asyncio.CancelledError:
             # propagate cancellation immediately
             raise
+        except GcpSyncCredentialsRequiredError:
+            # Fail closed: unusable credentials must never degrade the
+            # philosophy path into source-text output (ADR 0004 D3 — mirror
+            # the non-philosophy batch branch).
+            raise
         except Exception:
             # Minimal, non-sensitive logging, then fallback
             logger.exception(
@@ -607,8 +763,14 @@ async def _translate_page_texts_concurrently(
     ]
     try:
         results: list[tuple[int, str]] = await asyncio.gather(*tasks)
-    except asyncio.CancelledError:
-        # Explicitly cancel child tasks to release references quickly
+    except BaseException:
+        # gather abandons its remaining children on first failure: sibling
+        # pages parked on the semaphore would keep starting detection and
+        # translation work after the caller has already failed — and each
+        # such late failure would surface as an unretrieved task exception.
+        # Structured cleanup covers the explicit CancelledError sentinel
+        # path and the new fail-closed credential path (ADR 0004 D3) alike:
+        # cancel every child, drain it, then re-raise.
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -736,9 +898,7 @@ def get_translation_status() -> TranslationStatusResult:
         )
     elif state.translation_status == "completed":
         return TranslationStatusResult(
-            message=(
-                "✅ Advanced translation completed with format preservation!"
-            ),
+            message=("✅ Advanced translation completed with format preservation!"),
             progress=100,
             is_done=True,
             is_error=False,
@@ -778,12 +938,31 @@ def download_translated_file(output_format: str) -> str:
 
 
 async def process_advanced_translation_job(
-    job_id: str, file_path: str, source_lang: str, target_lang: str
+    job_id: str,
+    file_path: str,
+    source_lang: str,
+    target_lang: str,
+    translator: Any | None = None,
+    user_id: str | None = None,
 ) -> None:
-    """Process translation job with advanced formatting preservation."""
+    """Process translation job with advanced formatting preservation.
+
+    Args:
+        job_id: Identifier present in ``translation_jobs``.
+        file_path: Path to the extracted document content.
+        source_lang: Source language code.
+        target_lang: Target language code.
+        translator: User-bound engine resolved at submission time (ADR 0004
+            D4). When ``None``, ``translate_content`` resolves through
+            ``user_id`` (or fails closed).
+        user_id: Owner of the bound engine (recorded for job telemetry).
+    """
     try:
         job: dict[str, Any] = translation_jobs[job_id]
         job["status"] = "processing"
+        # ThreadSafeTranslationJobs.__getitem__ returns a shallow COPY;
+        # mutate a local and re-store through __setitem__ so updates persist.
+        translation_jobs[job_id] = job
 
         # Extract content with advanced processing
         # Re-extract content if needed
@@ -792,8 +971,10 @@ async def process_advanced_translation_job(
 
         # Define progress callback for job updates
         def update_job_progress(progress: int) -> None:
-            # Scale progress to job progress range (20-80)
-            job["progress"] = 20 + int(progress * 0.6)
+            # Scale progress to job progress range (20-80). Persist through
+            # update_job: the local `job` dict is a shallow copy, so a bare
+            # mutation would never reach the store (/status polling).
+            translation_jobs.update_job(job_id, {"progress": 20 + int(progress * 0.6)})
 
         # Use the centralized translate_content function
         translated_by_page: TranslatedPageDict
@@ -806,10 +987,13 @@ async def process_advanced_translation_job(
             progress_callback=update_job_progress,
             philosophy_mode=False,  # Jobs don't use philosophy mode
             session_id=None,
+            user_id=user_id,
+            translator=translator,
         )
 
         # Create output with preserved formatting
         job["progress"] = 80
+        translation_jobs[job_id] = job
 
         output_file: str = document_processor.create_translated_document(
             content, translated_by_page, output_filename
@@ -818,12 +1002,18 @@ async def process_advanced_translation_job(
         job["progress"] = 100
         job["status"] = "completed"
         job["output_file"] = output_file
+        translation_jobs[job_id] = job
 
         logger.info(f"Advanced translation job completed: {job_id}")
     except Exception as e:
         logger.error(f"Error in advanced translation job {job_id}: {e!s}")
-        job["status"] = "failed"
-        job["error"] = str(e)
+        try:
+            failed_job: dict[str, Any] = translation_jobs[job_id]
+            failed_job["status"] = "failed"
+            failed_job["error"] = str(e)
+            translation_jobs[job_id] = failed_job
+        except KeyError:
+            logger.error("Attempted to update missing job %s", job_id)
 
 
 async def _show_pdf_preprocessing_steps(
@@ -885,9 +1075,7 @@ async def _show_pdf_preprocessing_steps(
 
         # Step 3: Document Analysis Preparation
         preprocessing_steps.append("\n🤖 Step 3: Document Analysis Preparation")
-        preprocessing_steps.append(
-            "   🚀 Target: Google Cloud Document Translation"
-        )
+        preprocessing_steps.append("   🚀 Target: Google Cloud Document Translation")
         preprocessing_steps.append(
             "   📋 Expected output: Layout + text + bounding boxes"
         )
@@ -895,7 +1083,9 @@ async def _show_pdf_preprocessing_steps(
 
         # Step 4: Ready for Translation
         preprocessing_steps.append("\n✅ Step 4: Ready for Translation Pipeline")
-        preprocessing_steps.append("   🌐 Translation service: Lingo.dev API")
+        preprocessing_steps.append(
+            "   🌐 Translation service: Google Cloud Translation v3 (BYOK)"
+        )
         preprocessing_steps.append("   🎨 Layout preservation: Advanced text fitting")
         preprocessing_steps.append("   📄 Output format: PDF with preserved formatting")
 

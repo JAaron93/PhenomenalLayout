@@ -27,8 +27,10 @@ from api.auth import UserRole, get_current_user_dependency, is_auth_enabled
 from api.memory_routes import router as memory_router
 from core.state_manager import state, translation_jobs
 from core.translation_handler import (
+    build_philosophy_service,
     document_processor,
     file_handler,
+    get_translation_facade,
     language_detector,
     neologism_detector,
     philosophy_translation_service,
@@ -54,6 +56,7 @@ from services.byok_credentials_manager import (
 )
 from services.confidence_scorer import ConfidenceScorer
 from services.cost_estimator import GCPCostEstimator
+from services.gcp_sync_translation_service import GcpSyncCredentialsRequiredError
 from services.neologism_detector import merge_neologism_analyses
 from services.pdf_quality_validator import PDFQualityValidator
 
@@ -67,6 +70,7 @@ from utils.document_errors import (
     DOC_ENCRYPTED_PDF,
     DOC_INVALID_FORMAT,
     DOC_SERVICE_UNAVAILABLE,
+    GCP_CREDENTIALS_REQUIRED,
     get_error_message,
 )
 from utils.language_utils import extract_text_sample_for_language_detection
@@ -219,11 +223,15 @@ async def update_philosophy_translation_config(
 @api_router.post("/philosophy/translate")
 async def translate_with_philosophy(
     translation_data: dict[str, Any],
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> dict[str, Any]:
-    """Translate text with philosophy awareness.
+    """Translate text with philosophy awareness (BYOK user-scoped, ADR 0004).
 
-    This endpoint uses the philosophy-enhanced translation service to detect
-    and preserve neologisms while applying user choices.
+    Requires an explicit ``user_id`` inside the JSON body and an
+    authenticated identity that owns that user id (mirrors
+    ``POST /book/translate``). Submission fails closed with HTTP 503
+    (``GCP_CREDENTIALS_REQUIRED``) when the caller has no usable personal
+    Google Cloud credentials.
     """
     try:
         text = translation_data.get("text", "")
@@ -231,11 +239,37 @@ async def translate_with_philosophy(
         target_lang = translation_data.get("target_language", "en")
         provider = translation_data.get("provider", "auto")
         session_id = translation_data.get("session_id")
+        user_id = translation_data.get("user_id")
 
         if not text:
             raise HTTPException(
                 status_code=400, detail="Text is required for translation"
             )
+        if not isinstance(user_id, str) or not user_id.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="user_id is required for BYOK philosophy translation",
+            )
+
+        _verify_resource_ownership(user_id, current_user)
+        manager = get_byok_credentials_manager()
+        if not manager.has_credentials(user_id):
+            logger.info(
+                "Philosophy translation rejected: no BYOK credentials for %s",
+                user_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"{GCP_CREDENTIALS_REQUIRED}: "
+                    f"{get_error_message(GCP_CREDENTIALS_REQUIRED)}"
+                ),
+            )
+
+        # Request-scoped credential-bound engine + philosophy wrapper
+        # (ADR 0004 D4: no ambient engines, module singleton stays config-only).
+        translator = get_translation_facade().translator_for_user(user_id)
+        philosophy_service = build_philosophy_service(translator)
 
         result = await translate_with_philosophy_awareness(
             text=text,
@@ -243,12 +277,21 @@ async def translate_with_philosophy(
             target_lang=target_lang,
             provider=provider,
             session_id=session_id,
-            service=philosophy_translation_service,
+            service=philosophy_service,
         )
 
         return result
     except HTTPException:
         raise
+    except GcpSyncCredentialsRequiredError as exc:
+        # Engine-level race: credentials vanished mid-request.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"{GCP_CREDENTIALS_REQUIRED}: "
+                f"{get_error_message(GCP_CREDENTIALS_REQUIRED)}"
+            ),
+        ) from exc
     except Exception as e:
         logger.error("Error in philosophy-aware translation: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -279,9 +322,9 @@ async def merge_neologism_analyses_endpoint(
 
         return {
             "success": True,
-            "merged_analysis": merged.to_dict()
-            if hasattr(merged, "to_dict")
-            else merged,
+            "merged_analysis": (
+                merged.to_dict() if hasattr(merged, "to_dict") else merged
+            ),
         }
     except HTTPException:
         raise
@@ -557,7 +600,13 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
             if s.startswith(("/", "./", "../", "~")):
                 return True
             # Generic presence of separators suggesting a path (but not just a lone slash)
-            return bool(("/" in s or "\\" in s) and any(part not in ("", ".", "..") for part in s.replace("\\", "/").split("/")))
+            return bool(
+                ("/" in s or "\\" in s)
+                and any(
+                    part not in ("", ".", "..")
+                    for part in s.replace("\\", "/").split("/")
+                )
+            )
 
         def sanitize_metadata(obj: Any) -> Any:
             """Recursively sanitize metadata by removing path-like keys and values."""
@@ -639,10 +688,34 @@ async def translate_document(
     file_path: str,
     source_language: str,
     target_language: str,
+    user_id: str = Form(...),
+    current_user: dict[str, Any] = Depends(get_current_user_dependency),
 ) -> TranslationResponse:
-    """Enhanced translation endpoint."""
+    """Enhanced translation endpoint (BYOK user-scoped, ADR 0004).
+
+    Identity mirrors ``POST /book/translate``: explicit ``user_id`` plus the
+    shared auth dependency and resource-ownership check. Submission fails
+    closed with HTTP 503 (``GCP_CREDENTIALS_REQUIRED``) when the caller has
+    no usable personal Google Cloud credentials.
+    """
+    _verify_resource_ownership(user_id, current_user)
+    manager = get_byok_credentials_manager()
+    if not manager.has_credentials(user_id):
+        logger.info(
+            "Translation submission rejected: no BYOK credentials for %s",
+            user_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"{GCP_CREDENTIALS_REQUIRED}: "
+                f"{get_error_message(GCP_CREDENTIALS_REQUIRED)}"
+            ),
+        )
     try:
         import uuid
+
+        translator = get_translation_facade().translator_for_user(user_id)
 
         job_id: str = str(uuid.uuid4())
 
@@ -653,6 +726,7 @@ async def translate_document(
             "file_path": file_path,
             "source_language": source_language,
             "target_language": target_language,
+            "user_id": user_id,
             "created_at": datetime.now(UTC),
             "output_file": None,
             "error": None,
@@ -660,13 +734,17 @@ async def translate_document(
             "format_preservation": True,
         }
 
-        # Start background translation with advanced processing
+        # Start background translation with advanced processing; the
+        # user-bound engine is embedded in the job closure so long-running
+        # jobs never re-resolve ambient identity (ADR 0004 D4).
         background_tasks.add_task(
             process_advanced_translation_job,
             job_id,
             file_path,
             source_language,
             target_language,
+            translator,
+            user_id,
         )
 
         return {
@@ -885,9 +963,9 @@ async def calculate_confidence(
         return {
             "term": term,
             "final_confidence": final_confidence,
-            "confidence_factors": factors.__dict__
-            if hasattr(factors, "__dict__")
-            else {},
+            "confidence_factors": (
+                factors.__dict__ if hasattr(factors, "__dict__") else {}
+            ),
             "confidence_breakdown": breakdown,
         }
     except HTTPException:
@@ -1168,16 +1246,20 @@ async def validate_byok_credentials(
         proj = getattr(
             val,
             "project_id",
-            getattr(mgr, "get_project_id", lambda _u: "")(user_id)
-            if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
-            else "",
+            (
+                getattr(mgr, "get_project_id", lambda _u: "")(user_id)
+                if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
+                else ""
+            ),
         )
         bkt = getattr(
             val,
             "bucket_name",
-            getattr(mgr, "get_bucket_name", lambda _u: "")(user_id)
-            if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
-            else "",
+            (
+                getattr(mgr, "get_bucket_name", lambda _u: "")(user_id)
+                if hasattr(mgr, "has_credentials") and mgr.has_credentials(user_id)
+                else ""
+            ),
         )
         return {
             "is_valid": is_valid,
@@ -1261,9 +1343,11 @@ async def pre_scan_book_endpoint(
             "preview_recommended": result.ocr_confidence.preview_recommended,
         }
         script_dict = {
-            "script_type": result.script_analysis.script_type.value
-            if hasattr(result.script_analysis.script_type, "value")
-            else str(result.script_analysis.script_type),
+            "script_type": (
+                result.script_analysis.script_type.value
+                if hasattr(result.script_analysis.script_type, "value")
+                else str(result.script_analysis.script_type)
+            ),
             "ocr_confidence_score": result.script_analysis.ocr_confidence_score,
             "fraktur_ratio": result.script_analysis.fraktur_ratio,
             "recommended_action": result.script_analysis.recommended_action,
@@ -1607,9 +1691,11 @@ async def list_user_jobs_endpoint(
         else:
             jobs = orch.recovery_manager.list_active_jobs(user_id)
         return [
-            j.to_dict()
-            if hasattr(j, "to_dict")
-            else (j.__dict__ if hasattr(j, "__dict__") else dict(j))
+            (
+                j.to_dict()
+                if hasattr(j, "to_dict")
+                else (j.__dict__ if hasattr(j, "__dict__") else dict(j))
+            )
             for j in jobs
         ]
     except HTTPException:

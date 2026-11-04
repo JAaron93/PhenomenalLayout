@@ -102,10 +102,10 @@ class TestPhilosophyEnhancedTranslationServiceIntegration:
         assert philosophy_service.preserve_marker_prefix == "NEOLOGISM_PRESERVE_"
         assert philosophy_service.preserve_marker_suffix == "_PRESERVE_END"
 
-        # Verify only Lingo provider is available
+        # Verify only the GCP provider is available (ADR 0004: single-provider
+        # sync tier — the Lingo.dev stack was retired).
         available_providers = philosophy_service.get_available_providers()
-        assert "lingo" in available_providers
-        assert len(available_providers) == 1
+        assert available_providers == ["gcp"]
 
     def test_translate_text_with_neologism_handling(
         self, philosophy_service, mock_translation_service
@@ -144,7 +144,7 @@ class TestPhilosophyEnhancedTranslationServiceIntegration:
 
     @pytest.mark.asyncio
     async def test_translate_document_with_neologism_handling(self, philosophy_service):
-        """Test document translation with neologism handling using Lingo."""
+        """Test document translation with neologism handling using GCP."""
         document = {
             "type": "pdf_advanced",
             "text_by_page": {
@@ -161,8 +161,8 @@ class TestPhilosophyEnhancedTranslationServiceIntegration:
             document,
             "en",
             "de",
-            "lingo",
-            "test_session",  # Use Lingo provider
+            "gcp",
+            "test_session",  # Use GCP provider
         )
 
         assert "translated_content" in result

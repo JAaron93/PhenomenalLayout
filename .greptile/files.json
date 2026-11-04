@@ -1,5 +1,7 @@
 [
   "AGENTS.md",
   "docs/adr/0001-migrate-to-google-cloud-document-translation.md",
-  ".kiro/specs/gcp-migration/design.md"
+  "docs/adr/0004-retire-lingo-dev-translation-stack.md",
+  ".kiro/specs/gcp-migration/design.md",
+  ".kiro/specs/lingo-dev-retirement/design.md"
 ]
