@@ -2,6 +2,7 @@
  * Philosophy Interface JavaScript
  * Interactive neologism detection and user choice management
  * Parse-integrity regression gate: tests/test_static_js_syntax.py (node --check).
+ * Injection-surface gate: tests/test_static_js_security.py (innerHTML literals).
  */
 
 class PhilosophyInterface {
@@ -218,28 +219,29 @@ class PhilosophyInterface {
         div.setAttribute('data-term', neologism.term);
         div.setAttribute('data-confidence', neologism.confidence);
 
-        const confidenceClass = this.getConfidenceClass(neologism.confidence);
-
+        // Static skeleton only — every dynamic value is delivered below via
+        // textContent/properties, which never re-parse markup. Interpolating
+        // server-provided neologism data into HTML here is the js/xss sink
+        // CodeQL flagged (code-scanning alert #23); the invariant is gated
+        // by tests/test_static_js_security.py.
         div.innerHTML = `
             <div class="neologism-header">
                 <div class="neologism-term">
-                    <span class="term-text">${neologism.term}</span>
-                    <span class="confidence-badge ${confidenceClass}">
-                        ${(neologism.confidence * 100).toFixed(1)}%
-                    </span>
+                    <span class="term-text"></span>
+                    <span class="confidence-badge"></span>
                 </div>
                 <div class="neologism-type">
-                    <span class="type-badge">${neologism.neologism_type}</span>
+                    <span class="type-badge"></span>
                 </div>
             </div>
 
             <div class="neologism-context">
                 <div class="context-sentence">
-                    <strong>Context:</strong> ${neologism.sentence_context}
+                    <strong>Context:</strong> <span class="context-text"></span>
                 </div>
                 <div class="context-details">
-                    <span class="semantic-field">Field: ${neologism.philosophical_context.semantic_field}</span>
-                    <span class="page-number">Page: ${neologism.page_number || 'N/A'}</span>
+                    <span class="semantic-field"></span>
+                    <span class="page-number"></span>
                 </div>
             </div>
 
@@ -249,14 +251,14 @@ class PhilosophyInterface {
                     <div class="analysis-content">
                         <div class="morphological-analysis">
                             <h4>Morphological Analysis</h4>
-                            <p><strong>Compound:</strong> ${neologism.morphological_analysis.is_compound ? 'Yes' : 'No'}</p>
-                            <p><strong>Parts:</strong> ${neologism.morphological_analysis.compound_parts.join(', ')}</p>
-                            <p><strong>Complexity:</strong> ${(neologism.morphological_analysis.structural_complexity * 100).toFixed(1)}%</p>
+                            <p><strong>Compound:</strong> <span class="compound-answer"></span></p>
+                            <p><strong>Parts:</strong> <span class="compound-parts"></span></p>
+                            <p><strong>Complexity:</strong> <span class="complexity-value"></span></p>
                         </div>
                         <div class="philosophical-context">
                             <h4>Philosophical Context</h4>
-                            <p><strong>Density:</strong> ${(neologism.philosophical_context.philosophical_density * 100).toFixed(1)}%</p>
-                            <p><strong>Keywords:</strong> ${neologism.philosophical_context.philosophical_keywords.join(', ')}</p>
+                            <p><strong>Density:</strong> <span class="density-value"></span></p>
+                            <p><strong>Keywords:</strong> <span class="keywords-list"></span></p>
                         </div>
                     </div>
                 </details>
@@ -265,15 +267,15 @@ class PhilosophyInterface {
             <div class="neologism-choices">
                 <div class="choice-options">
                     <label class="choice-option">
-                        <input type="radio" name="choice-${neologism.term}" value="preserve" class="neologism-choice">
+                        <input type="radio" value="preserve" class="neologism-choice">
                         <span class="choice-label">Preserve Original</span>
                     </label>
                     <label class="choice-option">
-                        <input type="radio" name="choice-${neologism.term}" value="translate" class="neologism-choice">
+                        <input type="radio" value="translate" class="neologism-choice">
                         <span class="choice-label">Allow Translation</span>
                     </label>
                     <label class="choice-option">
-                        <input type="radio" name="choice-${neologism.term}" value="custom" class="neologism-choice">
+                        <input type="radio" value="custom" class="neologism-choice">
                         <span class="choice-label">Custom Translation</span>
                     </label>
                 </div>
@@ -288,6 +290,31 @@ class PhilosophyInterface {
                 </div>
             </div>
         `;
+
+        // Dynamic values — safe sinks only (textContent / element properties).
+        div.querySelector('.term-text').textContent = neologism.term;
+        const confidenceBadge = div.querySelector('.confidence-badge');
+        confidenceBadge.classList.add(this.getConfidenceClass(neologism.confidence));
+        confidenceBadge.textContent = `${(neologism.confidence * 100).toFixed(1)}%`;
+        div.querySelector('.type-badge').textContent = neologism.neologism_type;
+        div.querySelector('.context-text').textContent = neologism.sentence_context;
+        div.querySelector('.semantic-field').textContent =
+            `Field: ${neologism.philosophical_context.semantic_field}`;
+        div.querySelector('.page-number').textContent =
+            `Page: ${neologism.page_number || 'N/A'}`;
+        div.querySelector('.compound-answer').textContent =
+            neologism.morphological_analysis.is_compound ? 'Yes' : 'No';
+        div.querySelector('.compound-parts').textContent =
+            neologism.morphological_analysis.compound_parts.join(', ');
+        div.querySelector('.complexity-value').textContent =
+            `${(neologism.morphological_analysis.structural_complexity * 100).toFixed(1)}%`;
+        div.querySelector('.density-value').textContent =
+            `${(neologism.philosophical_context.philosophical_density * 100).toFixed(1)}%`;
+        div.querySelector('.keywords-list').textContent =
+            neologism.philosophical_context.philosophical_keywords.join(', ');
+        div.querySelectorAll('.neologism-choice').forEach((input) => {
+            input.name = `choice-${neologism.term}`;
+        });
 
         return div;
     }
@@ -575,17 +602,24 @@ class PhilosophyInterface {
         Object.entries(terminology).forEach(([term, translation]) => {
             const item = document.createElement('div');
             item.className = 'terminology-item';
+            // Static skeleton; API-sourced term/translation values enter
+            // via textContent/setAttribute — never interpolated as HTML
+            // (invariant: tests/test_static_js_security.py).
             item.innerHTML = `
                 <div class="term-pair">
-                    <span class="source-term">${term}</span>
+                    <span class="source-term"></span>
                     <span class="arrow">→</span>
-                    <span class="target-term">${translation}</span>
+                    <span class="target-term"></span>
                 </div>
                 <div class="term-actions">
-                    <button class="edit-term-btn" data-term="${term}">Edit</button>
-                    <button class="delete-term-btn" data-term="${term}">Delete</button>
+                    <button class="edit-term-btn" data-term="">Edit</button>
+                    <button class="delete-term-btn" data-term="">Delete</button>
                 </div>
             `;
+            item.querySelector('.source-term').textContent = term;
+            item.querySelector('.target-term').textContent = translation;
+            item.querySelector('.edit-term-btn').setAttribute('data-term', term);
+            item.querySelector('.delete-term-btn').setAttribute('data-term', term);
             container.appendChild(item);
         });
     }
