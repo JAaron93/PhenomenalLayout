@@ -523,12 +523,26 @@ The only request-path engine: one instance represents one user's content-tier en
 
 ```python
 import asyncio
+from pathlib import Path
+
 from services.byok_credentials_manager import BYOKCredentialsManager
 from services.gcp_sync_translation_service import GcpSyncTranslator
 
 async def translate_texts():
     # Manager holds the user's Service Account JSON in session memory only
     manager = BYOKCredentialsManager()
+
+    # Ingest credentials BEFORE constructing the engine — an empty vault
+    # fails closed on every translation call. In the web UI this happens
+    # through the BYOK setup flow; in a script, load the Service Account
+    # JSON you downloaded from your own GCP project.
+    sa_json = Path("~/gcp/sa-key.json").expanduser().read_text()
+    manager.set_credentials(
+        user_id="scholar-42",
+        project_id="my-gcp-project",
+        bucket_name="my-translation-bucket",
+        sa_json_content=sa_json,
+    )
 
     # Bind the engine to one user's vault
     service = GcpSyncTranslator(manager, "scholar-42")
@@ -556,6 +570,10 @@ Neologism detection and user-choice preservation ride on the BYOK engine:
 from services.philosophy_enhanced_translation_service import (
     PhilosophyEnhancedTranslationService,
 )
+
+# bound_engine is the user-bound GcpSyncTranslator constructed in the
+# BYOK example above (`service = GcpSyncTranslator(manager, "scholar-42")`)
+bound_engine = service
 
 service = PhilosophyEnhancedTranslationService(
     translation_service=bound_engine,  # user-bound GcpSyncTranslator

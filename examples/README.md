@@ -35,7 +35,7 @@ This directory contains examples demonstrating the use of the Neologism Detectio
    python -m spacy download de_core_news_sm
    ```
 
-3. Configure translation credentials in the web interface (Bring Your Own Key):
+3. Translation credentials (Bring Your Own Key):
 
    PhenomenalLayout uses only personal Google Cloud Translation v3 credentials.
    Your Service Account JSON key is validated in the application and held in
@@ -48,13 +48,27 @@ cd examples
 python philosophy_enhanced_usage_examples.py
 ```
 
-This will:
-1. Initialize the PhilosophyEnhancedTranslationService (main app)
+> **ADR 0004 fail-closed behavior:** the script constructs
+> `PhilosophyEnhancedTranslationService()` without a bound engine. The
+> neologism-analysis examples run without credentials, but its first
+> translation call raises `GcpSyncCredentialsRequiredError` (code
+> `GCP_CREDENTIALS_REQUIRED`) and the remaining examples are skipped.
+> Credentials entered in the web interface live in that server process's
+> session memory and cannot bind this standalone script — to see live
+> translation, bind a user-bound `GcpSyncTranslator` BYOK engine first, as
+> shown in the top-level
+> [README](../README.md#user-bound-gcp-translation-engine-byok).
+
+The script will:
+1. Initialize the PhilosophyEnhancedTranslationService (unbound — see the
+   fail-closed note above)
 2. Analyze sample German philosophical text for neologisms
-3. Translate the text while preserving detected neologisms
-4. Generate translation suggestions for philosophical terms
-5. Display comprehensive analysis results
-6. Export results to JSON format
+3. Attempt translation — fails closed here without a bound engine
+
+With a bound BYOK engine, it additionally translates the text while
+preserving detected neologisms, generates translation suggestions for
+philosophical terms, displays comprehensive analysis results, and exports
+results to JSON format.
 
 ## Example Output
 
