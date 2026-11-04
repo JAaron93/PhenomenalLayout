@@ -763,8 +763,14 @@ async def _translate_page_texts_concurrently(
     ]
     try:
         results: list[tuple[int, str]] = await asyncio.gather(*tasks)
-    except asyncio.CancelledError:
-        # Explicitly cancel child tasks to release references quickly
+    except BaseException:
+        # gather abandons its remaining children on first failure: sibling
+        # pages parked on the semaphore would keep starting detection and
+        # translation work after the caller has already failed — and each
+        # such late failure would surface as an unretrieved task exception.
+        # Structured cleanup covers the explicit CancelledError sentinel
+        # path and the new fail-closed credential path (ADR 0004 D3) alike:
+        # cancel every child, drain it, then re-raise.
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

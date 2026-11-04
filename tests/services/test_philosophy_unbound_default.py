@@ -97,6 +97,31 @@ class TestUnboundStubStatsSurface:
 
 
 # ---------------------------------------------------------------------------
+# Review round 2 — end-to-end unbound path guard (finding #1)
+# ---------------------------------------------------------------------------
+
+
+class TestUnboundCredentialFailureEndToEnd:
+    """Unbound stub error must reach the caller unpatched (ADR 0004 D3)."""
+
+    @pytest.mark.asyncio
+    async def test_unbound_service_fails_closed_end_to_end(self) -> None:
+        """Default service (no patching) raises the typed credential error.
+
+        Exercises the real chain end-to-end: UnboundTranslationStub ->
+        _translate_with_preservation_async -> outer catch re-raise. Guards
+        against any future swallow in the default philosophy service.
+        """
+        svc = _light_service()
+        assert isinstance(svc.translation_service, UnboundTranslationStub)
+
+        with pytest.raises(GcpSyncCredentialsRequiredError):
+            await svc.translate_text_with_neologism_handling_async(
+                "Der Geist", "de", "en", "gcp", "s-e2e-unbound"
+            )
+
+
+# ---------------------------------------------------------------------------
 # Review round 1 — fail-closed propagation through the philosophy fallback
 # ---------------------------------------------------------------------------
 

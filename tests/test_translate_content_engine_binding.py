@@ -348,6 +348,73 @@ class TestAdvancedJobEngineThreading:
         assert job["status"] == "failed"
         assert "GCP_CREDENTIALS_REQUIRED" in job["error"]
 
+
+class TestSiblingTaskCleanupOnCredentialFailure:
+    """First-failure cleanup must cancel sibling page tasks (round 2, #2)."""
+
+    def test_credential_failure_cancels_sibling_pages(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Credential error cancels tasks queued on the semaphore.
+
+        ``asyncio.gather`` abandons its remaining children on first
+        failure: with the concurrency limit at 1, the sibling page is
+        parked waiting for the semaphore and would start detection and
+        translation work (up to 30s of wasted GCP-bound effort) after
+        the caller has already failed. The cleanup must cancel and
+        drain it.
+        """
+        engine = _StubEngine("scale-user")  # unused; service is faked below
+
+        class _FailThenSlowService:
+            """Call 1 raises credential failure; later calls sleep long."""
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def translate_text_with_neologism_handling_async(
+                self, **_kwargs: Any
+            ) -> dict[str, str]:
+                self.calls += 1
+                if self.calls == 1:
+                    raise GcpSyncCredentialsRequiredError("<engine>")
+                await asyncio.sleep(30)
+                return {"translated_text": worker_text}  # pragma: no cover
+
+        worker_text = "Warten auf Semaphore"
+        fake = _FailThenSlowService()
+        _ = engine  # presence documents the philosophy resolution shape
+        monkeypatch.setattr(
+            th.settings, "TRANSLATION_CONCURRENCY_LIMIT", 1, raising=True
+        )
+
+        loop = asyncio.new_event_loop()
+        try:
+            with pytest.raises(GcpSyncCredentialsRequiredError):
+                loop.run_until_complete(
+                    th._translate_page_texts_concurrently(
+                        page_texts={"0": ["Der Geist"], "1": [worker_text]},
+                        source_language="de",
+                        target_language="en",
+                        session_id="s-scale",
+                        service=fake,
+                    )
+                )
+            leftover = [t for t in asyncio.all_tasks(loop) if not t.done()]
+            assert not leftover, (
+                f"{len(leftover)} sibling task(s) abandoned after credential "
+                "failure; cleanup must cancel and drain them"
+            )
+        finally:
+            pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+            for t in pending:
+                t.cancel()
+            if pending:
+                loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
+            loop.close()
+
     def test_job_persists_progress_during_translation(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
