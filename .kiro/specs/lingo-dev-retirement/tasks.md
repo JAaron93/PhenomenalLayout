@@ -145,15 +145,22 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     `tests/test_document_errors.py` + `tests/services/test_philosophy_unbound_default.py`).
   - **Depends on:** T-2.1 (parallel with T-2.2)
 
-* **[STATUS: IN PROGRESS] T-2.4 — Track B green run**
+* **[STATUS: COMPLETE] T-2.4 — Track B green run**
   - Targeted `--no-cov` inner loop, then `pytest -n auto`; fix any
     scheduling-dependent failures per AGENTS §6.3 triage (serial diff check).
   - Verified: targeted combined run 59/59 (engine + routes + doc-errors +
-    unbound-default compat) and legacy replay suites
+    unbound-default compat); legacy replay suites
     (`test_translate_one_safety`, `test_translate_content_philosophy_async`,
     `test_translate_content_philosophy_load`, `test_phase5_services`,
     `test_book_translation_orchestrator`) all green; full `pytest -n auto`
-    + CI-exact serial run pending.
+    green apart from one environmental timing flake
+    (`test_rate_limiter_concurrent` — passed on serial rerun, moving-signature
+    `dist=load` artifact per §6.3 triage) plus
+    `test_philosophy_enhanced_integration::test_service_initialization`
+    asserting the retired `"lingo"` provider — updated to the ADR 0004
+    contract (`"gcp"`, single-provider registry); CI-exact serial
+    `pytest --maxfail=1 --disable-warnings` exit 0 with coverage 71.52%
+    (gate ≥ 70%).
   - **Depends on:** T-2.2, T-2.3
 
 ---
