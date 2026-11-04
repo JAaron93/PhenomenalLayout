@@ -240,6 +240,17 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     swept (~45-788 band) with the migration-table row added and the
     Lingo-era benchmark suite replaced by a historical note;
     `.kiro/steering/product.md:13` and `tech.md:82` reworded GCP-only.
+  - Verified: philosophy-path docs parity —
+    `docs/philosophy_enhanced_translation_api.md` now states the sync-tier
+    mapping explicitly (neologism path rides GCP Translation v3's
+    synchronous text API via user-bound `GcpSyncTranslator`; books use the
+    async `batchTranslateDocument` pipeline), documents `provider` as a
+    deprecated no-op (4 param sites), and replaces the multi-provider
+    fallback error-handling example with fail-closed
+    `GcpSyncCredentialsRequiredError` semantics;
+    `docs/PHILOSOPHY_ENHANCED_TRANSLATION_ARCHITECTURE_COMPLETE.md` carries
+    a historical pre-ADR-0004 banner (design history preserved, live
+    contract pointers added).
   - `.greptile/rules.md` + `.greptile/instructions.md`: Lingo Eradication
     section (mirror Dolphin section; never request restoration; flag
     re-introduction).

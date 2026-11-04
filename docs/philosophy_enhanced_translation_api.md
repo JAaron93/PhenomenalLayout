@@ -37,17 +37,27 @@ The Philosophy-Enhanced Translation API provides comprehensive neologism detecti
 
 The main service that integrates neologism detection with translation capabilities.
 
+> **Engine binding (ADR 0004):** text-level philosophy translation rides
+> Google Cloud Translation v3's **synchronous text API** through a
+> user-bound `GcpSyncTranslator` BYOK engine. Full-length books use the
+> separate asynchronous `batchTranslateDocument` pipeline
+> (`services/gcp_batch_translation_service.py`). Without a bound engine the
+> service defaults to `UnboundTranslationStub` (statistics-only) and any
+> translation attempt raises `GcpSyncCredentialsRequiredError` — source text
+> is never returned as a silent fallback.
+
 #### Initialization
 
 ```python
 from services.philosophy_enhanced_translation_service import PhilosophyEnhancedTranslationService
 
-# Default initialization
+# Default initialization (unbound: statistics/config surface only,
+# fails closed on translation attempts until an engine is bound)
 service = PhilosophyEnhancedTranslationService()
 
-# Custom initialization
+# Request-path initialization: bind one user's BYOK engine
 service = PhilosophyEnhancedTranslationService(
-    translation_service=custom_translation_service,
+    translation_service=user_bound_gcp_engine,  # GcpSyncTranslator from the BYOK vault
     neologism_detector=custom_neologism_detector,
     user_choice_manager=custom_user_choice_manager,
     terminology_path="path/to/terminology.json"
@@ -64,7 +74,7 @@ Translates text while detecting and handling neologisms according to user prefer
 - `text` (str): The text to translate
 - `source_lang` (str): Source language code (e.g., "en", "de", "fr")
 - `target_lang` (str): Target language code
-- `provider` (str): Translation provider ("auto", "lingo", etc.)
+- `provider` (str): Deprecated no-op (backward compatibility only). Has no effect; translation always rides the user-bound GCP BYOK engine (ADR 0004).
 - `session_id` (str): User session ID for choice management
 - `progress_callback` (Optional[Callable]): Progress callback function
 
@@ -94,7 +104,7 @@ Translates multiple texts in batch while handling neologisms.
 - `texts` (List[str]): List of texts to translate
 - `source_lang` (str): Source language code
 - `target_lang` (str): Target language code
-- `provider` (str): Translation provider
+- `provider` (str): Deprecated no-op (backward compatibility only). Has no effect; translation always rides the user-bound GCP BYOK engine (ADR 0004).
 - `session_id` (str): User session ID
 - `progress_callback` (Optional[Callable]): Progress callback function
 
@@ -128,7 +138,7 @@ Translates an entire document with neologism handling.
 - `document` (Dict[str, Any]): Document content structure
 - `source_lang` (str): Source language code
 - `target_lang` (str): Target language code
-- `provider` (str): Translation provider
+- `provider` (str): Deprecated no-op (backward compatibility only). Has no effect; translation always rides the user-bound GCP BYOK engine (ADR 0004).
 - `session_id` (str): User session ID
 - `progress_callback` (Optional[Callable]): Progress callback function
 
@@ -186,7 +196,7 @@ Processes a document with comprehensive philosophy-aware translation.
 - `file_path` (str): Path to the document file
 - `source_lang` (str): Source language code
 - `target_lang` (str): Target language code
-- `provider` (str): Translation provider
+- `provider` (str): Deprecated no-op (backward compatibility only). Has no effect; translation always rides the user-bound GCP BYOK engine (ADR 0004).
 - `user_id` (Optional[str]): User ID for session management
 - `session_id` (Optional[str]): Existing session ID or None to create new
 - `progress_callback` (Optional[Callable]): Progress callback function
@@ -400,6 +410,7 @@ results = await parallel_processor.process_multiple_documents_parallel(
 
 ```python
 from services.philosophy_enhanced_translation_service import PhilosophyEnhancedTranslationService
+from services.gcp_sync_translation_service import GcpSyncCredentialsRequiredError
 import logging
 
 service = PhilosophyEnhancedTranslationService()
@@ -409,25 +420,27 @@ try:
         text="Philosophical text",
         source_lang="en",
         target_lang="de",
-        provider="auto",
         session_id="session123"
     )
-except Exception as e:
-    logging.error(f"Translation failed: {e}")
-    # Implement fallback logic
-    # - Use basic translation without neologism handling
-    # - Try alternative provider
-    # - Return partial results
+except GcpSyncCredentialsRequiredError as e:
+    # ADR 0004 fail-closed invariant: missing or rejected BYOK credentials
+    # surface as GcpSyncCredentialsRequiredError (code "GCP_CREDENTIALS_REQUIRED").
+    # Surface the BYOK setup flow to the user — NEVER fall back to returning
+    # the source text as if it were a translation.
+    logging.error(f"BYOK credentials required: {e}")
+    raise
 ```
 
-### Graceful Degradation
+### Degradation Boundaries
 
-The system provides graceful degradation when components fail:
+The system degrades gracefully only where correctness is unaffected:
 
 ```python
-# If neologism detection fails, translation continues without it
+# If neologism detection fails, translation continues without preservation markers
 # If user choice management fails, defaults are used
-# If specific provider fails, auto-fallback to available providers
+# If BYOK credentials are missing or rejected, translation FAILS CLOSED —
+#   GcpSyncCredentialsRequiredError propagates; source text is never returned
+#   as a silent fallback (ADR 0004 invariant, no multi-provider fallback exists)
 ```
 
 ## Statistics and Monitoring
