@@ -593,13 +593,15 @@ async def translate_content(
                 service: PhilosophyEnhancedTranslationService = (
                     philosophy_translation_service
                 )
-                if translator is not None or user_id:
-                    engine: Any = (
-                        translator
-                        if translator is not None
-                        else get_translation_facade().translator_for_user(user_id)
-                    )
+                if translator is not None:
+                    engine: Any = translator
                     service = build_philosophy_service(engine)
+                elif user_id:
+                    # Narrowed to str here: the facade resolves the bound
+                    # engine or fails closed (unknown user → typed error).
+                    service = build_philosophy_service(
+                        get_translation_facade().translator_for_user(user_id)
+                    )
                 # Use philosophy-enhanced translation with bounded concurrency via helper
                 translated_texts: list[str] = await _translate_page_texts_concurrently(
                     page_texts=page_texts,

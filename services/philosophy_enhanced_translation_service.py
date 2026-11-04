@@ -1098,7 +1098,7 @@ class PhilosophyEnhancedTranslationService:
     def get_statistics(self) -> dict[str, Any]:
         """Get service statistics."""
         try:
-            ts_stats = self.translation_service.get_statistics()  # type: ignore[attr-defined]
+            ts_stats = self.translation_service.get_statistics()
         except Exception:
             ts_stats = {}
         detector_stats = self.neologism_detector.get_statistics()
@@ -1182,4 +1182,6 @@ async def translate_with_philosophy_awareness(
     )
     # Convert to dict for backward compatibility. User-bound GCP engines
     # (ADR 0004) may return plain result dicts — pass those through intact.
-    return result.to_dict() if hasattr(result, "to_dict") else result
+    if isinstance(result, dict):
+        return result
+    return result.to_dict()

@@ -110,6 +110,20 @@ def _map_unusable_credentials(
     return GcpSyncCredentialsRequiredError(user_id)
 
 
+def _close_v3_client(client: Any) -> None:
+    """Deterministically close a borrowed v3 client (AGENTS §2.10).
+
+    The generated ``translate_v3`` client stubs do not declare ``close``,
+    so the duck-typed shutdown goes through ``getattr``; failures are
+    suppressed so a ``finally`` cleanup can never mask the failure that
+    triggered it.
+    """
+    with contextlib.suppress(Exception):
+        close_method: Any = getattr(client, "close", None)
+        if close_method is not None:
+            close_method()
+
+
 def _validate_provider(provider: str | None) -> str | None:
     """Validate a legacy trailing ``provider`` argument.
 
@@ -683,7 +697,7 @@ class GcpSyncTranslator:
                     first: Any = outputs[0]
                     return first if isinstance(first, bytes) else bytes(first)
             finally:
-                client.close()
+                _close_v3_client(client)
 
         try:
             data: bytes = await asyncio.to_thread(worker)
@@ -856,8 +870,7 @@ class GcpSyncTranslator:
         except Exception as exc:
             # The client exists but its origin data failed to resolve:
             # deterministically close it before propagating (AGENTS §2.10).
-            with contextlib.suppress(Exception):
-                client.close()
+            _close_v3_client(client)
             if isinstance(exc, _UNUSABLE_CREDENTIAL_ERRORS):
                 raise _map_unusable_credentials(exc, self.user_id) from exc
             if isinstance(exc, CredentialNotFoundError):
@@ -962,7 +975,7 @@ class GcpSyncTranslator:
                     )
                 return collected
             finally:
-                client.close()
+                _close_v3_client(client)
 
         return await asyncio.to_thread(worker)
 
