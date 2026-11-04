@@ -1,6 +1,7 @@
 """Memory leak detection tests for PhenomenalLayout."""
 
 import gc
+import logging
 import os
 import threading
 import time
@@ -8,9 +9,25 @@ from dataclasses import dataclass
 
 import pytest
 
-from services.mcp_lingo_client import McpLingoClient, McpLingoConfig
-from services.translation_service import LingoTranslator, TranslationService
+from services.gcp_sync_translation_service import GcpSyncTranslator
 from utils.memory_monitor import MemoryMonitor, force_garbage_collection
+
+
+class _EngineLeakManager:
+    """Credentials-manager stub with an empty vault (engine fail-closed)."""
+
+    def __init__(self) -> None:
+        """Empty vault: no user ever holds credentials."""
+        self.credentialed_users: set[str] = set()
+
+    def has_credentials(self, user_id: str) -> bool:
+        """Report credential presence — always false for the empty vault."""
+        return user_id in self.credentialed_users
+
+
+def _leak_translator() -> GcpSyncTranslator:
+    """Build a GCP sync engine bound to an empty vault (no GCP access)."""
+    return GcpSyncTranslator(_EngineLeakManager(), "leak-user")
 
 
 def get_baseline_memory() -> float:
@@ -157,136 +174,66 @@ class MockMemoryMonitor(MemoryMonitor):
                         break
 
 
-class TestTranslationServiceMemoryLeaks:
-    """Test memory leaks in translation service."""
+class TestGcpEngineResourceCleanup:
+    """Resource-cleanup guards for the BYOK GCP sync engine.
 
-    @pytest.fixture
-    def translation_service(self):
-        """Create translation service for testing."""
-        service = TranslationService()
-        yield service
-        # Cleanup
-        try:
-            import asyncio
-            asyncio.run(service.aclose())
-        except Exception:
-            service.close()
+    Replaces the Lingo-era TranslationService leak tests: the engine holds
+    no host-side sessions — BYOK translation borrows per-invocation clients
+    closed deterministically in the request path (AGENTS §2.10), while
+    ``close``/``aclose`` are lifecycle no-ops with stable statistics.
+    """
 
-    def test_lingo_translator_session_cleanup(self, translation_service):
-        """Test LingoTranslator session cleanup."""
-        # Get a LingoTranslator instance
-        lingo_translator = None
-        for provider in translation_service.providers.values():
-            if isinstance(provider, LingoTranslator):
-                lingo_translator = provider
-                break
+    def test_engine_close_safe_noop_keeps_stats_stable(self):
+        """close() must not drift statistics and must be idempotent."""
+        translator = _leak_translator()
+        before = translator.get_statistics()
 
-        if lingo_translator is None:
-            pytest.skip("No LingoTranslator available")
+        translator.close()
+        translator.close()
 
-        # Verify session exists
-        assert lingo_translator.session is not None
-
-        # Close the translator
-        lingo_translator.close()
-
-        # Verify session was closed
-        assert lingo_translator.session is not None  # Reference still exists
-        # Note: requests.Session doesn't have a 'closed' attribute, so we verify
-        # through the close() call completion
-
-    def test_translation_service_cleanup_logging(self, translation_service, monkeypatch):
-        """Test translation service cleanup logging."""
-        # Mock logger to capture log messages
-        log_messages = []
-
-        def mock_info(msg, *args):
-            log_messages.append(msg % args if args else msg)
-
-        def mock_debug(msg, *args):
-            log_messages.append(msg % args if args else msg)
-
-        import services.translation_service
-        monkeypatch.setattr(services.translation_service.logger, "info", mock_info)
-        monkeypatch.setattr(services.translation_service.logger, "debug", mock_debug)
-
-        # Test synchronous cleanup
-        translation_service.close()
-
-        # Verify cleanup was logged
-        cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
-        assert len(cleanup_messages) > 0
+        assert translator.get_statistics() == before
 
     @pytest.mark.asyncio
-    async def test_translation_service_async_cleanup_logging(self, translation_service, monkeypatch):
-        """Test translation service async cleanup logging."""
-        log_messages = []
+    async def test_engine_aclose_safe_noop_keeps_stats_stable(self):
+        """aclose() must not drift statistics and must be idempotent."""
+        translator = _leak_translator()
+        before = translator.get_statistics()
 
-        def mock_info(msg, *args):
-            log_messages.append(msg % args if args else msg)
+        await translator.aclose()
+        await translator.aclose()
 
-        def mock_debug(msg, *args):
-            log_messages.append(msg % args if args else msg)
+        assert translator.get_statistics() == before
 
-        import services.translation_service
-        monkeypatch.setattr(services.translation_service.logger, "info", mock_info)
-        monkeypatch.setattr(services.translation_service.logger, "debug", mock_debug)
+    def test_engine_close_records_no_errors(self, caplog):
+        """Closing emits no ERROR-level records (silent lifecycle stub)."""
+        translator = _leak_translator()
 
-        # Test async cleanup
-        await translation_service.aclose()
+        with caplog.at_level(logging.ERROR, logger="services.gcp_sync_translation_service"):
+            translator.close()
 
-        # Verify cleanup was logged
-        cleanup_messages = [msg for msg in log_messages if "cleanup" in msg.lower()]
-        assert len(cleanup_messages) > 0
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert not errors
 
 
-class TestMcpClientMemoryLeaks:
-    """Test memory leaks in MCP client."""
+class TestGcpEngineLeakGuards:
+    """No-retained-state guards for the GCP engine lifecycle.
 
-    def test_mcp_client_cleanup_verification(self):
-        """Test MCP client cleanup with verification."""
-        # Create a mock config
-        config = McpLingoConfig(api_key="test-key")
-        client = McpLingoClient(config)
-
-        # Verify initial state
-        assert client._session is None
-        assert client._session_ctx is None
-        assert client._stdio_ctx is None
-        assert client._tool_name is None
-        assert client._tool_schema is None
-
-        # Test stop method on unstarted client
-        # Should not raise any exceptions
-        import asyncio
-        try:
-            asyncio.run(client.stop())
-        except Exception as e:
-            pytest.fail(f"stop() raised exception on unstarted client: {e}")
-
-        # Verify state is still clean
-        assert client._session is None
-        assert client._session_ctx is None
-        assert client._stdio_ctx is None
-        assert client._tool_name is None
-        assert client._tool_schema is None
+    The MCP-era "stop on unstarted client" semantics have no analog: a BYOK
+    engine borrows nothing at construction time, so close/aclose cycles
+    leave the engine state byte-stable (no credential clients, no sessions,
+    no retained tool caches).
+    """
 
     @pytest.mark.asyncio
-    async def test_mcp_client_tool_cache_cleanup(self):
-        """Test MCP client tool cache cleanup."""
-        config = McpLingoConfig(api_key="test-key")
-        client = McpLingoClient(config)
+    async def test_engine_close_cycle_leaves_state_byte_stable(self):
+        """close→aclose cycle on an engine that never borrowed a client."""
+        translator = _leak_translator()
+        before = translator.get_statistics()
 
-        # Set some tool data
-        client._tool_name = "test_tool"
-        client._tool_schema = {"type": "object", "properties": {}}
+        translator.close()
+        await translator.aclose()
 
-        # Stop the client
-        await client.stop()
-
-        # Verify cache was cleared
-        assert client._tool_name is None
-        assert client._tool_schema is None
+        assert translator.get_statistics() == before
 
 
 class TestMemoryMonitor:

@@ -5,7 +5,19 @@ import pytest
 
 from core import translation_handler
 from core.state_manager import state
-from services.translation_service import LingoTranslator
+from services.gcp_sync_translation_service import GcpSyncTranslator
+
+
+class _EngineLeakManager:
+    """Credentials-manager stub with an empty vault (engine fail-closed)."""
+
+    def __init__(self) -> None:
+        """Empty vault: no user ever holds credentials."""
+        self.credentialed_users: set[str] = set()
+
+    def has_credentials(self, user_id: str) -> bool:
+        """Report credential presence — always false for the empty vault."""
+        return user_id in self.credentialed_users
 
 
 @pytest.mark.asyncio
@@ -79,18 +91,16 @@ async def test_start_translation_single_flight_cancels_previous(monkeypatch: pyt
         state.source_language = old_lang
 
 
-def test_lingo_translator_close_closes_session() -> None:
-    translator = LingoTranslator(api_key="unit_test")
+def test_gcp_engine_close_never_retains_resources() -> None:
+    """Engine close() is a safe lifecycle no-op; BYOK owns all resources.
 
-    class _Session:
-        def __init__(self) -> None:
-            self.closed = False
-
-        def close(self) -> None:
-            self.closed = True
-
-    sess = _Session()
-    translator.session = sess  # type: ignore[assignment]
+    Replaces the Lingo-era session-close test: the GCP sync engine holds no
+    host-side session, so close cycles must leave it state-stable.
+    """
+    translator = GcpSyncTranslator(_EngineLeakManager(), "leak-user")
+    before = translator.get_statistics()
 
     translator.close()
-    assert sess.closed is True
+    translator.close()
+
+    assert translator.get_statistics() == before

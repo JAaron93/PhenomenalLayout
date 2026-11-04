@@ -22,17 +22,6 @@ except ImportError as e:
     logger.warning(f"Failed to import NeologismDetector: {e}")
     _service_availability["NEOLOGISM_DETECTOR_AVAILABLE"] = False
 
-# Services with external dependencies
-try:
-    from .translation_service import TranslationService  # noqa: F401
-
-    _available_services.append("TranslationService")
-    _service_availability["TRANSLATION_SERVICE_AVAILABLE"] = True
-    logger.debug("TranslationService imported successfully")
-except ImportError as e:
-    logger.debug(f"TranslationService not available: {e}")
-    _service_availability["TRANSLATION_SERVICE_AVAILABLE"] = False
-
 try:
     from core.dynamic_language_engine import (  # noqa: F401
         OptimizedLanguageDetector as LanguageDetector,
@@ -226,7 +215,6 @@ except ImportError as e:
 __all__: list[str] = [
     *_available_services,
     "NEOLOGISM_DETECTOR_AVAILABLE",
-    "TRANSLATION_SERVICE_AVAILABLE",
     "LANGUAGE_DETECTOR_AVAILABLE",
     "ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE",
     "GCP_BATCH_SERVICES_AVAILABLE",
@@ -242,9 +230,6 @@ __all__: list[str] = [
 # Export availability flags for runtime dependency checking
 NEOLOGISM_DETECTOR_AVAILABLE: bool = _service_availability[
     "NEOLOGISM_DETECTOR_AVAILABLE"
-]
-TRANSLATION_SERVICE_AVAILABLE: bool = _service_availability[
-    "TRANSLATION_SERVICE_AVAILABLE"
 ]
 LANGUAGE_DETECTOR_AVAILABLE: bool = _service_availability["LANGUAGE_DETECTOR_AVAILABLE"]
 ENHANCED_DOCUMENT_PROCESSOR_AVAILABLE: bool = _service_availability[

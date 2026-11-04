@@ -35,20 +35,21 @@ This directory contains examples demonstrating the use of the Neologism Detectio
    python -m spacy download de_core_news_sm
    ```
 
-3. Set up environment variables for translation services:
-   ```bash
-   export LINGO_API_KEY=your_lingo_api_key
-   ```
+3. Configure translation credentials in the web interface (Bring Your Own Key):
 
-### Running the Integration Example
+   PhenomenalLayout uses only personal Google Cloud Translation v3 credentials.
+   Your Service Account JSON key is validated in the application and held in
+   session memory only — no environment variables are required.
+
+### Running the Usage Examples
 
 ```bash
 cd examples
-python neologism_integration_example.py
+python philosophy_enhanced_usage_examples.py
 ```
 
 This will:
-1. Initialize the Philosophy-Enhanced Translator
+1. Initialize the PhilosophyEnhancedTranslationService (main app)
 2. Analyze sample German philosophical text for neologisms
 3. Translate the text while preserving detected neologisms
 4. Generate translation suggestions for philosophical terms
@@ -115,7 +116,7 @@ The system is optimized for:
 ## Integration with Existing Systems
 
 The neologism detector integrates seamlessly with:
-- Lingo.dev translation service with parallel processing
+- Google Cloud Document Translation (v3) with user-bound BYOK engines
 - Document processing pipeline
 - Language detection system
 - Terminology management system

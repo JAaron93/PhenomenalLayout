@@ -22,13 +22,6 @@ from models.user_choice_models import ChoiceType, UserChoice
 from .gcp_sync_translation_service import GcpSyncCredentialsRequiredError
 from .neologism_detector import NeologismDetector
 
-try:
-    # Legacy delegation typing shim (ADR 0004 Track C deletes this module;
-    # the philosophy layer keeps working after deletion via the stub default).
-    from .translation_service import TranslationService
-except ImportError:  # pragma: no cover - exercised by Track C deletion
-    TranslationService = None  # type: ignore[assignment,misc]
-
 logger = logging.getLogger(__name__)
 
 
@@ -239,7 +232,8 @@ class NeologismPreservationResult:
 class PhilosophyEnhancedTranslationService:
     """Philosophy-Enhanced Translation Service with integrated neologism detection and user choice management.
 
-    This service wraps the existing TranslationService and adds:
+    This service wraps a user-bound ``GcpSyncTranslator`` BYOK engine
+    (ADR 0004: GCP-only, no ambient credentials) and adds:
     - Automatic neologism detection during translation
     - User choice application for handling detected neologisms
     - Preservation of philosophical terms according to user preferences

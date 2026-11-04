@@ -171,7 +171,14 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
 > PARALLEL EXECUTION: C-1 (code deletion) is sequential after B; C-2 (dependency
 > prune) and C-3 (governance docs) are mutually independent.
 
-* **[STATUS: NOT STARTED] T-3.1 — Delete Lingo service modules + orphans**
+* **[STATUS: COMPLETE] T-3.1 — Delete Lingo service modules + orphans**
+  - Verified: `tests/test_lingo_eradication.py` RED on collection before
+    implementation (16 initial failures), then 19 passed at GREEN.
+  - Verified: `examples/neologism_integration_example.py` and the dead
+    delegation typing shim in `services/philosophy_enhanced_translation_service.py`
+    (relative import missed by the first recon sweep) were caught by the
+    extended net; `ruff` + `mypy .` + full `-n auto` replay (74.26% coverage)
+    + CI-exact serial replay (74.27%) all green.
   - `services/translation_service.py`, `services/mcp_lingo_client.py`,
     `services/parallel_translation_service.py`, `services/enhanced_translation_service.py`.
   - `scripts/verify/verify_mcp_timeout_configuration.py`;
@@ -188,6 +195,8 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     `examples/parallel_translation_demo.py`,
     `examples/neologism_integration_example.py` (update or delete),
     `examples/README.md` Lingo sections.
+  - Note: the shim sweep (`from .translation_service import`) is now covered
+    by `TestPackageExportRemoved::test_philosophy_service_has_no_legacy_delegation_shim`.
   - **Depends on:** T-2.4
 
 * **[STATUS: NOT STARTED] T-3.2 — Dependency prune + manifest regen (AGENTS §6.7)**
