@@ -74,7 +74,11 @@ Translates text while detecting and handling neologisms according to user prefer
 - `text` (str): The text to translate
 - `source_lang` (str): Source language code (e.g., "en", "de", "fr")
 - `target_lang` (str): Target language code
-- `provider` (str): Deprecated no-op (backward compatibility only). Has no effect; translation always rides the user-bound GCP BYOK engine (ADR 0004).
+- `provider` (str): Deprecated legacy routing argument (default `"auto"`).
+  Accepted values: `None`, `"gcp"`, `"auto"` — any other value (e.g. the
+  retired `"lingo"`) raises `ValueError`. The value does not select an
+  engine; translation always rides the user-bound GCP BYOK engine
+  (ADR 0004).
 - `session_id` (str): User session ID for choice management
 - `progress_callback` (Optional[Callable]): Progress callback function
 
@@ -104,7 +108,11 @@ Translates multiple texts in batch while handling neologisms.
 - `texts` (List[str]): List of texts to translate
 - `source_lang` (str): Source language code
 - `target_lang` (str): Target language code
-- `provider` (str): Deprecated no-op (backward compatibility only). Has no effect; translation always rides the user-bound GCP BYOK engine (ADR 0004).
+- `provider` (str): Deprecated legacy routing argument (default `"auto"`).
+  Accepted values: `None`, `"gcp"`, `"auto"` — any other value (e.g. the
+  retired `"lingo"`) raises `ValueError`. The value does not select an
+  engine; translation always rides the user-bound GCP BYOK engine
+  (ADR 0004).
 - `session_id` (str): User session ID
 - `progress_callback` (Optional[Callable]): Progress callback function
 
@@ -138,7 +146,11 @@ Translates an entire document with neologism handling.
 - `document` (Dict[str, Any]): Document content structure
 - `source_lang` (str): Source language code
 - `target_lang` (str): Target language code
-- `provider` (str): Deprecated no-op (backward compatibility only). Has no effect; translation always rides the user-bound GCP BYOK engine (ADR 0004).
+- `provider` (str): Deprecated legacy routing argument (default `"auto"`).
+  Accepted values: `None`, `"gcp"`, `"auto"` — any other value (e.g. the
+  retired `"lingo"`) raises `ValueError`. The value does not select an
+  engine; translation always rides the user-bound GCP BYOK engine
+  (ADR 0004).
 - `session_id` (str): User session ID
 - `progress_callback` (Optional[Callable]): Progress callback function
 
@@ -196,7 +208,11 @@ Processes a document with comprehensive philosophy-aware translation.
 - `file_path` (str): Path to the document file
 - `source_lang` (str): Source language code
 - `target_lang` (str): Target language code
-- `provider` (str): Deprecated no-op (backward compatibility only). Has no effect; translation always rides the user-bound GCP BYOK engine (ADR 0004).
+- `provider` (str): Deprecated legacy routing argument (default `"auto"`).
+  Accepted values: `None`, `"gcp"`, `"auto"` — any other value (e.g. the
+  retired `"lingo"`) raises `ValueError`. The value does not select an
+  engine; translation always rides the user-bound GCP BYOK engine
+  (ADR 0004).
 - `user_id` (Optional[str]): User ID for session management
 - `session_id` (Optional[str]): Existing session ID or None to create new
 - `progress_callback` (Optional[Callable]): Progress callback function

@@ -245,7 +245,9 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     mapping explicitly (neologism path rides GCP Translation v3's
     synchronous text API via user-bound `GcpSyncTranslator`; books use the
     async `batchTranslateDocument` pipeline), documents `provider` as a
-    deprecated no-op (4 param sites), and replaces the multi-provider
+    deprecated legacy routing argument validated by the engine — accepted
+    values `None`/`"gcp"`/`"auto"` (default `"auto"`); any other value
+    raises `ValueError` (4 param sites) — and replaces the multi-provider
     fallback error-handling example with fail-closed
     `GcpSyncCredentialsRequiredError` semantics;
     `docs/PHILOSOPHY_ENHANCED_TRANSLATION_ARCHITECTURE_COMPLETE.md` carries
