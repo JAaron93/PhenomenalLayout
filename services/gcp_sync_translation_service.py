@@ -31,6 +31,7 @@ import logging
 import os
 import re
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, BinaryIO
 
@@ -70,6 +71,124 @@ _NOTRANSLATE_SPAN_RE: re.Pattern[str] = re.compile(
     r"<span translate=\"no\">(.*?)</span>", re.IGNORECASE
 )
 
+#: Legacy trailing-argument parity values accepted for provider ("auto" maps
+#: to the GCP sync tier — the content tier serves exactly one provider).
+_SUPPORTED_PROVIDERS: frozenset[str] = frozenset({"gcp", "auto"})
+
+
+def _validate_provider(provider: str | None) -> str | None:
+    """Validate a legacy trailing ``provider`` argument.
+
+    The content tier serves exactly one provider (``gcp`` — ADR 0004 D2);
+    unknown values fail closed instead of being silently substituted.
+
+    Args:
+        provider: Legacy provider argument (``None`` accepted).
+
+    Returns:
+        The validated provider value.
+
+    Raises:
+        ValueError: If *provider* names a retired or unknown provider.
+    """
+    if provider is None or provider in _SUPPORTED_PROVIDERS:
+        return provider
+    raise ValueError(
+        f"Unsupported provider {provider!r}: the sync tier serves only 'gcp' "
+        "(ADR 0004 retired all other providers)."
+    )
+
+
+@dataclass(frozen=True)
+class _LegacyDocArgs:
+    """Canonicalized legacy content-dict ``translate_document`` arguments."""
+
+    source_lang: str
+    target_lang: str
+    provider: str | None
+    progress_callback: Callable[[int], None] | None
+
+
+_LANGUAGE_CODE_RE: re.Pattern[str] = re.compile(r"[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]+)*")
+
+
+def _canonicalize_legacy_doc_args(
+    mime_type: Any,
+    source_lang: Any,
+    target_lang: Any,
+    provider: Any,
+    progress_callback: Any,
+) -> _LegacyDocArgs | None:
+    """Canonicalize legacy content-dict ``translate_document`` positionals.
+
+    The legacy callers enumerate ``(content, source_lang, target_lang,
+    provider, progress_callback)`` positionally; because the encodable
+    stream contract's second positional is a MIME type, a dict call's
+    arguments land one slice earlier in this method's parameter list. The
+    shift is deterministic: a string in the ``mime_type`` slot can only come
+    from the legacy shape. Fail-closed validation guards against silently
+    mis-reading either contract.
+
+    Args:
+        mime_type: 2nd positional as delivered (legacy ``source_lang``).
+        source_lang: 3rd positional as delivered (legacy ``target_lang``).
+        target_lang: 4th positional as delivered (legacy ``provider``).
+        provider: 5th positional as delivered (legacy ``progress_callback``).
+        progress_callback: 6th positional as delivered (always absent in
+            legacy 5-argument calls).
+
+    Returns:
+        ``None`` when ``mime_type`` is ``None`` (kwargs-style dict call with
+        arguments already in their named slots); otherwise canonicalized
+        legacy arguments.
+
+    Raises:
+        ValueError: If the positional shape does not match either contract.
+    """
+    if mime_type is None:
+        # kwargs-mode: the named parameters carry the dict contract directly.
+        if provider is not None and not isinstance(provider, str):
+            raise ValueError("provider must be a string or None in the dict contract")
+        if progress_callback is not None and not callable(progress_callback):
+            raise ValueError(
+                "progress_callback must be callable or None in the dict contract"
+            )
+        return None
+    if not isinstance(mime_type, str):
+        raise ValueError(
+            "translate_document dict contract expects "
+            "(content, source_lang, target_lang, provider, progress_callback) "
+            "positionally, or keyword arguments"
+        )
+    legacy_source: Any = mime_type
+    legacy_target: Any = source_lang
+    legacy_provider: Any = target_lang
+    legacy_callback: Any = provider
+    for name, code in (("source_lang", legacy_source), ("target_lang", legacy_target)):
+        if not isinstance(code, str) or not _LANGUAGE_CODE_RE.fullmatch(code):
+            raise ValueError(
+                f"translate_document dict contract misaligned arguments "
+                f"({name}={code!r}); expected the legacy positional shape "
+                "(content, source_lang, target_lang, provider, progress_callback) "
+                "or keyword arguments"
+            )
+    if legacy_provider is not None and not isinstance(legacy_provider, str):
+        raise ValueError(
+            "translate_document dict contract misaligned arguments "
+            f"(provider={legacy_provider!r}); expected legacy positional shape"
+        )
+    if legacy_callback is not None and not callable(legacy_callback):
+        raise ValueError(
+            "translate_document dict contract misaligned arguments "
+            "(progress_callback not callable); expected legacy positional shape"
+        )
+    return _LegacyDocArgs(
+        source_lang=legacy_source,
+        target_lang=legacy_target,
+        provider=legacy_provider,
+        progress_callback=legacy_callback,
+    )
+
 
 class GcpSyncCredentialsRequiredError(RuntimeError):
     """Fail-closed error when a user lacks usable BYOK credentials.
@@ -91,7 +210,8 @@ class GcpSyncCredentialsRequiredError(RuntimeError):
             user_id: Identifier whose credentials were missing or unusable.
         """
         super().__init__(
-            f"No usable GCP credentials for user_id={user_id}. {_ONBOARDING_HINT}"
+            f"[{self.code}] No usable GCP credentials for user_id={user_id}. "
+            f"{_ONBOARDING_HINT}"
         )
         self.user_id: str = user_id
 
@@ -284,7 +404,11 @@ class GcpSyncTranslator:
     # ------------------------------------------------------------------
 
     async def translate_text(
-        self, text: str, source_lang: str, target_lang: str
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        provider: str | None = None,
     ) -> str:
         """Translate one string through the sync tier.
 
@@ -292,14 +416,18 @@ class GcpSyncTranslator:
             text: Source text (blank input short-circuits to ``""``).
             source_lang: Source language code (normalized 2-letter bodies).
             target_lang: Target language code.
+            provider: Legacy trailing argument; only ``gcp``/``auto`` accepted
+                (validated, otherwise ignored — one-provider tier).
 
         Returns:
             The translated string with terminology markers stripped.
 
         Raises:
-            GcpSyncCredentialsRequiredError: If the user has no usable.
+            ValueError: If *provider* is neither ``gcp`` nor ``auto``.
+            GcpSyncCredentialsRequiredError: If the user has no usable
                 BYOK credentials (fail-closed; never a silent substitute).
         """
+        _validate_provider(provider)
         if not isinstance(text, str):
             raise TypeError("text must be a string")
         self._stats.total_calls += 1
@@ -316,7 +444,11 @@ class GcpSyncTranslator:
             raise
 
     async def translate_batch(
-        self, texts: list[str], source_lang: str, target_lang: str
+        self,
+        texts: list[str],
+        source_lang: str,
+        target_lang: str,
+        provider: str | None = None,
     ) -> list[str]:
         """Translate a batch of strings preserving order and 1:1 mapping.
 
@@ -327,14 +459,17 @@ class GcpSyncTranslator:
             texts: Source strings (order preserved 1:1 in the result).
             source_lang: Source language code.
             target_lang: Target language code.
+            provider: Legacy trailing argument; only ``gcp``/``auto`` accepted.
 
         Returns:
             Translated strings aligned with the input order.
 
         Raises:
+            ValueError: If *provider* is neither ``gcp`` nor ``auto``.
             GcpSyncCredentialsRequiredError: If the user has no usable
                 BYOK credentials.
         """
+        _validate_provider(provider)
         if texts is None:
             raise TypeError("texts must be a list of strings")
         self._stats.total_calls += 1
@@ -369,35 +504,99 @@ class GcpSyncTranslator:
 
     async def translate_document(
         self,
+        document: BinaryIO | dict[str, Any],
+        mime_type: str | None = None,
+        source_lang: str | None = None,
+        target_lang: str | None = None,
+        provider: str | None = None,
+        progress_callback: Callable[[int], None] | None = None,
+    ) -> BinaryIO | dict[str, Any]:
+        """Translate one document (two caller contracts, ADR 0004 Track B).
+
+        * **Stream preview contract** (Track A): ``document`` is a
+          ``BinaryIO`` — synchronous ``translateDocument`` translation of the
+          inline bytes (≤ sample pages, AGENTS §2.1); returns a
+          :class:`io.BytesIO` of the translated bytes. Arguments arrive as
+          ``(document, mime_type, source_lang, target_lang)``.
+        * **Legacy content-dict contract** (philosophy delegation parity):
+          ``document`` is the extracted-content ``dict``; every non-empty
+          page text element is translated and written back without touching
+          unrelated layout data. Arguments arrive as
+          ``(content, source_lang, target_lang, provider, progress_callback)``
+          — i.e. one positional slot earlier than the stream contract, since
+          the stream's second positional is a MIME type. Observed positional
+          values are canonicalized inside this method and validated loudly.
+
+        Args:
+            document: Binary stream or extracted-content dictionary.
+            mime_type: Stream contract — source/output MIME type. On the
+                legacy dict contract this positional carries *source_lang*
+                instead (canonicalized).
+            source_lang: Stream contract — source language; on the dict
+                contract this positional carries *target_lang*.
+            target_lang: Stream contract — target language; on the dict
+                contract this positional carries *provider*.
+            provider: Legacy trailing argument (``gcp``/``auto`` only).
+            progress_callback: Legacy dict contract — integer percent (0–100).
+
+        Returns:
+            ``io.BytesIO`` for streams; translated content ``dict`` for the
+            legacy dict contract.
+
+        Raises:
+            ValueError: If the arguments of the requested contract do not
+                line up (fail-closed against silent mis-translation).
+            GcpSyncCredentialsRequiredError: If the user has no usable
+                BYOK credentials.
+            RuntimeError: If the sync service returns no byte-stream output.
+        """
+        if isinstance(document, dict):
+            legacy: _LegacyDocArgs | None = _canonicalize_legacy_doc_args(
+                mime_type, source_lang, target_lang, provider, progress_callback
+            )
+            if legacy is None:
+                # kwargs-style dict call: arguments already in their named slots.
+                if mime_type is not None:
+                    raise ValueError(
+                        "translate_document dict contract accepts either "
+                        "keyword arguments or the legacy positional shape, "
+                        "not both"
+                    )
+                legacy = _LegacyDocArgs(
+                    source_lang=str(source_lang or ""),
+                    target_lang=str(target_lang or ""),
+                    provider=provider,
+                    progress_callback=progress_callback,
+                )
+            _validate_provider(legacy.provider)
+            return await self._translate_content_dict(
+                document,
+                legacy.source_lang,
+                legacy.target_lang,
+                legacy.progress_callback,
+            )
+
+        # Stream preview contract (strict argument positions).
+        _validate_provider(provider)
+        if not isinstance(mime_type, str) or not mime_type.strip():
+            raise ValueError("mime_type is required for stream document translation")
+        if source_lang is None or target_lang is None:
+            raise ValueError(
+                "source_lang and target_lang are required for stream "
+                "document translation"
+            )
+        return await self._translate_document_stream(
+            document, mime_type, source_lang, target_lang
+        )
+
+    async def _translate_document_stream(
+        self,
         document: BinaryIO,
         mime_type: str,
         source_lang: str,
         target_lang: str,
     ) -> BinaryIO:
-        """Translate one document via the sync preview tier (≤ sample pages).
-
-        Honors AGENTS §2.1: synchronous ``translateDocument`` is the preview
-        mechanism for 1–3 sample pages; books stay on the batch tier.
-
-        Args:
-            document: Seekable or non-seekable stream providing source bytes.
-                Read exactly once by the engine inside its worker thread;
-                the caller retains ownership of the stream.
-            mime_type: Source and output MIME type (e.g. ``application/pdf``).
-            source_lang: Source language code.
-            target_lang: Target language code.
-
-        Returns:
-            A :class:`io.BytesIO` with the translated document bytes.
-
-        Raises:
-            ValueError: If the document produces no bytes.
-            GcpSyncCredentialsRequiredError: If the user has no usable
-                BYOK credentials.
-            RuntimeError: If the service returns no byte-stream output.
-        """
-        if not isinstance(mime_type, str) or not mime_type.strip():
-            raise ValueError("mime_type is required")
+        """Run the sync preview-tier translation of inline document bytes."""
         self._stats.total_calls += 1
 
         def worker() -> bytes:
@@ -443,6 +642,117 @@ class GcpSyncTranslator:
             raise
         self._stats.translated_documents += 1
         return io.BytesIO(data)
+
+    async def _translate_content_dict(
+        self,
+        content: dict[str, Any],
+        source_lang: str,
+        target_lang: str,
+        progress_callback: Callable[[int], None] | None,
+    ) -> dict[str, Any]:
+        """Translate extracted-content text elements (legacy dict contract).
+
+        Parity port of the legacy ``TranslationService.translate_document``
+        block pipeline: only ``pages → text_elements`` entries change;
+        unrelated content (layouts, metadata, images, page geometry) is
+        passed through untouched. Empty/whitespace elements are preserved
+        exactly.
+
+        Args:
+            content: Extracted document content dictionary.
+            source_lang: Source language code.
+            target_lang: Target language code.
+            progress_callback: Optional integer percent (0–100) callback.
+
+        Returns:
+            A shallow-copied content dict whose ``pages`` structure carries
+            the translated text.
+
+        Raises:
+            TypeError: If *content* is not a mapping.
+            GcpSyncCredentialsRequiredError: If the user has no usable
+                BYOK credentials.
+        """
+        if not isinstance(content, dict):
+            raise TypeError("content must be a dict")
+        _normalize_language_code(source_lang)
+        _normalize_language_code(target_lang)
+        self._stats.total_calls += 1
+        try:
+            source_pages: list[Any] = list(content.get("pages") or [])
+            translated_pages: list[Any] = [
+                dict(page) if isinstance(page, dict) else page for page in source_pages
+            ]
+            for page in translated_pages:
+                if isinstance(page, dict) and isinstance(
+                    page.get("text_elements"), list
+                ):
+                    page["text_elements"] = [
+                        dict(element) if isinstance(element, dict) else element
+                        for element in page["text_elements"]
+                    ]
+
+            blocks: list[tuple[int, int, str]] = []
+            for page_index, page in enumerate(translated_pages):
+                if not isinstance(page, dict):
+                    continue
+                elements = page.get("text_elements")
+                if not isinstance(elements, list):
+                    continue
+                for element_index, element in enumerate(elements):
+                    if not isinstance(element, dict):
+                        continue
+                    text = element.get("text")
+                    if isinstance(text, str) and text.strip():
+                        blocks.append((page_index, element_index, text))
+
+            if progress_callback:
+                progress_callback(0)
+
+            translated_content: dict[str, Any] = dict(content)
+            translated_content["pages"] = translated_pages
+
+            batch_size: int = 20
+            total_blocks: int = len(blocks)
+            for start in range(0, total_blocks, batch_size):
+                batch = blocks[start : start + batch_size]
+                batch_texts: list[str] = [text for _, _, text in batch]
+                translated_texts: list[str] = await self.translate_batch(
+                    batch_texts, source_lang, target_lang
+                )
+                for (page_index, element_index, _), translated in zip(
+                    batch, translated_texts, strict=True
+                ):
+                    page = translated_pages[page_index]
+                    if isinstance(page, dict) and isinstance(
+                        page.get("text_elements"), list
+                    ):
+                        element = page["text_elements"][element_index]
+                        if isinstance(element, dict):
+                            element["text"] = translated
+                if progress_callback and total_blocks:
+                    percent: int = min(
+                        100, int((start + len(batch)) / total_blocks * 100)
+                    )
+                    progress_callback(percent)
+
+            if progress_callback:
+                progress_callback(100)
+            return translated_content
+        except Exception:
+            self._stats.errors += 1
+            raise
+
+    def get_available_providers(self) -> list[str]:
+        """Return the single-provider registry list (surface parity).
+
+        Exposed on the engine because philosophy adapters call
+        ``get_available_providers`` directly against the injected engine.
+
+        Returns:
+            ``["gcp"]`` — the sync tier provider name.
+        """
+        return [self.PROVIDER_NAME]
 
     def get_statistics(self) -> dict[str, Any]:
         """Return stable statistics for engine telemetry.

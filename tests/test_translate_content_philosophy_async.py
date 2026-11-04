@@ -217,31 +217,35 @@ async def test_non_philosophy_path_unchanged(monkeypatch: pytest.MonkeyPatch):
         "text_by_page": {0: texts},
     }
 
-    # Monkeypatch the batch translator to assert only non-empty are passed and in order
-    import core.translation_handler as th
+    # ADR 0004 Track B: the non-philosophy path runs a credential-bound
+    # engine resolved at submission time. Capture batch calls on the stub.
 
     captured_batches: list[list[str]] = []
 
-    async def _fake_batch(
-        texts: list[str], _source_lang: str, _target_lang: str
-    ) -> list[str]:
-        # record what we actually receive
-        captured_batches.append(list(texts))
-        # simulate work
-        await asyncio.sleep(0.01)
-        return [f"T:{t}" for t in texts]
+    class _CapturingEngine:
+        """User-bound engine stub recording translate_batch inputs."""
 
-    monkeypatch.setattr(
-        th.translation_service, "translate_batch", _fake_batch, raising=True
-    )
+        async def translate_batch(
+            self, texts: list[str], _source_lang: str, _target_lang: str
+        ) -> list[str]:
+            # record what we actually receive
+            captured_batches.append(list(texts))
+            # simulate work
+            await asyncio.sleep(0.01)
+            return [f"T:{t}" for t in texts]
 
-    # Act: non-philosophy path
+    engine = _CapturingEngine()
+
+    _ = monkeypatch  # patch point retained for engine-level tests
+
+    # Act: non-philosophy path (engine bound explicitly, as the route does)
     translated_by_page, _ = await translate_content(
         content=content,
         source_language="en",
         target_language="de",
         philosophy_mode=False,  # important: go through non-philosophy branch
         session_id=None,
+        translator=engine,
     )
 
     # Assert: batch received only the non-empty items in their relative order

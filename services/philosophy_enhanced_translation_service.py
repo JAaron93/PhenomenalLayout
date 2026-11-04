@@ -19,10 +19,72 @@ from core.dynamic_choice_engine import OptimizedUserChoiceManager as UserChoiceM
 from models.neologism_models import DetectedNeologism, NeologismAnalysis
 from models.user_choice_models import ChoiceType, UserChoice
 
+from .gcp_sync_translation_service import GcpSyncCredentialsRequiredError
 from .neologism_detector import NeologismDetector
-from .translation_service import TranslationService
+
+try:
+    # Legacy delegation typing shim (ADR 0004 Track C deletes this module;
+    # the philosophy layer keeps working after deletion via the stub default).
+    from .translation_service import TranslationService
+except ImportError:  # pragma: no cover - exercised by Track C deletion
+    TranslationService = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
+
+
+class UnboundTranslationStub:
+    """Statistics-only engine stub used when no user engine is bound.
+
+    ADR 0004 D2/D3: the philosophy layer is never allowed an ambient
+    credential engine. Without an explicitly injected user-bound
+    ``GcpSyncTranslator`` (request path), the default engine serves the
+    statistics/config surface only and fails closed on any translation
+    attempt.
+    """
+
+    PROVIDER_NAME: str = "gcp"
+
+    async def translate_text(
+        self,
+        text: str,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        source_lang: str,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        target_lang: str,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        provider: str | None = None,  # noqa: ARG002  (fail-closed engine protocol)
+    ) -> str:
+        """Fail closed — no ambient credentials exist (ADR 0004 D3)."""
+        raise GcpSyncCredentialsRequiredError("<unbound>")
+
+    async def translate_batch(
+        self,
+        texts: list[str],  # noqa: ARG002  (fail-closed unbound engine protocol)
+        source_lang: str,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        target_lang: str,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        provider: str | None = None,  # noqa: ARG002  (fail-closed engine protocol)
+    ) -> list[str]:
+        """Fail closed — no ambient credentials exist (ADR 0004 D3)."""
+        raise GcpSyncCredentialsRequiredError("<unbound>")
+
+    async def translate_document(
+        self,
+        document: Any,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        mime_type: Any = None,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        source_lang: Any = None,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        target_lang: Any = None,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        provider: Any = None,  # noqa: ARG002  (fail-closed unbound engine protocol)
+        progress_callback: (
+            Callable[[int], None] | None
+        ) = None,  # noqa: ARG002 (fail-closed engine protocol)
+    ) -> Any:
+        """Fail closed — no ambient credentials exist (ADR 0004 D3)."""
+        raise GcpSyncCredentialsRequiredError("<unbound>")
+
+    def get_available_providers(self) -> list[str]:
+        """Surface the GCP provider registry (config parity)."""
+        return [self.PROVIDER_NAME]
+
+    def get_statistics(self) -> dict[str, Any]:
+        """Return an empty statistics snapshot (nothing translated)."""
+        return {}
 
 
 @functools.cache
@@ -167,9 +229,9 @@ class NeologismPreservationResult:
         return {
             "original_text": self.original_text,
             "translated_text": self.translated_text,
-            "neologism_analysis": self.neologism_analysis.to_dict()
-            if self.neologism_analysis
-            else None,
+            "neologism_analysis": (
+                self.neologism_analysis.to_dict() if self.neologism_analysis else None
+            ),
             "neologisms_preserved": [n.to_dict() for n in self.neologisms_preserved],
             "user_choices_applied": [c.to_dict() for c in self.user_choices_applied],
             "preservation_markers": self.preservation_markers,
@@ -188,7 +250,7 @@ class PhilosophyEnhancedTranslationService:
 
     def __init__(
         self,
-        translation_service: TranslationService | None = None,
+        translation_service: Any | None = None,
         neologism_detector: NeologismDetector | None = None,
         user_choice_manager: UserChoiceManager | None = None,
         terminology_path: str | None = None,
@@ -199,7 +261,11 @@ class PhilosophyEnhancedTranslationService:
         """Initialize the philosophy-enhanced translation service.
 
         Args:
-            translation_service: Base translation service instance
+            translation_service: User-bound translation engine
+                (``GcpSyncTranslator``). Defaults to
+                :class:`UnboundTranslationStub`, which fails closed on
+                translation attempts (ADR 0004 D2/D3) — real translation
+                requires a request-path bound engine.
             neologism_detector: Neologism detection service
             user_choice_manager: User choice management service
             terminology_path: Path to terminology file
@@ -210,11 +276,11 @@ class PhilosophyEnhancedTranslationService:
         # Track whether dependencies were explicitly injected (affects error propagation)
         self._injected_translation_service = translation_service is not None
 
-        # Initialize base translation service
-        self.translation_service = translation_service or TranslationService(
-            terminology_map=(
-                self._load_terminology(terminology_path) if terminology_path else None
-            )
+        # Initialize base translation service (no ambient engine — fail closed)
+        self.translation_service: Any = (
+            translation_service
+            if translation_service is not None
+            else UnboundTranslationStub()
         )
 
         # Initialize neologism detection
@@ -263,8 +329,9 @@ class PhilosophyEnhancedTranslationService:
         target_lang: str,
         provider: str = "auto",
         session_id: str | None = None,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None]
-        | None = None,
+        progress_callback: (
+            Callable[[PhilosophyTranslationProgress], None] | None
+        ) = None,
     ) -> NeologismPreservationResult:
         """Async version: Translate text with integrated neologism detection and user choice handling.
 
@@ -404,8 +471,9 @@ class PhilosophyEnhancedTranslationService:
         target_lang: str,
         provider: str = "auto",
         session_id: str | None = None,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None]
-        | None = None,
+        progress_callback: (
+            Callable[[PhilosophyTranslationProgress], None] | None
+        ) = None,
     ) -> NeologismPreservationResult:
         """Synchronous wrapper: Translate text with integrated neologism detection and user choice handling.
 
@@ -438,10 +506,10 @@ class PhilosophyEnhancedTranslationService:
         target_lang: str,
         provider: str = "auto",
         session_id: str | None = None,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None] | None = None,
-    ) -> list[
-        NeologismPreservationResult
-    ]:
+        progress_callback: (
+            Callable[[PhilosophyTranslationProgress], None] | None
+        ) = None,
+    ) -> list[NeologismPreservationResult]:
         """Synchronous batch translation."""
         return _run_coro_sync(
             self._translate_batch_with_neologism_handling_async(
@@ -461,7 +529,9 @@ class PhilosophyEnhancedTranslationService:
         target_lang: str,
         provider: str = "auto",
         session_id: str | None = None,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None] | None = None,
+        progress_callback: (
+            Callable[[PhilosophyTranslationProgress], None] | None
+        ) = None,
     ) -> list[NeologismPreservationResult]:
         """Asynchronous batch translation."""
         return await self._translate_batch_with_neologism_handling_async(
@@ -475,8 +545,9 @@ class PhilosophyEnhancedTranslationService:
         target_lang: str,
         provider: str = "auto",
         session_id: str | None = None,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None]
-        | None = None,
+        progress_callback: (
+            Callable[[PhilosophyTranslationProgress], None] | None
+        ) = None,
     ) -> list[NeologismPreservationResult]:
         """Translate a batch of texts with neologism handling.
 
@@ -573,8 +644,9 @@ class PhilosophyEnhancedTranslationService:
         self,
         text: str,
         progress: PhilosophyTranslationProgress,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None]
-        | None = None,
+        progress_callback: (
+            Callable[[PhilosophyTranslationProgress], None] | None
+        ) = None,
     ) -> NeologismAnalysis:
         """Detect neologisms in text asynchronously."""
         # Run neologism detection in a thread to avoid blocking
@@ -606,8 +678,9 @@ class PhilosophyEnhancedTranslationService:
         analysis: NeologismAnalysis,
         session_id: str | None,
         progress: PhilosophyTranslationProgress,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None]
-        | None = None,
+        progress_callback: (
+            Callable[[PhilosophyTranslationProgress], None] | None
+        ) = None,
     ):
         """Apply user choices to detected neologisms."""
         preservation_markers: dict[str, str] = {}
@@ -750,8 +823,9 @@ class PhilosophyEnhancedTranslationService:
         target_lang: str,
         provider: str,
         progress: PhilosophyTranslationProgress,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None]
-        | None = None,
+        progress_callback: (
+            Callable[[PhilosophyTranslationProgress], None] | None
+        ) = None,
     ) -> str:
         """Translate text with preserved markers."""
         # Use the existing translation service (supports sync/async).
@@ -802,8 +876,9 @@ class PhilosophyEnhancedTranslationService:
         target_lang: str,
         provider: str = "auto",
         session_id: str | None = None,
-        progress_callback: Callable[[PhilosophyTranslationProgress], None]
-        | None = None,
+        progress_callback: (
+            Callable[[PhilosophyTranslationProgress], None] | None
+        ) = None,
     ) -> dict[str, Any]:
         """Translate document content with neologism handling.
 
@@ -892,9 +967,9 @@ class PhilosophyEnhancedTranslationService:
                 "translated_content": translated_content,
                 "original_content": content,
                 # Provide both singular and plural keys for compatibility
-                "neologism_analysis": neologism_analyses[0]
-                if neologism_analyses
-                else None,
+                "neologism_analysis": (
+                    neologism_analyses[0] if neologism_analyses else None
+                ),
                 "neologism_analyses": neologism_analyses,
                 "session_id": session_id,
                 "processing_metadata": {
@@ -909,6 +984,7 @@ class PhilosophyEnhancedTranslationService:
 
         except Exception as e:
             logger.error(f"Error in document translation with neologism handling: {e}")
+
             # Fallback to regular document translation
             # Fallback (support sync/async)
             def _doc_progress(percent: int) -> None:
@@ -990,20 +1066,19 @@ class PhilosophyEnhancedTranslationService:
         return content
 
     def _select_best_provider(self) -> str:
-        """Select the best available provider."""
+        """Select the best available provider (GCP sync tier, ADR 0004)."""
         try:
             # Use get_available_providers to get a list of valid providers
             available_providers = self.get_available_providers()
-            # If "lingo" is in the list, use it as the fallback
-            if "lingo" in available_providers:
-                return "lingo"
-            # Otherwise, use the first available provider or "auto" if none
-            elif available_providers:
-                return available_providers[0]
-            else:
-                return "auto"
+            # Prefer the single GCP provider, then the first available
+            if "gcp" in available_providers:
+                return "gcp"
+            if available_providers:
+                first: Any = available_providers[0]
+                return str(first) if first is not None else "gcp"
+            return "gcp"
         except Exception:
-            return "lingo"
+            return "gcp"
 
     def get_available_providers(self) -> list[str]:
         """Get list of available translation providers."""
@@ -1012,10 +1087,10 @@ class PhilosophyEnhancedTranslationService:
             # list; keep the coercion branch reachable via Any.
             prov: Any = self.translation_service.get_available_providers()
             if not isinstance(prov, list):
-                return ["lingo"]
+                return ["gcp"]
             return prov
         except Exception:
-            return ["lingo"]
+            return ["gcp"]
 
     def get_statistics(self) -> dict[str, Any]:
         """Get service statistics."""
@@ -1058,7 +1133,6 @@ class PhilosophyEnhancedTranslationService:
     # Convenience functions for easy integration
 
 
-
 def create_philosophy_enhanced_translation_service(
     terminology_path: str | None = None,
     db_path: str = "database/user_choices.db",
@@ -1098,12 +1172,11 @@ async def translate_with_philosophy_awareness(
     """
     # Use provided service or create new one
     if service is None:
-        service = create_philosophy_enhanced_translation_service(
-            terminology_path
-        )
+        service = create_philosophy_enhanced_translation_service(terminology_path)
 
     result = await service.translate_text_with_neologism_handling_async(
         text, source_lang, target_lang, provider, session_id
     )
-    # Convert to dict for backward compatibility
-    return result.to_dict()
+    # Convert to dict for backward compatibility. User-bound GCP engines
+    # (ADR 0004) may return plain result dicts — pass those through intact.
+    return result.to_dict() if hasattr(result, "to_dict") else result

@@ -85,7 +85,7 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
 
 ## Track B — Handler & API Rewiring
 
-* **[STATUS: NOT STARTED] T-2.1 — Failing tests: request-path rewiring (RED)**
+* **[STATUS: COMPLETE] T-2.1 — Failing tests: request-path rewiring (RED)**
   - `/philosophy/translate` and `/translate` accept `user_id` + auth dependency
     (mirror `POST /book/translate` pattern at `api/routes.py:1458-1465`).
   - Missing-credentials 503 onboarding response.
@@ -93,9 +93,14 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     gains an engine parameter; job closure never re-resolves identity).
   - Config endpoints unchanged: `get_available_providers`/`get_statistics`
     surface through `api/routes.py:160-203` (philosophy service intact).
+  - Verified: `tests/test_translate_routes_byok.py` (10 tests: 422 without
+    `user_id`, 401 unauthenticated, 503 + `GCP_CREDENTIALS_REQUIRED` fail-closed,
+    engine/job binding, cross-identity 403, config-endpoint provider parity)
+    and `tests/test_translate_content_engine_binding.py` (10 tests) — written
+    RED first with 25 failing tests across the Track B surfaces.
   - **Depends on:** T-1.5
 
-* **[STATUS: NOT STARTED] T-2.2 — Rewire `core/translation_handler.py` (GREEN)**
+* **[STATUS: COMPLETE] T-2.2 — Rewire `core/translation_handler.py` (GREEN)**
   - Singleton becomes the non-translating statistics/config facade holding the
     BYOK manager reference + `translator_for_user(user_id)` registry.
   - Document job flow + upload hint string (`core/translation_handler.py:898`)
@@ -104,16 +109,51 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     `tests/test_translate_content_philosophy_async.py`,
     `tests/test_translation.py` — patch points (`th.translation_service`,
     `th.` module vars) must keep working (AGENTS §6.2 module-family hygiene).
+  - Verified: RED→GREEN with suite extensions —
+    `tests/test_translate_content_engine_binding.py` 10/10 (fail-closed
+    `GcpSyncCredentialsRequiredError` without user/engine, injected-engine
+    resolution, credential-error never swallowed by the legacy fallback while
+    transient errors still fall back to source text, philosophy mode wraps the
+    user engine via `build_philosophy_service`, module-singleton patch point
+    intact, job threading + fail-closed job error records, shared BYOK vault
+    identity) and `tests/services/test_gcp_sync_translation_service.py` 23/23
+    (Track A 17 + Track B compat 6: trailing `provider` positional accepted
+    for `gcp`/`auto` and ValueError fail-closed otherwise, engine-level
+    `get_available_providers`, legacy content-dict `translate_document`
+    positional canonicalization with `progress_callback` parity).
+    `tests/test_translate_one_safety.py` and
+    `tests/test_translate_content_philosophy_async.py` pass unmodified except
+    `test_non_philosophy_path_unchanged`, whose `th.translation_service.
+    translate_batch` instance-method patch migrated to the ADR 0004 seam
+    (stub engine bound via `translator=` — same assertions: only non-empty
+    texts batched in order, empties and spacing preserved verbatim).
+    Handler materialization: PEP 562 lazy `translation_service` attribute →
+    `GcpSyncTranslationService` over `api.routes.get_byok_credentials_manager`
+    (no second manager); `process_advanced_translation_job` now also re-stores
+    mutated job dicts through `translation_jobs[job_id] = job` because
+    `ThreadSafeTranslationJobs.__getitem__` returns shallow copies
+    (`core/state_manager.py:197-216`) — fixes a pre-existing lost-update bug.
   - **Depends on:** T-2.1
 
-* **[STATUS: NOT STARTED] T-2.3 — `utils/document_errors.py` extension**
+* **[STATUS: COMPLETE] T-2.3 — `utils/document_errors.py` extension**
   - Add `GCP_CREDENTIALS_REQUIRED` with onboarding guidance message; wire
     through `get_error_message` consumers (`api/routes.py:66-71`).
+  - Verified: engine error message carries a machine-readable
+    `[GCP_CREDENTIALS_REQUIRED]` prefix, both route raise sites map to HTTP 503
+    with the code prepended to the onboarding guidance; registry test updated
+    to the 4-code set with an onboarding-message contract test (16/16 in
+    `tests/test_document_errors.py` + `tests/services/test_philosophy_unbound_default.py`).
   - **Depends on:** T-2.1 (parallel with T-2.2)
 
-* **[STATUS: NOT STARTED] T-2.4 — Track B green run**
+* **[STATUS: IN PROGRESS] T-2.4 — Track B green run**
   - Targeted `--no-cov` inner loop, then `pytest -n auto`; fix any
     scheduling-dependent failures per AGENTS §6.3 triage (serial diff check).
+  - Verified: targeted combined run 59/59 (engine + routes + doc-errors +
+    unbound-default compat) and legacy replay suites
+    (`test_translate_one_safety`, `test_translate_content_philosophy_async`,
+    `test_translate_content_philosophy_load`, `test_phase5_services`,
+    `test_book_translation_orchestrator`) all green; full `pytest -n auto`
+    + CI-exact serial run pending.
   - **Depends on:** T-2.2, T-2.3
 
 ---

@@ -408,3 +408,118 @@ class TestNonBlockingIO:
 
         assert result == "EN:Welt"
         assert any("worker" in name or "sync" in name for name in seen)
+
+
+# ---------------------------------------------------------------------------
+# Track B — legacy caller parity: provider param + content-dict documents
+# ---------------------------------------------------------------------------
+
+
+class TestProviderArgCompat:
+    """Trailing ``provider`` positional accepted (legacy call parity)."""
+
+    def test_translate_text_accepts_provider_gcp_and_auto(self) -> None:
+        """Explicit provider values for the GCP tier are accepted verbatim."""
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+
+        result = asyncio.run(translator.translate_text("Der Geist", "de", "en", "gcp"))
+
+        assert result == "EN:Der Geist"
+
+        auto_result = asyncio.run(
+            translator.translate_text("Der Geist", "de", "en", "auto")
+        )
+
+        assert auto_result == "EN:Der Geist"
+
+    def test_translate_text_rejects_unknown_provider(self) -> None:
+        """Unknown providers fail closed (no silent substitution, ADR D3)."""
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+
+        with pytest.raises(ValueError, match="Unsupported provider"):
+            asyncio.run(translator.translate_text("X", "de", "en", "lingo"))
+
+    def test_translate_batch_accepts_provider_positional(self) -> None:
+        """Batch calls keep accepting the trailing provider argument."""
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+
+        result = asyncio.run(translator.translate_batch(["a", "b"], "de", "en", "gcp"))
+
+        assert result == ["EN:a", "EN:b"]
+
+    def test_engine_get_available_providers_is_gcp(self) -> None:
+        """Engine-level provider registry is stable for philosophy adapters."""
+        manager = _FakeCredentialsManager()
+        translator = _make_translator(manager)
+
+        assert translator.get_available_providers() == ["gcp"]
+
+
+class TestContentDictDocumentContract:
+    """Legacy content-dict translate_document contract (philosophy fallback)."""
+
+    def _content(self) -> dict[str, Any]:
+        """Minimal extracted-content dict with text elements."""
+        return {
+            "type": "pdf_advanced",
+            "pages": [
+                {
+                    "page_num": 0,
+                    "text_elements": [
+                        {"id": "e1", "text": "Der Geist"},
+                        {"id": "e2", "text": ""},
+                        {"id": "e3", "text": "Kraft und Not"},
+                    ],
+                }
+            ],
+        }
+
+    def test_content_dict_translated_positionally(self) -> None:
+        """(content, source, target, provider, callback) positional legacy shape."""
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+
+        percents: list[int] = []
+        result = asyncio.run(
+            translator.translate_document(
+                self._content(), "de", "en", "gcp", percents.append
+            )
+        )
+
+        element = result["pages"][0]["text_elements"]
+        assert element[0]["text"] == "EN:Der Geist"
+        assert element[1]["text"] == ""
+        assert element[2]["text"] == "EN:Kraft und Not"
+        assert percents[0] == 0
+        assert percents[-1] == 100
+        assert percents == sorted(percents)
+
+    def test_content_dict_requires_credentials(self) -> None:
+        """Missing credentials raise the typed fail-closed error."""
+        manager = _FakeCredentialsManager()
+        translator = _make_translator(manager)
+
+        with pytest.raises(GcpSyncCredentialsRequiredError):
+            asyncio.run(
+                translator.translate_document(self._content(), "de", "en", "gcp", None)
+            )
+
+    def test_stream_contract_still_supported(self) -> None:
+        """The Track A BinaryIO preview contract remains intact."""
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+        source = io.BytesIO(b"%PDF-1.4 sample")
+
+        out = asyncio.run(
+            translator.translate_document(source, "application/pdf", "de", "en")
+        )
+
+        assert out.read() == b"TRANSLATED[%PDF-1.4 sample]"
