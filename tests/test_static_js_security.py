@@ -12,13 +12,20 @@ surfacing as a security alert.
 Allowed ``innerHTML`` right-hand sides:
 - an empty string (element clearing), or
 - a pure string literal (single-/double-quoted or a backtick template)
-  with no ``${`` interpolation, no ``+`` concatenation, and no variable
-  reference.
+  with no ``${`` interpolation, **followed only by statement
+  termination**.
 
-Flaw classification the hand-rolled scanner covers instead of one regex:
-- multi-line template literals (``${`` detection across newlines),
-- concatenation after a quoted literal (``"<li>" + term``),
-- variable / ternary / call-expression right-hand sides.
+"Followed only by termination" is the rule that closes the concatenation
+holes: after the literal (past whitespace and comments, across newlines)
+the next significant character must be ``;``, ``,``, ``}`` or EOF —
+justified by ASI, because a token that *cannot* begin its own statement
+(``+``/``(``/``.``/``[``/``?``/template tick/…) continues the current
+expression instead (``a = b`` newline ``+ c`` parses as ``b + c``). Any
+such continuation character (concatenation, member/call/index chaining,
+ternary) is flagged — ``el.innerHTML = `<p>` + userInput;`` and
+``el.innerHTML = "<p>"`` newline ``+ userInput;`` both fail. Anything
+dynamic must go through ``textContent``, ``setAttribute`` or element
+properties, which never re-parse markup.
 """
 
 from __future__ import annotations
@@ -31,6 +38,12 @@ import pytest
 _STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 
 _INNERHTML_ASSIGN_RE = re.compile(r"\.innerHTML\s*\+?=\s*")
+
+# Characters that, when following a complete literal, continue the larger
+# expression (cannot start a fresh ASI-terminated statement): string
+# concatenation, member/call/index access, ternary, arithmetic/bitwise
+# operators, and a template tick.
+_CONTINUATION_CHARS = frozenset("+-([.?`&|^*/%")
 
 
 def _find_string_close(source: str, start: int) -> int | None:
@@ -48,6 +61,33 @@ def _find_string_close(source: str, start: int) -> int | None:
     return None
 
 
+def _next_significant_char(source: str, start: int) -> str:
+    """First non-whitespace, non-comment character at/after ``start``.
+
+    Returns an empty string at end of source.
+    """
+    index = start
+    while index < len(source):
+        char = source[index]
+        if char in " \t\r\n\f\v":
+            index += 1
+            continue
+        if source.startswith("//", index):
+            newline = source.find("\n", index)
+            if newline == -1:
+                return ""
+            index = newline + 1
+            continue
+        if source.startswith("/*", index):
+            close = source.find("*/", index + 2)
+            if close == -1:
+                return ""
+            index = close + 2
+            continue
+        return char
+    return ""
+
+
 def _innerhtml_offender_lines(source: str) -> list[int]:
     """1-based lines whose ``innerHTML`` RHS is not a purely static literal."""
     offenders: list[int] = []
@@ -56,24 +96,30 @@ def _innerhtml_offender_lines(source: str) -> list[int]:
         line = source.count("\n", 0, rhs) + 1
         first_char = source[rhs]
 
+        literal_end: int | None = None
         if first_char == "`":
             close = source.find("`", rhs + 1)
-            template = source[rhs : close if close != -1 else len(source)]
-            if "${" in template or close == -1:
+            if close == -1:
                 offenders.append(line)
-            continue
-
-        if first_char in "\"'":
+                continue
+            if "${" in source[rhs:close]:
+                offenders.append(line)
+                continue
+            literal_end = close + 1
+        elif first_char in "\"'":
             close = _find_string_close(source, rhs)
             if close is None:
                 offenders.append(line)
                 continue
-            statement = source[close + 1 :].split("\n", 1)[0]
-            if statement.strip() != ";" and statement.strip() != "":
-                offenders.append(line)
+            literal_end = close + 1
+        else:
+            # Variable, ternary or call-expression right-hand side.
+            offenders.append(line)
             continue
 
-        offenders.append(line)
+        following = _next_significant_char(source, literal_end)
+        if following in _CONTINUATION_CHARS:
+            offenders.append(line)
     return offenders
 
 
@@ -94,6 +140,38 @@ def test_innerhtml_assignments_are_static_literals() -> None:
         "dynamic values via textContent/properties instead): "
         + "; ".join(offenders)
     )
+
+
+def test_gate_flags_concatenation_after_backtick_template() -> None:
+    """Same-line concatenation after a static template must be flagged."""
+    source = "el.innerHTML = `<p>` + userInput;\n"
+    assert _innerhtml_offender_lines(source) == [1]
+
+
+def test_gate_flags_concatenation_continuing_on_next_line() -> None:
+    """Cross-newline continuation after a quoted literal must be flagged."""
+    source = 'el.innerHTML = "<p>"\n    + userInput;\n'
+    assert _innerhtml_offender_lines(source) == [1]
+
+
+def test_gate_flags_member_call_on_static_template() -> None:
+    """Chained calls on the literal keep expression control in code — flagged."""
+    source = "el.innerHTML = `<p>x</p>`.concat(tainted);\n"
+    assert _innerhtml_offender_lines(source) == [1]
+
+
+def test_gate_allows_terminated_static_literals() -> None:
+    """Real terminator forms stay permitted: ; , } EOF and comments."""
+    source = (
+        'a.innerHTML = "";\n'
+        "b.innerHTML = `<p>static</p>`;\n"
+        'c.innerHTML = "<li>ok</li>"; // trailing comment\n'
+        'd.innerHTML = "" /* block */ ;\n'
+        'e.innerHTML = `<p>x</p>`, e.className = "y";\n'
+        'f.innerHTML = ""\n'
+        ";g.innerHTML = `t`\n"
+    )
+    assert _innerhtml_offender_lines(source) == []
 
 
 def test_static_security_gate_covers_known_sink_file() -> None:
