@@ -99,6 +99,27 @@ except ImportError as e:
     logger.debug(f"GCP Batch Translation services not available: {e}")
     _service_availability["GCP_BATCH_SERVICES_AVAILABLE"] = False
 
+# Track A (ADR 0004): GCP synchronous translation engine for the content tier
+try:
+    from .gcp_sync_translation_service import (  # noqa: F401
+        GcpSyncCredentialsRequiredError,
+        GcpSyncTranslationService,
+        GcpSyncTranslator,
+    )
+
+    _available_services.extend(
+        [
+            "GcpSyncTranslationService",
+            "GcpSyncTranslator",
+            "GcpSyncCredentialsRequiredError",
+        ]
+    )
+    _service_availability["GCP_SYNC_SERVICES_AVAILABLE"] = True
+    logger.debug("GCP sync translation services imported successfully")
+except ImportError as e:
+    logger.debug(f"GCP sync translation services not available: {e}")
+    _service_availability["GCP_SYNC_SERVICES_AVAILABLE"] = False
+
 # Track 2: Dual-Tier Glossary Sync & Persistent User Vocabulary Store
 try:
     from .glossary_compiler import (  # noqa: F401
@@ -212,6 +233,7 @@ __all__: list[str] = [
     "GLOSSARY_SYNC_SERVICES_AVAILABLE",
     "SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE",
     "BOOK_ORCHESTRATOR_AVAILABLE",
+    "GCP_SYNC_SERVICES_AVAILABLE",
     "services_count",
     "services_list",
     "AVAILABLE_SERVICES",
@@ -237,9 +259,8 @@ GLOSSARY_SYNC_SERVICES_AVAILABLE: bool = _service_availability[
 SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE: bool = _service_availability[
     "SCHOLARLY_RESILIENCE_SERVICES_AVAILABLE"
 ]
-BOOK_ORCHESTRATOR_AVAILABLE: bool = _service_availability[
-    "BOOK_ORCHESTRATOR_AVAILABLE"
-]
+GCP_SYNC_SERVICES_AVAILABLE: bool = _service_availability["GCP_SYNC_SERVICES_AVAILABLE"]
+BOOK_ORCHESTRATOR_AVAILABLE: bool = _service_availability["BOOK_ORCHESTRATOR_AVAILABLE"]
 
 # Log summary of available services
 services_count: int = len(_available_services)
