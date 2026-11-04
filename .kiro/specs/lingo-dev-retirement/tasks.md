@@ -217,7 +217,15 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     never reintroduce `reportlab`).
   - **Depends on:** T-3.1 (parallel with T-3.3)
 
-* **[STATUS: NOT STARTED] T-3.3 — Configuration & env eradication**
+* **[STATUS: COMPLETE] T-3.3 — Configuration & env eradication**
+  - Verified: `TestConfigurationEradication` net (5 surfaces) RED × 6 pre-edit,
+    then GREEN; README-assertion coupling handled by deleting
+    `test_required_env_vars_documented_and_optionally_set` (would have failed
+    the T-3.4 README sweep); `scripts/run_tests_with_env.py` repurposed per
+    sweep result (was reporting "zero Lingo refs" only because the grep was
+    case-sensitive); `tests/test_complete_integration.py` Lingo gate
+    neutralized to `RUN_LIVE_INTEGRATION=1` (provider-string parity deferred
+    to T-4.1).
   - `.env.example:1-19`: remove LINGO block (BYOK credentials are session-memory
     only per §2.3 — no env replacement needed).
   - `config/settings.py:393-394`: drop `LINGO_API_KEY` ("Only Lingo.dev" comment).
@@ -241,6 +249,10 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
 * **[STATUS: NOT STARTED] T-4.1 — Eradication regression net**
   - Grep-based test asserting no `lingo|mcp`-SDK references inside
     `services/`, `config/`, `api/` (negative sweep; mirrors Dolphin pollution tests).
+  - Rewrite the legacy provider semantics in `tests/test_complete_integration.py`
+    (`provider="lingo"` call sites, available-provider assertions) against the
+    BYOK engine; its never-satisfiable Lingo gate is already neutralized to
+    `RUN_LIVE_INTEGRATION=1` opt-in (T-3.3).
   - **Depends on:** T-3.1–T-3.4
 
 * **[STATUS: NOT STARTED] T-4.2 — Coverage & CI parity**

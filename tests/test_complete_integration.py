@@ -47,10 +47,10 @@ class TestCompletePhilosophyEnhancedIntegration:
     """Complete integration test suite for the philosophy-enhanced translation system."""
 
     pytestmark = pytest.mark.skipif(
-        not os.getenv("LINGO_API_KEY") or os.getenv("RUN_LINGO_INTEGRATION") != "1",
+        os.getenv("RUN_LIVE_INTEGRATION") != "1",
         reason=(
-            "Live Lingo integration tests require LINGO_API_KEY and "
-            "RUN_LINGO_INTEGRATION=1"
+            "Live integration tests require RUN_LIVE_INTEGRATION=1 with a "
+            "user-bound BYOK engine (ADR 0004 fail-closed semantics)"
         ),
     )
 

@@ -390,9 +390,6 @@ def _parse_int_env(
 class Settings:
     """Application settings with environment variable configuration."""
 
-    # Translation API settings - Only Lingo.dev
-    LINGO_API_KEY: str | None = os.getenv("LINGO_API_KEY")
-
     # Server configuration
     PORT: int = _parse_int_env("PORT", default=7860, min_value=1, max_value=65535)
     DEBUG: bool = _parse_bool_env("DEBUG", "false")

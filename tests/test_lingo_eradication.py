@@ -13,6 +13,7 @@ import importlib
 import importlib.util
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -100,6 +101,30 @@ class TestConftestLingoEradicated:
         assert (
             "lingo" not in text.lower()
         ), "conftest still references the Lingo stack (fixture/mock-key block)"
+
+
+class TestConfigurationEradication:
+    """LINGO-era configuration tokens are eradicated from all surfaces (T-3.3)."""
+
+    _SURFACES: ClassVar[dict[str, Path]] = {
+        ".env.example": REPO_ROOT / ".env.example",
+        "config/settings.py": REPO_ROOT / "config" / "settings.py",
+        "app.py": REPO_ROOT / "app.py",
+        "scripts/run_tests_with_env.py": REPO_ROOT
+        / "scripts"
+        / "run_tests_with_env.py",
+        "tests/test_deployment_config.py": REPO_ROOT
+        / "tests"
+        / "test_deployment_config.py",
+    }
+
+    @pytest.mark.parametrize(
+        "surface", sorted(_SURFACES.keys())
+    )
+    def test_surface_has_no_lingo_tokens(self, surface: str) -> None:
+        """Configuration surfaces must not carry LINGO-era env tokens."""
+        text = self._SURFACES[surface].read_text(encoding="utf-8")
+        assert "lingo" not in text.lower(), f"{surface} still references the Lingo stack"
 
 
 class TestDependencyPrune:

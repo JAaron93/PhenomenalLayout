@@ -10,14 +10,6 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Verify that the API key is loaded
-api_key = os.getenv("LINGO_API_KEY")
-if api_key and api_key.strip():
-    print("✓ LINGO_API_KEY loaded successfully")
-else:
-    print("✗ LINGO_API_KEY not found or empty")
-    # A missing API key only degrades the run; a hard exit can be wired here if tests require it.
-
 # Run pytest with the loaded environment
 if __name__ == "__main__":
     # Pass any command line arguments to pytest
