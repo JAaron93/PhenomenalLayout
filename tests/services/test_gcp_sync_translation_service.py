@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from google.api_core import exceptions as gcp_exceptions
+from google.auth.exceptions import GoogleAuthError
 
 from services.byok_credentials_manager import CredentialNotFoundError
 from services.gcp_sync_translation_service import (
@@ -523,3 +524,148 @@ class TestContentDictDocumentContract:
         )
 
         assert out.read() == b"TRANSLATED[%PDF-1.4 sample]"
+
+
+# ---------------------------------------------------------------------------
+# Review round 1 — credential-error fidelity, descriptor safety, stream rewind
+# ---------------------------------------------------------------------------
+
+
+class _ProjectUnreadableManager(_FakeCredentialsManager):
+    """Manager whose project fetch fails AFTER client vending (issue 3)."""
+
+    def get_project_id(self, user_id: str) -> str:
+        """Simulate credentials deleted between client create and fetch."""
+        raise CredentialNotFoundError(
+            f"credentials deleted mid-flight for user_id={user_id}"
+        )
+
+
+class _BrokenKeyManager(_FakeCredentialsManager):
+    """Manager whose stale service-account key fails client construction."""
+
+    def get_translation_client(self, user_id: str) -> _FakeTranslateClient:
+        """Raise GoogleAuthError for a revoked/unparseable key."""
+        self.client_requests.append(user_id)
+        raise GoogleAuthError("stored service account key could not be parsed")
+
+
+class TestUnusableCredentialMapping:
+    """Google-side credential failures map to the typed BYOK error (issue 2)."""
+
+    def test_unauthenticated_translate_text_maps_to_typed_error(self) -> None:
+        """A revoked key (401) never degrades into a source-text fallback."""
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        client = _FakeTranslateClient(
+            fail_times=1,
+            error_factory=lambda: gcp_exceptions.Unauthenticated(
+                "Request had invalid authentication credentials."
+            ),
+        )
+        manager.pending_clients.append(client)
+        translator = _make_translator(manager, user_id="u")
+
+        with pytest.raises(GcpSyncCredentialsRequiredError) as excinfo:
+            asyncio.run(translator.translate_text("Hallo", "de", "en"))
+
+        assert excinfo.value.code == "GCP_CREDENTIALS_REQUIRED"
+        assert client.closed, "engine must close the borrowed client"
+
+    def test_permission_denied_document_maps_to_typed_error(self) -> None:
+        """A key without translation permission (403) fails closed."""
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        client = _FakeTranslateClient(
+            fail_times=1,
+            error_factory=lambda: gcp_exceptions.PermissionDenied(
+                "Identity does not have permission to use the Cloud " "Translation API."
+            ),
+        )
+        manager.pending_clients.append(client)
+        translator = _make_translator(manager, user_id="u")
+        source = io.BytesIO(b"%PDF-1.4 payload")
+
+        with pytest.raises(GcpSyncCredentialsRequiredError):
+            asyncio.run(
+                translator.translate_document(source, "application/pdf", "de", "en")
+            )
+
+        assert client.closed
+
+    def test_broken_service_account_key_maps_to_typed_error(self) -> None:
+        """Client-construction auth failures surface as the typed error."""
+        manager = _BrokenKeyManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+
+        with pytest.raises(GcpSyncCredentialsRequiredError) as excinfo:
+            asyncio.run(translator.translate_text("Hallo", "de", "en"))
+
+        assert excinfo.value.code == "GCP_CREDENTIALS_REQUIRED"
+
+
+class TestDescriptorLeakHardening:
+    """Client creation is protected against later-step failures (issue 3)."""
+
+    def test_text_worker_closes_client_on_invalid_language_code(self) -> None:
+        """Empty language code raises without creating a client at all.
+
+        Review-fix note: the text worker validates language inputs BEFORE
+        borrowing the client, so a bad code can no longer leak a freshly
+        vended gRPC channel — the stronger guarantee is zero clients.
+        """
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+
+        with pytest.raises(ValueError, match="language code"):
+            asyncio.run(translator.translate_text("Hallo", "", "en"))
+
+        assert manager.client_requests == []
+
+    def test_resolve_runtime_closes_client_when_project_unreadable(self) -> None:
+        """get_project_id failure closes the freshly vended client."""
+        manager = _ProjectUnreadableManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+
+        with pytest.raises(GcpSyncCredentialsRequiredError) as excinfo:
+            asyncio.run(translator.translate_text("Hallo", "de", "en"))
+
+        assert excinfo.value.code == "GCP_CREDENTIALS_REQUIRED"
+        assert manager.clients[-1].closed
+
+    def test_document_worker_closes_client_on_invalid_language_code(self) -> None:
+        """Language validation precedes client creation in the doc worker."""
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+        source = io.BytesIO(b"%PDF-1.4 payload")
+
+        with pytest.raises(ValueError, match="language code"):
+            asyncio.run(
+                translator.translate_document(source, "application/pdf", "", "en")
+            )
+
+        assert manager.client_requests == []
+
+
+class TestStreamPositionRewind:
+    """Seekable documents are translated from the beginning (issue 5)."""
+
+    def test_seekable_document_rewound_before_read(self) -> None:
+        """A caller that already read the header still gets full coverage."""
+        manager = _FakeCredentialsManager()
+        manager.grant("u")
+        translator = _make_translator(manager, user_id="u")
+        source = io.BytesIO(b"%PDF-1.4 payload")
+        source.read(1)  # caller inspected the first byte before handing off
+
+        asyncio.run(
+            translator.translate_document(source, "application/pdf", "de", "en")
+        )
+
+        client = manager.clients[-1]
+        sent = client.doc_requests[-1].document_input_config.content
+        assert sent == b"%PDF-1.4 payload"

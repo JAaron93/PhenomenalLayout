@@ -170,6 +170,48 @@ class TestEngineBinding:
 
         assert translated == {"0": ["Hallo", ""]}
 
+    def test_philosophy_mode_credential_error_propagates(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Review round 1: philosophy mode must fail closed like batch mode.
+
+        The request-bound philosophy wrapper (as ``build_philosophy_service``
+        produces for an engine that rejects credentials) raises the typed
+        credential error; the per-item broad catch in
+        ``_translate_page_texts_concurrently`` must re-raise it instead of
+        planting the source text (ADR 0004 D3).
+        """
+
+        class _CredFailPhilosophy:
+            """Request-scoped wrapper whose engine reports unusable creds."""
+
+            async def translate_text_with_neologism_handling_async(
+                self, **_kwargs: Any
+            ) -> dict[str, str]:
+                """Simulate the user-bound engine's typed failure."""
+                raise GcpSyncCredentialsRequiredError("<engine>")
+
+        monkeypatch.setattr(
+            th,
+            "PhilosophyEnhancedTranslationService",
+            lambda **_kwargs: _CredFailPhilosophy(),
+        )
+
+        with pytest.raises(GcpSyncCredentialsRequiredError):
+            asyncio.run(
+                th.translate_content(
+                    content={
+                        "type": "pdf_advanced",
+                        "text_by_page": {"0": ["Hallo"]},
+                    },
+                    source_language="de",
+                    target_language="en",
+                    philosophy_mode=True,
+                    session_id="s-cred",
+                    translator=object(),  # any bound engine; wrapper raises
+                )
+            )
+
     def test_philosophy_mode_binds_user_engine_into_request_service(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -305,6 +347,64 @@ class TestAdvancedJobEngineThreading:
         job = th.translation_jobs[job_id]
         assert job["status"] == "failed"
         assert "GCP_CREDENTIALS_REQUIRED" in job["error"]
+
+    def test_job_persists_progress_during_translation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Review round 1: progress callback writes must reach the store.
+
+        ``translate_batch`` probes the live job record: with the persisting
+        callback, progress is > 0 while the job is still translating — and
+        the final record shows completion.
+        """
+        seen: list[int] = []
+        job_id = str(uuid.uuid4())
+        engine = _StubEngine("job-user")
+        original_translate_batch = engine.translate_batch
+
+        async def _probe_and_translate(
+            texts: list[str], source_lang: str, target_lang: str
+        ) -> list[str]:
+            """Record the persisted progress at invocation time."""
+            seen.append(th.translation_jobs[job_id]["progress"])
+            return await original_translate_batch(texts, source_lang, target_lang)
+
+        engine.translate_batch = _probe_and_translate  # type: ignore[method-assign]
+        th.translation_jobs[job_id] = {
+            "status": "started",
+            "progress": 0,
+            "file_path": "doc.pdf",
+            "source_language": "de",
+            "target_language": "en",
+            "user_id": "job-user",
+        }
+        content: dict[str, Any] = _content()
+        content["file_path"] = "doc.pdf"
+
+        async def _fake_extract(_file_path: str) -> dict[str, Any]:
+            """Return canned content; no filesystem involved."""
+            return content
+
+        monkeypatch.setattr(th.document_processor, "extract_content", _fake_extract)
+        monkeypatch.setattr(
+            th.document_processor,
+            "create_translated_document",
+            lambda *_args, **_kw: "translated_stub.pdf",
+        )
+
+        asyncio.run(
+            th.process_advanced_translation_job(
+                job_id, "doc.pdf", "de", "en", translator=engine
+            )
+        )
+
+        assert seen, "engine must have been called"
+        assert (
+            max(seen) >= 20
+        ), "progress runs >= 20 while translating (scale callback persists)"
+        final_job = th.translation_jobs[job_id]
+        assert final_job["status"] == "completed"
+        assert final_job["progress"] == 100
 
 
 # ---------------------------------------------------------------------------

@@ -742,6 +742,11 @@ async def _translate_page_texts_concurrently(
         except asyncio.CancelledError:
             # propagate cancellation immediately
             raise
+        except GcpSyncCredentialsRequiredError:
+            # Fail closed: unusable credentials must never degrade the
+            # philosophy path into source-text output (ADR 0004 D3 — mirror
+            # the non-philosophy batch branch).
+            raise
         except Exception:
             # Minimal, non-sensitive logging, then fallback
             logger.exception(
@@ -958,8 +963,10 @@ async def process_advanced_translation_job(
 
         # Define progress callback for job updates
         def update_job_progress(progress: int) -> None:
-            # Scale progress to job progress range (20-80)
-            job["progress"] = 20 + int(progress * 0.6)
+            # Scale progress to job progress range (20-80). Persist through
+            # update_job: the local `job` dict is a shallow copy, so a bare
+            # mutation would never reach the store (/status polling).
+            translation_jobs.update_job(job_id, {"progress": 20 + int(progress * 0.6)})
 
         # Use the centralized translate_content function
         translated_by_page: TranslatedPageDict

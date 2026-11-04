@@ -26,6 +26,7 @@ Design invariants (ADR 0004):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import logging
 import os
@@ -35,6 +36,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, BinaryIO
 
+from google.api_core.exceptions import PermissionDenied, Unauthenticated
+from google.auth.exceptions import GoogleAuthError
 from google.cloud import translate_v3 as translate
 
 from services.byok_credentials_manager import (
@@ -42,6 +45,7 @@ from services.byok_credentials_manager import (
     CredentialNotFoundError,
 )
 from utils.gcp_helpers import retry_gcp_call
+from utils.pdf_stream import open_pdf_stream
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -74,6 +78,36 @@ _NOTRANSLATE_SPAN_RE: re.Pattern[str] = re.compile(
 #: Legacy trailing-argument parity values accepted for provider ("auto" maps
 #: to the GCP sync tier — the content tier serves exactly one provider).
 _SUPPORTED_PROVIDERS: frozenset[str] = frozenset({"gcp", "auto"})
+
+#: Google-side error families that mean "the user's credentials cannot be
+#: used right now" (revoked key, missing permission, unparseable key). These
+#: must surface as the typed BYOK error — a source-text fallback would record
+#: a falsely "completed" translation (ADR 0004 D3).
+_UNUSABLE_CREDENTIAL_ERRORS: tuple[type[Exception], ...] = (
+    GoogleAuthError,
+    Unauthenticated,
+    PermissionDenied,
+)
+
+
+def _map_unusable_credentials(
+    exc: Exception, user_id: str
+) -> GcpSyncCredentialsRequiredError:
+    """Convert a Google credential rejection into the typed BYOK error.
+
+    Call sites chain the original exception via ``raise ... from exc`` so
+    the Google-side rejection survives in the traceback.
+
+    Args:
+        exc: The original Google auth/api exception (unused beyond typing;
+            kept in the signature for readability at raise sites).
+        user_id: Owner of the unusable credentials (for the message).
+
+    Returns:
+        The typed :class:`GcpSyncCredentialsRequiredError` instance.
+    """
+    _ = exc
+    return GcpSyncCredentialsRequiredError(user_id)
 
 
 def _validate_provider(provider: str | None) -> str | None:
@@ -600,38 +634,54 @@ class GcpSyncTranslator:
         self._stats.total_calls += 1
 
         def worker() -> bytes:
-            """Read the stream, call translateDocuments, close the client."""
+            """Read the stream (rewound), call translateDocuments, close the client."""
+            # Validate language inputs BEFORE borrowing the client so a bad
+            # code can never leak a freshly vended gRPC channel (AGENTS §2.10).
+            source_code: str = _normalize_language_code(source_lang)
+            target_code: str = _normalize_language_code(target_lang)
             client, project_id = self._resolve_runtime()
             try:
-                data: bytes = document.read()
-                if not data:
-                    raise ValueError("source document produced no bytes")
-                request = translate.TranslateDocumentRequest(
-                    parent=(f"projects/{project_id}/locations/{GCP_SYNC_REGION}"),
-                    document_input_config=translate.DocumentInputConfig(
-                        content=data, mime_type=mime_type
-                    ),
-                    source_language_code=_normalize_language_code(source_lang),
-                    target_language_code=_normalize_language_code(target_lang),
-                    document_output_config=translate.DocumentOutputConfig(
-                        mime_type=mime_type
-                    ),
-                )
-                response: Any = retry_gcp_call(
-                    lambda: client.translate_document(request=request),
-                    max_retries=self._retry_max_retries,
-                    base_delay=self._retry_base_delay,
-                    max_delay=self._retry_max_delay,
-                )
-                outputs: Any = getattr(
-                    response.document_translation, "byte_stream_outputs", None
-                )
-                if not outputs:
-                    raise RuntimeError(
-                        "sync document translation produced no byte-stream " "output"
+                # open_pdf_stream rewinds seekable inputs to position 0 and
+                # buffers non-seekable inputs through the shared canonical
+                # helper (AGENTS §2.13.5) — a caller that already inspected
+                # the stream still gets full-document translation.
+                with open_pdf_stream(document, label="document") as (stream, _size):
+                    data: bytes = stream.read()
+                    if not data:
+                        raise ValueError("source document produced no bytes")
+                    request = translate.TranslateDocumentRequest(
+                        parent=(f"projects/{project_id}/locations/{GCP_SYNC_REGION}"),
+                        document_input_config=translate.DocumentInputConfig(
+                            content=data, mime_type=mime_type
+                        ),
+                        source_language_code=source_code,
+                        target_language_code=target_code,
+                        document_output_config=translate.DocumentOutputConfig(
+                            mime_type=mime_type
+                        ),
                     )
-                first: Any = outputs[0]
-                return first if isinstance(first, bytes) else bytes(first)
+                    try:
+                        response: Any = retry_gcp_call(
+                            lambda: client.translate_document(request=request),
+                            max_retries=self._retry_max_retries,
+                            base_delay=self._retry_base_delay,
+                            max_delay=self._retry_max_delay,
+                        )
+                    except _UNUSABLE_CREDENTIAL_ERRORS as exc:
+                        # Revoked key / missing permission (401/403): fail
+                        # closed so pollers never record a falsely "completed"
+                        # untranslated run (ADR 0004 D3).
+                        raise _map_unusable_credentials(exc, self.user_id) from exc
+                    outputs: Any = getattr(
+                        response.document_translation, "byte_stream_outputs", None
+                    )
+                    if not outputs:
+                        raise RuntimeError(
+                            "sync document translation produced no byte-stream "
+                            "output"
+                        )
+                    first: Any = outputs[0]
+                    return first if isinstance(first, bytes) else bytes(first)
             finally:
                 client.close()
 
@@ -785,17 +835,34 @@ class GcpSyncTranslator:
             Tuple of (translation client, GCP project id).
 
         Raises:
-            GcpSyncCredentialsRequiredError: If the credentials vanished.
+            GcpSyncCredentialsRequiredError: If the credentials vanished,
+                were rejected by Google (revoked key), or cannot construct a
+                client.
         """
+        if not self._credentials_manager.has_credentials(self.user_id):
+            raise GcpSyncCredentialsRequiredError(self.user_id)
         try:
-            if not self._credentials_manager.has_credentials(self.user_id):
-                raise GcpSyncCredentialsRequiredError(self.user_id)
             client: translate.TranslationServiceClient = (
                 self._credentials_manager.get_translation_client(self.user_id)
             )
-            project_id: str = self._credentials_manager.get_project_id(self.user_id)
         except CredentialNotFoundError as exc:
             raise GcpSyncCredentialsRequiredError(self.user_id) from exc
+        except GoogleAuthError as exc:
+            # Stale/revoked/unparseable service-account key (AGENTS §2.2
+            # fail-closed surface, not a silent substitute).
+            raise _map_unusable_credentials(exc, self.user_id) from exc
+        try:
+            project_id: str = self._credentials_manager.get_project_id(self.user_id)
+        except Exception as exc:
+            # The client exists but its origin data failed to resolve:
+            # deterministically close it before propagating (AGENTS §2.10).
+            with contextlib.suppress(Exception):
+                client.close()
+            if isinstance(exc, _UNUSABLE_CREDENTIAL_ERRORS):
+                raise _map_unusable_credentials(exc, self.user_id) from exc
+            if isinstance(exc, CredentialNotFoundError):
+                raise GcpSyncCredentialsRequiredError(self.user_id) from exc
+            raise
         return client, project_id
 
     def _translate_text_once(
@@ -819,6 +886,8 @@ class GcpSyncTranslator:
             Translated strings aligned with *contents*.
 
         Raises:
+            GcpSyncCredentialsRequiredError: If the user's credentials are
+                missing or rejected by Google (revoked key / no permission).
             RuntimeError: If the response length does not match the chunk.
         """
         request = translate.TranslateTextRequest(
@@ -828,7 +897,13 @@ class GcpSyncTranslator:
             source_language_code=source_code,
             target_language_code=target_code,
         )
-        response: Any = client.translate_text(request=request)
+        try:
+            response: Any = client.translate_text(request=request)
+        except _UNUSABLE_CREDENTIAL_ERRORS as exc:
+            # Revoked key / missing permission (401/403): fail closed so the
+            # caller never silently falls back to source text and a job never
+            # records a falsely "completed" translation (ADR 0004 D3).
+            raise _map_unusable_credentials(exc, self.user_id) from exc
         translations: list[str] = [
             str(item.translated_text) for item in response.translations
         ]
@@ -863,10 +938,12 @@ class GcpSyncTranslator:
 
         def worker() -> list[str]:
             """Run the chunked remote translation inside a worker thread."""
-            client, project_id = self._resolve_runtime()
+            # Validate language inputs BEFORE borrowing the client so a bad
+            # code can never leak a freshly vended gRPC channel (AGENTS §2.10).
             batch_size: int = _resolve_batch_size()
             source_code: str = _normalize_language_code(source_lang)
             target_code: str = _normalize_language_code(target_lang)
+            client, project_id = self._resolve_runtime()
             try:
                 collected: list[str] = []
                 for chunk in _chunked(contents, batch_size):

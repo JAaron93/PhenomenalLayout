@@ -71,9 +71,7 @@ class UnboundTranslationStub:
         source_lang: Any = None,  # noqa: ARG002  (fail-closed unbound engine protocol)
         target_lang: Any = None,  # noqa: ARG002  (fail-closed unbound engine protocol)
         provider: Any = None,  # noqa: ARG002  (fail-closed unbound engine protocol)
-        progress_callback: (
-            Callable[[int], None] | None
-        ) = None,  # noqa: ARG002 (fail-closed engine protocol)
+        _progress_callback: Callable[[int], None] | None = None,
     ) -> Any:
         """Fail closed — no ambient credentials exist (ADR 0004 D3)."""
         raise GcpSyncCredentialsRequiredError("<unbound>")
@@ -436,6 +434,11 @@ class PhilosophyEnhancedTranslationService:
                 preservation_markers=pres.preservation_markers,
             )
 
+        except GcpSyncCredentialsRequiredError:
+            # Fail closed (ADR 0004 D3): an unbound/invalid credential
+            # engine must never degrade to the source-text fallback — the
+            # caller surfaces the typed error (HTTP 503 / job failure).
+            raise
         except Exception as e:
             logger.error(f"Error in philosophy-enhanced translation: {e}")
             # If a translation_service was injected explicitly, propagate the error

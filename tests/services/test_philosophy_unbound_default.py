@@ -94,3 +94,37 @@ class TestUnboundStubStatsSurface:
         """philosophy.get_available_providers yields ['gcp'] with the stub."""
         svc = _light_service()
         assert svc.get_available_providers() == ["gcp"]
+
+
+# ---------------------------------------------------------------------------
+# Review round 1 — fail-closed propagation through the philosophy fallback
+# ---------------------------------------------------------------------------
+
+
+class TestCredentialErrorPropagatesThroughFallback:
+    """The philosophy text fallback must not swallow credential errors."""
+
+    @pytest.mark.asyncio
+    async def test_credential_error_not_swallowed_by_source_text_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A GcpSyncCredentialsRequiredError must re-raise, never mask to text.
+
+        Regression guard for the review finding that the default philosophy
+        service's broad ``except`` turned unusable credentials into silent
+        source-text "translations" (ADR 0004 D3 fail-closed).
+        """
+        svc = _light_service()
+
+        async def _raise_credential_error(*_args: Any, **_kwargs: Any) -> str:
+            """Simulate the engine reporting unusable credentials."""
+            raise GcpSyncCredentialsRequiredError("<unbound>")
+
+        monkeypatch.setattr(
+            svc, "_translate_with_preservation_async", _raise_credential_error
+        )
+
+        with pytest.raises(GcpSyncCredentialsRequiredError):
+            await svc.translate_text_with_neologism_handling_async(
+                "Der Geist", "de", "en", "gcp", "s-fallback"
+            )
