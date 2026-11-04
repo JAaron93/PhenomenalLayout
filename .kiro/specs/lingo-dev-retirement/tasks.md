@@ -199,7 +199,15 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     by `TestPackageExportRemoved::test_philosophy_service_has_no_legacy_delegation_shim`.
   - **Depends on:** T-2.4
 
-* **[STATUS: NOT STARTED] T-3.2 — Dependency prune + manifest regen (AGENTS §6.7)**
+* **[STATUS: COMPLETE] T-3.2 — Dependency prune + manifest regen (AGENTS §6.7)**
+  - Verified: §6.7 setup-script sweep clean (no `import mcp`/`import lingo`
+    probes in `scripts/`, `Makefile`, `justfile`, `.github/`, `tests/conftest.py`).
+  - Verified: deleted-mcp guard `TestDependencyPrune` RED (4 assertions), then
+    GREEN; `python-multipart` restored as an explicit `requirements.in` dep
+    (FastAPI `UploadFile`/`Form` routes need it at registration — previously
+    a transitive of the removed MCP SDK only); regen diff strictly
+    subtractive for the 11-pin MCP subtree, zero version bumps;
+    `test_deployment_config.py::test_minimum_dependency_pins_present` green.
   - Remove `mcp>=2.2.0,<3.0` from `requirements.in:18`; run the mandatory
     setup-script sweep (`grep -rn "import mcp\|import lingo" scripts/ Makefile
     justfile .github/ tests/conftest.py`) and fix any stale probes.

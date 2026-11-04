@@ -100,3 +100,42 @@ class TestConftestLingoEradicated:
         assert (
             "lingo" not in text.lower()
         ), "conftest still references the Lingo stack (fixture/mock-key block)"
+
+
+class TestDependencyPrune:
+    """The Lingo MCP SDK is pruned from runtime manifests (T-3.2)."""
+
+    def test_requirements_in_has_no_mcp_sdk(self) -> None:
+        """``requirements.in`` carries no Lingo MCP SDK dependency."""
+        text = (REPO_ROOT / "requirements.in").read_text(encoding="utf-8")
+        mcp_lines = [
+            line for line in text.splitlines() if line.lstrip().startswith("mcp")
+        ]
+        assert not mcp_lines, f"stale MCP SDK lines: {mcp_lines!r}"
+
+    def test_requirements_txt_has_no_mcp_sdk(self) -> None:
+        """Regenerated ``requirements.txt`` carries no Lingo MCP SDK entry."""
+        text = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")
+        mcp_lines = [
+            line for line in text.splitlines() if line.lstrip().startswith("mcp")
+        ]
+        assert not mcp_lines, f"stale MCP SDK lines: {mcp_lines!r}"
+
+    def test_pyproject_manifest_is_gcp_only(self) -> None:
+        """``pyproject.toml`` no longer advertises the Lingo stack."""
+        text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        assert "Lingo.dev" not in text
+        assert "mcp fallbacks" not in text
+
+    def test_requirements_keep_fastapi_runtime_multipart(self) -> None:
+        """FastAPI form routes need ``python-multipart`` installed explicitly.
+
+        The legacy Lingo MCP SDK carried ``python-multipart`` transitively;
+        once the SDK is pruned the app's own ``UploadFile``/``Form`` routes
+        (api/routes.py) need it declared or route registration fails on a
+        fresh install.
+        """
+        text = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")
+        assert "python-multipart==" in text
+        source = (REPO_ROOT / "requirements.in").read_text(encoding="utf-8")
+        assert "python-multipart" in source
