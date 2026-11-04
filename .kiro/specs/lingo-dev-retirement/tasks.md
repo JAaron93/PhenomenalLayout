@@ -232,7 +232,14 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
   - `app.py:4-5,181`: docwording → GCP-only.
   - **Depends on:** T-3.1 (parallel with T-3.2)
 
-* **[STATUS: NOT STARTED] T-3.4 — Governance codification (ADR 0004 D7)**
+* **[STATUS: COMPLETE] T-3.4 — Governance codification (ADR 0004 D7)**
+  - Verified: `.greptile/rules.md` §7 + `.greptile/instructions.md` §2.2
+    mirror the Dolphin eradication sections (never request restoration;
+    flag re-introductions; negative-sweep net named as the enforcement
+    artifact); AGENTS.md §4 deny-list row added; README Lingo sections
+    swept (~45-788 band) with the migration-table row added and the
+    Lingo-era benchmark suite replaced by a historical note;
+    `.kiro/steering/product.md:13` and `tech.md:82` reworded GCP-only.
   - `.greptile/rules.md` + `.greptile/instructions.md`: Lingo Eradication
     section (mirror Dolphin section; never request restoration; flag
     re-introduction).

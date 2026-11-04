@@ -42,24 +42,24 @@ Domain-specific **German Philosophical Book Translation & Neologism Orchestratio
 
 ### 🌍 Smart Translation Integration
 
-- **Lingo.dev API orchestration** for high-quality translation with layout awareness
+- **User-bound Google Cloud Translation v3 (BYOK)** for high-quality translation with layout awareness
 - **Layout-informed translation processing** that considers formatting constraints during translation
-- **Parallel processing engine** optimized for large-scale document translation (5-10x faster)
+- **Asynchronous GCS batch engine** optimized for large-scale document translation (up to 2,000+ pages)
 - **Automatic language detection** with confidence scoring and layout compatibility analysis
 - **Element-by-element translation** with intelligent layout preservation for each text block
-- **Quality-aware fallback systems** with graceful degradation to original text when needed
+- **Fail-closed credential semantics** — translation never silently falls back to source text
 - **Real-time progress tracking** with detailed layout preservation metrics
 
-### 🚀 **NEW: High-Performance Parallel Translation**
+### 🚀 Asynchronous Batch Translation (Large Documents)
 
-- **5-10x faster processing** for large documents (up to 2,000 pages)
-- **Async HTTP requests** with configurable concurrency (up to 10 concurrent)
-- **Intelligent rate limiting** (5 requests/second default) to respect API limits
-- **Batch processing** with configurable chunk sizes (50 texts per batch)
-- **Automatic optimization** - chooses parallel vs sequential based on workload
-- **Comprehensive error resilience** with exponential backoff retry
+- **GCS-staged batch processing** for large documents (up to 2,000+ pages)
+- **Long-Running Operation (LRO) progress** with `translated_pages`/`total_pages`/`failed_pages` metadata
+- **Dual-tier glossary synchronization** (base terminology + per-book session glossaries in `us-central1`)
+- **Zero-downtime blue-green glossary replacement** bounded to two regional slots
+- **Automatic job resumption** across browser closes and container scale-downs
+- **Transparent failed-page surfacing** with isolated re-run submissions
 - **Real-time progress monitoring** with time estimation
-- **Memory efficient** streaming processing for large documents
+- **Zero host PDF storage** — streams directly to/from the user's GCS bucket
 
 ### Target Architecture: Google Cloud Document Translation & Neologism Orchestrator
 
@@ -197,12 +197,6 @@ quality_score = (
 
 ### Integration with External Services
 
-#### Lingo.dev Integration
-- **High-quality translation** with context awareness
-- **Batch processing optimization** for performance
-- **Error handling** with graceful fallbacks
-- **Rate limiting** respect for API constraints
-
 #### Google Cloud Document Translation Advanced (v3) Integration
 - **Direct GCS Asynchronous Batch Translation**: Zero host disk caching via `batchTranslateDocument`
 - **Native Layout & Typography Preservation**: Preserves multi-column tables, figures, footnotes, and typography natively
@@ -298,7 +292,7 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 - Client/Server: `fastapi`, `uvicorn`, `httpx`, `starlette>=1.0.0`
 - UI: Bespoke zero-build vanilla ES modules single-page application served directly from `static/`
 - Testing: `pytest>=9.0,<10.0`, `pytest-cov`, `pytest-asyncio`, `pytest-playwright`
-- Valid Lingo API key for translation functionality
+- BYOK credentials: personal Google Cloud Translation v3 Service Account JSON, validated in-session (no env keys)
 
 ## 📁 Key Files
 
@@ -318,7 +312,8 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 - `services/session_glossary_lifecycle.py` - Session glossary tracking, regional quota auditing, and auto-cleanup
 - `services/glossary_compiler.py` - RFC 4180 TSV glossary compiler enforcing 3-tier precedence
 - `services/user_vocabulary_store.py` - Persistent user terminology store on Modal Volume SQLite
-- `services/translation_service.py` - Legacy translation service with Lingo.dev integration
+- `services/gcp_sync_translation_service.py` - User-bound synchronous GCP translation engine (BYOK, fail-closed)
+- `services/philosophy_enhanced_translation_service.py` - Philosophy-enhanced translation with neologism handling over the BYOK engine
 
 ### Supporting Services
 
@@ -432,13 +427,10 @@ Configure environment variables for Google Cloud Document Translation v3 and reg
 - `TRANSLATION_BATCH_SIZE` (int): Text batch size for translation.
 
 ### Translation & GCP API Configuration
-**Primary Cloud Translation (BYOK):**
+**Cloud Translation (BYOK):**
 - Provided interactively per user session or via `GOOGLE_APPLICATION_CREDENTIALS`
 - `GCP_PROJECT_ID`: User's Google Cloud project ID
 - `GCS_BUCKET_NAME`: User's Cloud Storage bucket for staging and outputs
-
-**Secondary / Direct Translation API:**
-- `LINGO_API_KEY`: Lingo.dev API key (optional rapid preview or fallback)
 
 ### 🚀 Parallel Translation Settings
 Configure these environment variables to optimize performance for your use case:
@@ -453,9 +445,6 @@ Configure these environment variables to optimize performance for your use case:
 
 **Example configuration:**
 ```bash
-# Basic API setup
-export LINGO_API_KEY="your_lingo_api_key_here"
-
 # High-performance setup for large documents
 export MAX_CONCURRENT_REQUESTS=15
 export MAX_REQUESTS_PER_SECOND=8.0
@@ -529,100 +518,70 @@ export ALLOWED_ORIGINS="*"  # Or specific domains
 
 ## 💻 Usage Examples
 
-### Enhanced Translation Service (Recommended)
-Drop-in replacement with automatic parallel processing optimization:
+### User-Bound GCP Translation Engine (BYOK)
+The only request-path engine: one instance represents one user's content-tier engine:
 
 ```python
 import asyncio
-from services.enhanced_translation_service import EnhancedTranslationService
+from services.byok_credentials_manager import BYOKCredentialsManager
+from services.gcp_sync_translation_service import GcpSyncTranslator
 
-async def translate_document():
-    # Initialize service (automatically detects optimal processing method)
-    service = EnhancedTranslationService()
+async def translate_texts():
+    # Manager holds the user's Service Account JSON in session memory only
+    manager = BYOKCredentialsManager()
 
-    # Translate a batch of texts (automatically uses parallel processing for large batches)
-    texts = ["Text 1", "Text 2", "Text 3", ...]  # Up to 2,000+ texts
-    translated = await service.translate_batch_enhanced(
+    # Bind the engine to one user's vault
+    service = GcpSyncTranslator(manager, "scholar-42")
+
+    texts = ["Text 1", "Text 2", "Text 3"]
+    translated = await service.translate_batch(
         texts=texts,
         source_lang="de",
         target_lang="en",
-        progress_callback=lambda current, total: print(f"Progress: {current}/{total}")
     )
 
-    # Translate document content
-    document_content = {"pages": {...}}  # Your document structure
-    translated_doc = await service.translate_document_enhanced(
-        content=document_content,
-        source_lang="de",
-        target_lang="en",
-        progress_callback=lambda progress: print(f"Progress: {progress}%")
-    )
+    # Statistics: stable per-engine telemetry
+    print(service.get_statistics())
 
-    # Get performance statistics
-    stats = service.get_performance_stats()
-    print(f"Parallel usage: {stats['parallel_usage_percentage']:.1f}%")
-    print(f"Average processing time: {stats['average_request_time']:.2f}s")
+    # Lifecycle no-op: BYOK owns the clients; engine holds no host sessions
+    await service.aclose()
 
-    await service.close()
-
-# Run the example
-asyncio.run(translate_document())
+asyncio.run(translate_texts())
 ```
 
-### Direct Parallel Translation Service
-For advanced users who need direct control over parallel processing:
+### Philosophy-Enhanced Translation with Neologism Handling
+Neologism detection and user-choice preservation ride on the BYOK engine:
 
 ```python
-import asyncio
-from services.parallel_translation_service import (
-    ParallelTranslationService,
-    ParallelTranslationConfig,
-    BatchProgress
+from services.philosophy_enhanced_translation_service import (
+    PhilosophyEnhancedTranslationService,
 )
 
-async def advanced_parallel_translation():
-    # Custom configuration for high-performance processing
-    config = ParallelTranslationConfig(
-        max_concurrent_requests=15,
-        max_requests_per_second=8.0,
-        batch_size=100,
-        max_retries=5
-    )
+service = PhilosophyEnhancedTranslationService(
+    translation_service=bound_engine,  # user-bound GcpSyncTranslator
+)
 
-    # Initialize parallel service
-    async with ParallelTranslationService("your_lingo_api_key", config) as service:
-        # Translate large batch with progress tracking
-        texts = ["Text {}".format(i) for i in range(1000)]  # Large batch
-
-        def progress_callback(progress: BatchProgress):
-            print(f"Completed: {progress.completed_tasks}/{progress.total_tasks}")
-            print(f"Progress: {progress.progress_percentage:.1f}%")
-            print(f"Estimated remaining: {progress.estimated_remaining_time:.1f}s")
-
-        translated = await service.translate_batch_texts(
-            texts=texts,
-            source_lang="de",
-            target_lang="en",
-            progress_callback=progress_callback
-        )
-
-        print(f"Translated {len(translated)} texts successfully!")
-
-# Run the advanced example
-asyncio.run(advanced_parallel_translation())
+result = service.translate_text_with_neologism_handling(
+    "Das Wirklichkeitsbewusstsein ist zentral...",
+    source_lang="de",
+    target_lang="en",
+)
+print(result.translated_text)          # translation with neologisms preserved
+print(result.neologisms_preserved)     # per-term handling decisions
 ```
 
-### Backward Compatibility
-The enhanced service maintains full compatibility with existing code:
+### Fail-Closed Credential Semantics
+Without a bound engine (or with rejected credentials), translation fails closed:
 
 ```python
-# Existing code continues to work unchanged
-from services.enhanced_translation_service import EnhancedTranslationService
+from services.gcp_sync_translation_service import GcpSyncCredentialsRequiredError
 
-service = EnhancedTranslationService()
-# All existing TranslationService methods work exactly the same
-result = await service.translate_text("Hello", "en", "de")
-batch_result = await service.translate_batch(texts, "en", "de")
+try:
+    await service.translate_batch(texts=texts, source_lang="de", target_lang="en")
+except GcpSyncCredentialsRequiredError as exc:
+    assert exc.code == "GCP_CREDENTIALS_REQUIRED"
+    # The UI surfaces the BYOK setup flow; source text is NEVER returned as a
+    # silent fallback (ADR 0004 invariant).
 ```
 
 ## 🎯 Advantages Over the Previous PDF Approach
@@ -682,22 +641,22 @@ PhenomenalLayout has evolved through three major architectural eras:
 | `services/fallback_translator.py` | Permanently deleted (ADR 0002) | Google Cloud Document Translation sole pipeline; transparent failed-page re-run |
 | `ui/gradio_interface.py` | Permanently deleted (ADR 0002) | Bespoke zero-build vanilla ES modules SPA (`static/`) |
 | `reportlab` (all manifests) | Permanently removed (PR #147) | `build_test_pdf(pages)` in `tests/conftest.py` — stdlib-only PDF 1.4 writer; Pillow now fully eradicated from all dependency trees |
+| `services/translation_service.py` / `services/mcp_lingo_client.py` / `services/parallel_translation_service.py` / `services/enhanced_translation_service.py` | Permanently deleted (ADR 0004) | User-bound `GcpSyncTranslator` BYOK engines; `mcp` SDK pruned (`python-multipart` now explicit) |
 
-### 🚀 Parallel Translation
-- **API Key Required**: Valid Lingo.dev API key is mandatory for translation functionality
-- **Rate Limiting**: Respects API rate limits automatically with intelligent throttling
-- **Memory Efficiency**: Designed for large documents but monitor memory usage for 2,000+ pages
-- **Backward Compatibility**: All existing code continues to work without modification
-- **Automatic Optimization**: System automatically chooses parallel vs sequential processing
-- **Error Resilience**: Failed translations fall back to original text, ensuring no data loss
+### 🚀 Asynchronous Batch Translation
+- **BYOK Credentials Required**: Personal Google Cloud Translation v3 Service Account JSON, validated in-session (ADR 0004)
+- **Rate Limiting**: Transient 429/500/503 errors retried with truncated exponential backoff and ±20% jitter
+- **Memory Efficiency**: Designed for large documents; zero host PDF storage keeps instances lean
+- **Fail-Closed Semantics**: Missing or rejected credentials raise `GcpSyncCredentialsRequiredError` — never silent source-text fallback
+- **Error Resilience**: Partial layout-parsing failures (`failed_pages > 0`) are surfaced transparently with isolated re-run submissions
 - **Configuration**: Fine-tune performance settings via environment variables for your specific use case
 
 ### Best Practices
-- Start with default settings and adjust based on your API limits and performance needs
-- Monitor API usage to stay within your Lingo.dev plan limits
+- Start with default settings and adjust based on your GCP quotas and performance needs
+- Monitor API usage in your own Google Cloud console (translation is billed to your project)
 - Use progress callbacks for long-running operations to provide user feedback
 - Test with smaller documents before processing large batches
-- Consider using `EnhancedTranslationService` for most use cases (automatic optimization)
+- Use the dual-pane viewer to verify translations against the German original
 
 ## 📈 Performance Considerations
 
@@ -707,121 +666,19 @@ PhenomenalLayout has evolved through three major architectural eras:
 - **Quality**: Significantly improved formatting preservation
 - **Scalability**: Designed for production use with proper resource management
 
-### 🚀 Parallel Translation Performance
-- **Speed Improvement**: 5-10x faster for large documents (2,000+ pages)
-- **Throughput**: Up to 10 concurrent requests with intelligent rate limiting
-- **Memory Efficiency**: Streaming processing minimizes memory footprint
-- **Scalability**: Handles enterprise-scale document processing
-- **Reliability**: Comprehensive error handling with automatic retry
-- **Monitoring**: Real-time progress tracking with time estimation
+### Performance Benchmarks (Historical — Lingo.dev Era)
+The parallel-vs-sequential benchmark tables published in earlier revisions
+were measured against the retired Lingo.dev parallel translation stack
+(`ParallelTranslationService`/`EnhancedTranslationService`, deleted under
+ADR 0004) and its third-party API latencies. They are retained only as
+history and no longer describe this codebase.
 
-### Performance Benchmarks
-| Document Size | Sequential Time | Parallel Time | Improvement |
-|---------------|----------------|---------------|-------------|
-| 50 pages      | ~25 seconds    | ~8 seconds    | 3.1x faster |
-| 200 pages     | ~100 seconds   | ~15 seconds   | 6.7x faster |
-| 1000 pages    | ~500 seconds   | ~60 seconds   | 8.3x faster |
-| 2000 pages    | ~1000 seconds  | ~120 seconds  | 8.3x faster |
-
-### 🧪 Testing Methodology & Benchmark Context
-
-#### Test Environment
-- **Hardware**: MacBook Pro M2, 16GB RAM, macOS Sonoma
-- **Python Version**: 3.13.x with asyncio event loop
-- **Network**: Stable broadband connection (100+ Mbps)
-- **API Provider**: Lingo.dev with standard rate limits
-- **Test Location**: US West Coast (optimal for API latency)
-
-#### Test Configuration
-```bash
-# Benchmark Configuration Used
-MAX_CONCURRENT_REQUESTS=10
-MAX_REQUESTS_PER_SECOND=5.0
-TRANSLATION_BATCH_SIZE=50
-TRANSLATION_MAX_RETRIES=3
-TRANSLATION_REQUEST_TIMEOUT=30.0
-```
-
-#### Test Methodology
-1. **Document Preparation**:
-   - Used German philosophical texts (Kant, Heidegger, Husserl)
-   - Average text density: ~250 words per page
-   - Mixed content: paragraphs, quotes, footnotes, technical terminology
-   - Text extracted and segmented into translation units
-
-2. **Measurement Process**:
-   - Each test run 3 times, results averaged
-   - Timing measured from translation start to completion
-   - Excluded document parsing and setup time
-   - Measured pure translation processing time only
-
-3. **Sequential Baseline**:
-   - Standard `TranslationService` with 0.1s delay between requests
-   - Single-threaded processing with synchronous HTTP requests
-   - No concurrent processing or batching optimizations
-
-4. **Parallel Testing**:
-   - `EnhancedTranslationService` with automatic optimization
-   - Async HTTP requests with configurable concurrency
-   - Intelligent batching and rate limiting applied
-
-#### Important Disclaimers
-
-⚠️ **Performance Variability Factors**:
-- **Document Content**: Technical texts with specialized terminology may process slower
-- **Network Conditions**: Internet latency and bandwidth affect API response times
-- **API Response Times**: Lingo.dev server load and geographic location impact speed
-- **System Resources**: Available CPU, memory, and concurrent processes affect performance
-- **Rate Limiting**: API quotas and rate limits may throttle processing speed
-- **Text Complexity**: Dense philosophical content may require longer processing
-
-⚠️ **Benchmark Limitations**:
-- Results based on specific test environment and may not reflect your setup
-- Performance improvements depend on optimal network conditions
-- API rate limits and quotas may vary by subscription plan
-- Actual performance may be 20-50% different based on your specific conditions
-
-⚠️ **Recommendations for Your Environment**:
-- Start with small test batches to measure your actual performance
-- Monitor API usage and adjust concurrency settings accordingly
-- Test with your specific document types and content complexity
-- Consider your network latency to Lingo.dev servers
-- Adjust `MAX_CONCURRENT_REQUESTS` based on your API plan limits
-
-#### Reproducing Benchmarks
-To test performance in your environment:
-
-```python
-import asyncio
-import time
-from services.enhanced_translation_service import EnhancedTranslationService
-
-async def benchmark_translation():
-    service = EnhancedTranslationService()
-
-    # Create test texts (adjust size as needed)
-    test_texts = ["Sample German text..."] * 100  # 100 texts for testing
-
-    # Measure sequential processing
-    start_time = time.time()
-    # Use original TranslationService for baseline
-    sequential_time = time.time() - start_time
-
-    # Measure parallel processing
-    start_time = time.time()
-    results = await service.translate_batch_enhanced(
-        test_texts, "de", "en"
-    )
-    parallel_time = time.time() - start_time
-
-    improvement = sequential_time / parallel_time
-    print(f"Improvement: {improvement:.1f}x faster")
-
-    await service.close()
-
-# Run your own benchmark
-asyncio.run(benchmark_translation())
-```
+Current performance characteristics ride on Google Cloud Document
+Translation v3: synchronous preview calls for 1–3 sample pages and
+asynchronous `batchTranslateDocument` LROs for full-length books, with
+progress derived from LRO metadata (`translated_pages` / `total_pages` /
+`failed_pages`). Measure your own workloads against your GCP project's
+quotas and regional latency.
 
 ## 🤝 Contributing
 

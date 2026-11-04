@@ -10,7 +10,7 @@ Translates documents (PDF, DOCX, TXT) while maintaining original formatting, lay
 - **Multi-format Support**: PDF, DOCX, and TXT with format-specific processing pipelines
 - **High-Performance Translation**: Parallel processing engine with 5-10x speed improvements for large documents
 - **Philosophy-Enhanced Processing**: Specialized neologism detection for philosophical and technical texts
-- **Lingo.dev Integration**: Professional translation API with intelligent rate limiting and error handling
+- **GCP BYOK Translation**: User-bound Google Cloud Document Translation (v3) with BYOK credentials (session-memory only) and fail-closed semantics
 
 ## Target Use Cases
 - Academic document translation (especially philosophical texts)

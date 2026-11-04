@@ -78,8 +78,8 @@ pre-commit run --all-files
 
 ### Environment Variables
 ```bash
-# Required
-export LINGO_API_KEY="your_api_key"
+# Translation credentials: BYOK — supplied per user in the web interface
+# (Service Account JSON, session-memory only); NO env key is required.
 
 # Optional performance tuning
 export MAX_CONCURRENT_REQUESTS=10

@@ -38,6 +38,14 @@ The Dolphin OCR stack is fully deleted: the `dolphin_ocr/` package, `core/dynami
 2. **Flag Re-introductions**: Unlike earlier migration phases, defensive-decoupling import fallbacks (`try...except ImportError`) and conftest mock stubs for the deleted modules are now obsolete patterns — flag them instead of approving them.
 3. **Generic Replacements**: Document error codes live in `utils/document_errors.py` (`DOC_*` constants); layout preservation is handled natively by Google Cloud Document Translation.
 
+### 2.2 Lingo Eradication Completed (ADR 0004, Track C)
+The Lingo.dev translation stack is fully deleted: `services/translation_service.py`, `services/mcp_lingo_client.py`, `services/parallel_translation_service.py`, `services/enhanced_translation_service.py`, the MCP timeout verify script, the legacy test modules and examples, the conftest `lingo_translator` fixture, the `LINGO_API_KEY`/`LINGO_MCP_*` configuration surfaces (`.env.example`, `config/settings.py`), and the `mcp>=2.2.0` runtime dependency. `python-multipart` is declared explicitly because FastAPI `UploadFile`/`Form` routes need it and the MCP SDK was its only carrier. Lingo references legitimately remain only as history (README migration table, ADR 0004, `.kiro/specs/lingo-dev-retirement/` records). Translation rides exclusively on user-bound `GcpSyncTranslator` BYOK engines (`UnboundTranslationStub` default for statistics-only paths), with fail-closed `GcpSyncCredentialsRequiredError` semantics.
+
+**Reviewer Instructions:**
+1. **Never Request Restoration**: Greptile must NEVER request restoring the deleted Lingo modules, the `mcp` SDK dependency, or removed environment keys.
+2. **Flag Re-introductions**: `try...except ImportError` mock stubs and `mcp` imports/probes resurfacing anywhere are obsolete patterns — flag them. The negative-sweep net `tests/test_lingo_eradication.py` enforces this at test level.
+3. **Generic Replacements**: BYOK credential semantics live in `GcpSyncCredentialsRequiredError` (code `GCP_CREDENTIALS_REQUIRED`); provider naming no longer routes through legacy provider strings (`provider="lingo"` call-site parity in `tests/test_complete_integration.py` is a T-4.1 Track D target).
+
 ---
 
 ## 3. Core Architecture Standards
