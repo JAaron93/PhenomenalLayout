@@ -284,7 +284,7 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
 
 ## Track D — Test & Documentation Parity + CI Gates
 
-* **[STATUS: NOT STARTED] T-4.1 — Eradication regression net**
+* **[STATUS: COMPLETE] T-4.1 — Eradication regression net**
   - Grep-based test asserting no `lingo|mcp`-SDK references inside
     `services/`, `config/`, `api/` (negative sweep; mirrors Dolphin pollution tests).
   - Rewrite the legacy provider semantics in `tests/test_complete_integration.py`
@@ -292,6 +292,22 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     BYOK engine; its never-satisfiable Lingo gate is already neutralized to
     `RUN_LIVE_INTEGRATION=1` opt-in (T-3.3).
   - **Depends on:** T-3.1–T-3.4
+  - **Verified:** `tests/test_lingo_eradication.py` gained
+    `TestSourceTreePollutionNet` — a case-insensitive regex sweep
+    (`import mcp`/`from mcp`, `LINGO_API_KEY`, `McpLingo*`/`*_lingo`
+    identifiers, `"lingo"` provider literals) over `services/`, `config/`,
+    `api/` (`*.py`/`*.json`/`*.yaml`/`*.yml`/`*.toml`, `__pycache__`
+    excluded). Prose provenance mentions (e.g. the
+    `gcp_sync_translation_service.py` module docstring) intentionally do
+    not match — AGENTS §6.13 hit classification. Mutation check: a
+    canary file carrying all four pollution forms failed RED with
+    `file:line` evidence, then GREEN after removal. Provider parity:
+    6 `provider="lingo"` call sites → validated legacy `"auto"`;
+    provider assertions now expect the single `"gcp"` registry entry;
+    all Lingo comments/log lines reworded BYOK (zero `lingo` tokens
+    remain in the file, enforced by
+    `test_complete_integration_provider_parity`). Net: 33 passed;
+    13 integration tests collect cleanly; `ruff check .` + `mypy .` green.
 
 * **[STATUS: NOT STARTED] T-4.2 — Coverage & CI parity**
   - Coverage ≥ 70% on `services`, `utils`, `models` (gate unchanged, ADR 0002 D6).
