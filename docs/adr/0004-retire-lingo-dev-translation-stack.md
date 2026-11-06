@@ -1,8 +1,10 @@
 # ADR 0004: Retire the Lingo.dev Translation Stack — GCP Document Translation as the Sole Engine (Sync + Batch Tiers)
 
 ## Status
-**Proposed** — flips to **Accepted** upon completion of the execution tracks in
-`.kiro/specs/lingo-dev-retirement/tasks.md`.
+**Accepted** (2026-11-06) — all execution tracks (T-1.x–T-4.3) in
+`.kiro/specs/lingo-dev-retirement/tasks.md` are COMPLETE: Tracks A+B merged
+in PR #157, Track C in PR #158, Track D closing the eradication net,
+provider parity, coverage/CI gates, and this status flip.
 
 ## Date
 2026-11-03
