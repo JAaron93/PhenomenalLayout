@@ -172,12 +172,14 @@ class TestDependencyPrune:
 #: mentions ("the retired Lingo.dev stack") are legitimate history per
 #: AGENTS §6.13 hit classification; these patterns match only executable
 #: pollution: MCP SDK imports, the retired ambient credential, client
-#: identifiers, and provider string literals.
+#: identifiers (including ``_lingo_`` infix forms such as
+#: ``mcp_lingo_client``), and provider string literals.
 _LINGO_POLLUTION_RE: re.Pattern[str] = re.compile(
     r"(?:\bimport\s+mcp\b|\bfrom\s+mcp\b)"  # MCP SDK import surface
     r"|LINGO_API_KEY"  # retired ambient credential
     r"|\bMcpLingo\w*"  # client class identifiers
     r"|\blingo_\w+|\w*_lingo\b"  # snake_case identifier forms
+    r"|\w*_lingo_\w*"  # infix identifier forms (e.g. mcp_lingo_client)
     r"|['\"]lingo['\"]",  # provider string literal
     re.IGNORECASE,
 )
@@ -224,4 +226,42 @@ class TestSourceTreePollutionNet:
         )
         assert "lingo" not in text.lower(), (
             "test_complete_integration.py still references the retired stack"
+        )
+
+    def test_pollution_regex_covers_canonical_pollution_forms(self) -> None:
+        """Self-test: the sweep regex matches every actionable pollution form.
+
+        Positive cases span the retired import surfaces (absolute, relative,
+        and aliased — AGENTS §6.13 relative-form coverage), the ambient
+        credential, client identifiers, snake_case identifier forms
+        including the ``_lingo_`` infix (``mcp_lingo_client``), and provider
+        literals. The negative case is the legitimate provenance prose in
+        the ``gcp_sync_translation_service`` module docstring, which must
+        stay unmatched (AGENTS §6.13 classification).
+        """
+        positives: tuple[str, ...] = (
+            "import mcp",
+            "from mcp import Client",
+            "import mcp_lingo_client as m",
+            "from .mcp_lingo_client import helper",
+            "from services.mcp_lingo_client import McpLingoClient",
+            "LINGO_API_KEY = 'sk-test'",
+            "os.environ['LINGO_API_KEY']",
+            "client = McpLingoClient()",
+            "result = lingo_translate(text)",
+            "cache = translation_lingo",
+            'provider="lingo"',
+            "provider='lingo'",
+        )
+        misses = [
+            line for line in positives if not _LINGO_POLLUTION_RE.search(line)
+        ]
+        assert not misses, f"pollution regex misses known forms: {misses!r}"
+
+        negative = (
+            "the retired Lingo.dev stack as the engine behind the "
+            "non-book translation"
+        )
+        assert not _LINGO_POLLUTION_RE.search(negative), (
+            "prose provenance mentions must stay unmatched (AGENTS §6.13)"
         )
