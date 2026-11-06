@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -165,3 +166,102 @@ class TestDependencyPrune:
         assert "python-multipart==" in text
         source = (REPO_ROOT / "requirements.in").read_text(encoding="utf-8")
         assert "python-multipart" in source
+
+
+#: Actionable retired-stack tokens (T-4.1 pollution net). Prose provenance
+#: mentions ("the retired Lingo.dev stack") are legitimate history per
+#: AGENTS §6.13 hit classification; these patterns match only executable
+#: pollution: MCP SDK imports, the retired ambient credential, client
+#: identifiers (including ``_lingo_`` infix forms such as
+#: ``mcp_lingo_client``), and provider string literals.
+_LINGO_POLLUTION_RE: re.Pattern[str] = re.compile(
+    r"(?:\bimport\s+mcp\b|\bfrom\s+mcp\b)"  # MCP SDK import surface
+    r"|LINGO_API_KEY"  # retired ambient credential
+    r"|\bMcpLingo\w*"  # client class identifiers
+    r"|\blingo_\w+|\w*_lingo\b"  # snake_case identifier forms
+    r"|\w*_lingo_\w*"  # infix identifier forms (e.g. mcp_lingo_client)
+    r"|['\"]lingo['\"]",  # provider string literal
+    re.IGNORECASE,
+)
+
+#: Live source trees swept by the pollution net (T-4.1 scope).
+_POLLUTION_TREES: tuple[str, ...] = ("services", "config", "api")
+
+#: File suffixes swept (code + structured config).
+_POLLUTION_SUFFIXES: frozenset[str] = frozenset({".py", ".json", ".yaml", ".yml", ".toml"})
+
+
+class TestSourceTreePollutionNet:
+    """Grep-based sweep: live source trees stay free of retired-stack tokens.
+
+    Mirrors the Dolphin-era pollution-test intent: any re-introduction of
+    the Lingo.dev stack (MCP SDK import, ``LINGO_API_KEY``, client
+    identifiers, or ``"lingo"`` provider literals) inside ``services/``,
+    ``config/``, or ``api/`` fails the suite with ``file:line`` evidence.
+    """
+
+    @pytest.mark.parametrize("tree", _POLLUTION_TREES)
+    def test_tree_has_no_lingo_mcp_references(self, tree: str) -> None:
+        """Sweep one live source tree for actionable retired-stack tokens."""
+        root = REPO_ROOT / tree
+        hits: list[str] = []
+        for path in sorted(root.rglob("*")):
+            if path.suffix not in _POLLUTION_SUFFIXES or "__pycache__" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for lineno, line in enumerate(text.splitlines(), start=1):
+                if _LINGO_POLLUTION_RE.search(line):
+                    hits.append(f"{path.relative_to(REPO_ROOT)}:{lineno}")
+        assert not hits, f"retired-stack references in {tree!r}: {hits}"
+
+    def test_complete_integration_provider_parity(self) -> None:
+        """``tests/test_complete_integration.py`` carries no Lingo semantics.
+
+        The live-integration suite was rewritten onto the BYOK engine
+        contract (T-4.1): provider call sites use the validated legacy
+        ``"auto"`` value and provider assertions expect ``"gcp"``.
+        """
+        text = (REPO_ROOT / "tests" / "test_complete_integration.py").read_text(
+            encoding="utf-8"
+        )
+        assert "lingo" not in text.lower(), (
+            "test_complete_integration.py still references the retired stack"
+        )
+
+    def test_pollution_regex_covers_canonical_pollution_forms(self) -> None:
+        """Self-test: the sweep regex matches every actionable pollution form.
+
+        Positive cases span the retired import surfaces (absolute, relative,
+        and aliased — AGENTS §6.13 relative-form coverage), the ambient
+        credential, client identifiers, snake_case identifier forms
+        including the ``_lingo_`` infix (``mcp_lingo_client``), and provider
+        literals. The negative case is the legitimate provenance prose in
+        the ``gcp_sync_translation_service`` module docstring, which must
+        stay unmatched (AGENTS §6.13 classification).
+        """
+        positives: tuple[str, ...] = (
+            "import mcp",
+            "from mcp import Client",
+            "import mcp_lingo_client as m",
+            "from .mcp_lingo_client import helper",
+            "from services.mcp_lingo_client import McpLingoClient",
+            "LINGO_API_KEY = 'sk-test'",
+            "os.environ['LINGO_API_KEY']",
+            "client = McpLingoClient()",
+            "result = lingo_translate(text)",
+            "cache = translation_lingo",
+            'provider="lingo"',
+            "provider='lingo'",
+        )
+        misses = [
+            line for line in positives if not _LINGO_POLLUTION_RE.search(line)
+        ]
+        assert not misses, f"pollution regex misses known forms: {misses!r}"
+
+        negative = (
+            "the retired Lingo.dev stack as the engine behind the "
+            "non-book translation"
+        )
+        assert not _LINGO_POLLUTION_RE.search(negative), (
+            "prose provenance mentions must stay unmatched (AGENTS §6.13)"
+        )

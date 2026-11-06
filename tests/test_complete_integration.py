@@ -13,17 +13,19 @@ import logging
 import os
 import tempfile
 import time
+from pathlib import Path
 
 import psutil
 import pytest
 
 from models.neologism_models import NeologismAnalysis
 from models.user_choice_models import ChoiceType
+from services.byok_credentials_manager import BYOKCredentialsManager
+from services.gcp_sync_translation_service import GcpSyncTranslator
 from services.philosophy_enhanced_document_processor import (
     PhilosophyDocumentResult,
     PhilosophyEnhancedDocumentProcessor,
     PhilosophyProcessingProgress,
-    process_document_with_philosophy_awareness,
 )
 from services.philosophy_enhanced_translation_service import (
     NeologismPreservationResult,
@@ -108,35 +110,71 @@ class TestCompletePhilosophyEnhancedIntegration:
         yield temp_path
         os.unlink(temp_path)
 
-    def test_1_basic_system_initialization(self):
+    @pytest.fixture
+    def byok_engine(self) -> GcpSyncTranslator:
+        """Build a user-bound GCP engine from live-test credential env vars.
+
+        Fail-closed (ADR 0004 D3): opting into ``RUN_LIVE_INTEGRATION=1``
+        requires all three credential env vars below. Without them the
+        live suite fails loudly instead of silently reaching the unbound
+        translation stub.
+        """
+        sa_json_path = os.environ.get("TEST_GCP_SA_JSON_PATH")
+        project_id = os.environ.get("TEST_GCP_PROJECT_ID")
+        bucket_name = os.environ.get("TEST_GCP_BUCKET_NAME")
+        if not (sa_json_path and project_id and bucket_name):
+            pytest.fail(
+                "RUN_LIVE_INTEGRATION=1 requires TEST_GCP_SA_JSON_PATH, "
+                "TEST_GCP_PROJECT_ID, and TEST_GCP_BUCKET_NAME to bind a "
+                "user-owned GCP engine (BYOK fail-closed contract, ADR 0004)"
+            )
+        manager = BYOKCredentialsManager()
+        manager.set_credentials(
+            user_id="live_integration_test",
+            project_id=project_id,
+            bucket_name=bucket_name,
+            sa_json_content=Path(sa_json_path).read_text(encoding="utf-8"),
+        )
+        return GcpSyncTranslator(manager, "live_integration_test")
+
+    @pytest.fixture
+    def bound_service(
+        self, byok_engine: GcpSyncTranslator
+    ) -> PhilosophyEnhancedTranslationService:
+        """Translation service wrapping the user-bound BYOK engine."""
+        return PhilosophyEnhancedTranslationService(translation_service=byok_engine)
+
+    def test_1_basic_system_initialization(self, bound_service):
         """Test 1: Verify all components can be initialized successfully."""
         logger.info("Test 1: Basic system initialization")
 
         # Test translation service initialization
-        translation_service = PhilosophyEnhancedTranslationService()
+        translation_service = bound_service
         assert translation_service is not None
         assert translation_service.translation_service is not None
         assert translation_service.neologism_detector is not None
         assert translation_service.user_choice_manager is not None
 
-        # Verify only Lingo provider is available
+        # Verify the single GCP provider registry entry (ADR 0004)
         available_providers = translation_service.get_available_providers()
-        assert "lingo" in available_providers
-        assert len(available_providers) == 1  # Only Lingo should be available
+        assert "gcp" in available_providers
+        assert len(available_providers) == 1  # One-provider tier (ADR 0004 D2)
 
         # Test document processor initialization
-        document_processor = PhilosophyEnhancedDocumentProcessor()
+        document_processor = PhilosophyEnhancedDocumentProcessor(
+            philosophy_translation_service=translation_service
+        )
         assert document_processor is not None
         assert document_processor.base_processor is not None
         assert document_processor.philosophy_translation_service is not None
 
-        logger.info("✓ All components initialized successfully with Lingo provider")
+        logger.info("✓ All components initialized successfully (GCP provider registry)")
 
-    def test_2_neologism_detection_integration(self, sample_philosophical_text):
+    def test_2_neologism_detection_integration(self, sample_philosophical_text, bound_service):
         """Test 2: Verify neologism detection works with the translation service."""
         logger.info("Test 2: Neologism detection integration")
 
-        service = PhilosophyEnhancedTranslationService()
+        service = bound_service
 
         # Test neologism detection
         analysis = service.neologism_detector.analyze_text(sample_philosophical_text)
@@ -159,11 +197,11 @@ class TestCompletePhilosophyEnhancedIntegration:
             f"✓ Detected {analysis.total_detections} neologisms: {detected_terms}"
         )
 
-    def test_3_user_choice_management_integration(self, sample_philosophical_text):
+    def test_3_user_choice_management_integration(self, sample_philosophical_text, bound_service):
         """Test 3: Verify user choice management works with translation."""
         logger.info("Test 3: User choice management integration")
 
-        service = PhilosophyEnhancedTranslationService()
+        service = bound_service
 
         # Create a session
         session = service.user_choice_manager.create_session(
@@ -202,12 +240,12 @@ class TestCompletePhilosophyEnhancedIntegration:
         logger.info(f"✓ Successfully set and retrieved {choices_set} user choices")
 
     def test_4_text_translation_with_neologism_handling(
-        self, sample_philosophical_text
+        self, sample_philosophical_text, bound_service
     ):
         """Test 4: Verify text translation with neologism handling."""
         logger.info("Test 4: Text translation with neologism handling")
 
-        service = PhilosophyEnhancedTranslationService()
+        service = bound_service
 
         # Create session and set some choices
         session = service.user_choice_manager.create_session(
@@ -218,12 +256,12 @@ class TestCompletePhilosophyEnhancedIntegration:
             target_language="de",
         )
 
-        # Perform translation with neologism handling using Lingo
+        # Perform translation with neologism handling via the BYOK engine
         result = service.translate_text_with_neologism_handling(
             text=sample_philosophical_text,
             source_lang="en",
             target_lang="de",
-            provider="lingo",  # Explicitly use Lingo provider
+            provider="auto",  # Legacy arg; rides the user-bound GCP engine (ADR 0004)
             session_id=session.session_id,
         )
 
@@ -243,11 +281,11 @@ class TestCompletePhilosophyEnhancedIntegration:
         logger.info(f"Translated length: {len(result.translated_text)} chars")
 
     @pytest.mark.asyncio
-    async def test_5_batch_translation_integration(self):
+    async def test_5_batch_translation_integration(self, bound_service):
         """Test 5: Verify batch translation with neologism handling."""
         logger.info("Test 5: Batch translation integration")
 
-        service = PhilosophyEnhancedTranslationService()
+        service = bound_service
 
         # Multiple philosophical texts
         texts = [
@@ -266,12 +304,12 @@ class TestCompletePhilosophyEnhancedIntegration:
             target_language="de",
         )
 
-        # Batch translate using Lingo
+        # Batch translate via the BYOK engine
         results = await service.translate_batch_with_neologism_handling_async(
             texts=texts,
             source_lang="en",
             target_lang="de",
-            provider="lingo",  # Explicitly use Lingo provider
+            provider="auto",  # Legacy arg; rides the user-bound GCP engine (ADR 0004)
             session_id=session.session_id,
         )
 
@@ -290,11 +328,13 @@ class TestCompletePhilosophyEnhancedIntegration:
         )
 
     @pytest.mark.asyncio
-    async def test_6_document_processing_integration(self, temp_document_file):
+    async def test_6_document_processing_integration(self, temp_document_file, bound_service):
         """Test 6: Verify complete document processing integration."""
         logger.info("Test 6: Document processing integration")
 
-        processor = PhilosophyEnhancedDocumentProcessor()
+        processor = PhilosophyEnhancedDocumentProcessor(
+            philosophy_translation_service=bound_service
+        )
 
         # Progress tracking
         progress_updates = []
@@ -305,12 +345,12 @@ class TestCompletePhilosophyEnhancedIntegration:
                 f"Progress: {progress.overall_progress:.1f}% - {progress.current_stage}"
             )
 
-        # Process document using Lingo
+        # Process document via the BYOK engine
         result = await processor.process_document_with_philosophy_awareness(
             file_path=temp_document_file,
             source_lang="en",
             target_lang="de",
-            provider="lingo",  # Explicitly use Lingo provider
+            provider="auto",  # Legacy arg; rides the user-bound GCP engine (ADR 0004)
             user_id="test_user",
             progress_callback=progress_callback,
         )
@@ -326,7 +366,7 @@ class TestCompletePhilosophyEnhancedIntegration:
         assert len(progress_updates) > 0
         assert max(progress_updates) == 100.0  # Should reach 100%
 
-        logger.info("✓ Document processing completed with Lingo provider")
+        logger.info("✓ Document processing completed via the BYOK engine")
         logger.info(f"Session ID: {result.session_id}")
         logger.info(
             f"Neologisms detected: {result.document_neologism_analysis.total_detections}"
@@ -334,18 +374,20 @@ class TestCompletePhilosophyEnhancedIntegration:
         logger.info(f"Processing time: {result.processing_time:.2f}s")
 
     @pytest.mark.asyncio
-    async def test_7_document_creation_integration(self, temp_document_file):
+    async def test_7_document_creation_integration(self, temp_document_file, bound_service):
         """Test 7: Verify translated document creation."""
         logger.info("Test 7: Document creation integration")
 
-        processor = PhilosophyEnhancedDocumentProcessor()
+        processor = PhilosophyEnhancedDocumentProcessor(
+            philosophy_translation_service=bound_service
+        )
 
-        # Process document first using Lingo
+        # Process document first via the BYOK engine
         result = await processor.process_document_with_philosophy_awareness(
             file_path=temp_document_file,
             source_lang="en",
             target_lang="de",
-            provider="lingo",  # Explicitly use Lingo provider
+            provider="auto",  # Legacy arg; rides the user-bound GCP engine (ADR 0004)
             user_id="test_user",
         )
 
@@ -370,36 +412,47 @@ class TestCompletePhilosophyEnhancedIntegration:
             logger.info(f"✓ Translated document created: {output_path}")
 
     @pytest.mark.asyncio
-    async def test_8_convenience_function_integration(self, temp_document_file):
+    async def test_8_convenience_function_integration(self, temp_document_file, bound_service):
         """Test 8: Verify convenience function integration."""
         logger.info("Test 8: Convenience function integration")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_filename = os.path.join(temp_dir, "convenience_output.pdf")
 
-            # Use convenience function with Lingo
-            result, output_path = await process_document_with_philosophy_awareness(
+            # The module-level convenience function constructs its own
+            # unbound processor, so exercise the injectable processor path
+            # with the user-bound engine instead (ADR 0004).
+            processor = PhilosophyEnhancedDocumentProcessor(
+                philosophy_translation_service=bound_service
+            )
+            result = await processor.process_document_with_philosophy_awareness(
                 file_path=temp_document_file,
                 source_lang="en",
                 target_lang="de",
-                provider="lingo",  # Explicitly use Lingo provider
+                provider="auto",  # Legacy arg; rides the user-bound GCP engine (ADR 0004)
                 user_id="test_user",
-                output_filename=output_filename,
+            )
+            output_path = (
+                await processor.create_translated_document_with_philosophy_awareness(
+                    result, output_filename
+                )
             )
 
             assert isinstance(result, PhilosophyDocumentResult)
             assert output_path is not None
             assert os.path.exists(output_path)
 
-            logger.info("✓ Convenience function completed successfully with Lingo")
+            logger.info("✓ Convenience function completed successfully via the BYOK engine")
             logger.info(f"Output: {output_path}")
 
-    def test_9_statistics_and_monitoring(self, sample_philosophical_text):
+    def test_9_statistics_and_monitoring(self, sample_philosophical_text, bound_service):
         """Test 9: Verify statistics and monitoring functionality."""
         logger.info("Test 9: Statistics and monitoring")
 
-        service = PhilosophyEnhancedTranslationService()
-        processor = PhilosophyEnhancedDocumentProcessor()
+        service = bound_service
+        processor = PhilosophyEnhancedDocumentProcessor(
+            philosophy_translation_service=service
+        )
 
         # Perform some operations to generate statistics
         session = service.user_choice_manager.create_session(
@@ -436,12 +489,14 @@ class TestCompletePhilosophyEnhancedIntegration:
             f"Processor stats: {processor_stats['philosophy_enhanced_processor_stats']}"
         )
 
-    def test_10_error_handling_and_resilience(self):
+    def test_10_error_handling_and_resilience(self, bound_service):
         """Test 10: Verify error handling and system resilience."""
         logger.info("Test 10: Error handling and resilience")
 
-        service = PhilosophyEnhancedTranslationService()
-        processor = PhilosophyEnhancedDocumentProcessor()
+        service = bound_service
+        processor = PhilosophyEnhancedDocumentProcessor(
+            philosophy_translation_service=service
+        )
 
         # Test with invalid file path. Paths outside the managed storage
         # areas are rejected before any existence probing occurs.
@@ -475,8 +530,8 @@ class TestCompletePhilosophyEnhancedIntegration:
 
         logger.info("✓ Error handling tests completed")
 
-    def test_11_memory_and_performance_monitoring(self, sample_philosophical_text):
-        """Test 11: Basic memory and performance monitoring with Lingo provider.
+    def test_11_memory_and_performance_monitoring(self, sample_philosophical_text, bound_service):
+        """Test 11: Basic memory and performance monitoring via the BYOK engine.
 
         Memory limit can be configured via TEST_MEMORY_LIMIT_MB environment variable.
         Default limit is 1000MB (1GB). Set lower values for stricter testing.
@@ -486,11 +541,11 @@ class TestCompletePhilosophyEnhancedIntegration:
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB
 
-        service = PhilosophyEnhancedTranslationService()
+        service = bound_service
 
-        # Verify Lingo provider is available
+        # Verify the GCP provider registry entry (ADR 0004)
         available_providers = service.get_available_providers()
-        assert "lingo" in available_providers
+        assert "gcp" in available_providers
 
         # Create session
         session = service.user_choice_manager.create_session(
@@ -510,7 +565,7 @@ class TestCompletePhilosophyEnhancedIntegration:
                 text=f"Performance test {i}: {sample_philosophical_text}",
                 source_lang="en",
                 target_lang="de",
-                provider="lingo",  # Explicitly use Lingo provider
+                provider="auto",  # Legacy arg; rides the user-bound GCP engine (ADR 0004)
                 session_id=session.session_id,
             )
             results.append(result)
@@ -521,7 +576,7 @@ class TestCompletePhilosophyEnhancedIntegration:
         processing_time = end_time - start_time
         memory_increase = final_memory - initial_memory
 
-        logger.info("✓ Performance test completed with Lingo provider")
+        logger.info("✓ Performance test completed via the BYOK engine")
         logger.info(f"Processed {len(results)} translations in {processing_time:.2f}s")
         logger.info(
             f"Average time per translation: {processing_time / len(results):.3f}s"
@@ -534,15 +589,17 @@ class TestCompletePhilosophyEnhancedIntegration:
             memory_increase < memory_limit
         ), f"Memory increase {memory_increase:.1f}MB exceeds limit {memory_limit}MB"
 
-    def test_12_complete_end_to_end_workflow(self, temp_document_file):
+    def test_12_complete_end_to_end_workflow(self, temp_document_file, bound_service):
         """Test 12: Complete end-to-end workflow test."""
         logger.info("Test 12: Complete end-to-end workflow")
 
         # This test combines all components in a realistic workflow
 
         # Step 1: Initialize services
-        service = PhilosophyEnhancedTranslationService()
-        processor = PhilosophyEnhancedDocumentProcessor()
+        service = bound_service
+        processor = PhilosophyEnhancedDocumentProcessor(
+            philosophy_translation_service=service
+        )
 
         # Step 2: Create user session
         session = service.user_choice_manager.create_session(

@@ -284,7 +284,7 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
 
 ## Track D — Test & Documentation Parity + CI Gates
 
-* **[STATUS: NOT STARTED] T-4.1 — Eradication regression net**
+* **[STATUS: COMPLETE] T-4.1 — Eradication regression net**
   - Grep-based test asserting no `lingo|mcp`-SDK references inside
     `services/`, `config/`, `api/` (negative sweep; mirrors Dolphin pollution tests).
   - Rewrite the legacy provider semantics in `tests/test_complete_integration.py`
@@ -292,18 +292,82 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     BYOK engine; its never-satisfiable Lingo gate is already neutralized to
     `RUN_LIVE_INTEGRATION=1` opt-in (T-3.3).
   - **Depends on:** T-3.1–T-3.4
+  - **Verified:** `tests/test_lingo_eradication.py` gained
+    `TestSourceTreePollutionNet` — a case-insensitive regex sweep
+    (`import mcp`/`from mcp`, `LINGO_API_KEY`, `McpLingo*`/`*_lingo`
+    identifiers, `"lingo"` provider literals) over `services/`, `config/`,
+    `api/` (`*.py`/`*.json`/`*.yaml`/`*.yml`/`*.toml`, `__pycache__`
+    excluded). Prose provenance mentions (e.g. the
+    `gcp_sync_translation_service.py` module docstring) intentionally do
+    not match — AGENTS §6.13 hit classification. Mutation check: a
+    canary file carrying all four pollution forms failed RED with
+    `file:line` evidence, then GREEN after removal. Provider parity:
+    6 `provider="lingo"` call sites → validated legacy `"auto"`;
+    provider assertions now expect the single `"gcp"` registry entry;
+    all Lingo comments/log lines reworded BYOK (zero `lingo` tokens
+    remain in the file, enforced by
+    `test_complete_integration_provider_parity`). Net: 33 passed;
+    13 integration tests collect cleanly; `ruff check .` + `mypy .` green.
+  - **PR #160 review hardening:** Greptile P2 identified that
+    `mcp_lingo_client` (the exact retired module name) escaped both
+    boundary patterns (`lingo_` had no leading word boundary; `_lingo`
+    no trailing one). Fixed by adding a `_lingo_` infix alternative
+    (`\w*_lingo_\w*`) plus a regex self-test
+    (`test_pollution_regex_covers_canonical_pollution_forms`) covering
+    absolute/relative/aliased retired import forms, the ambient
+    credential, identifiers, and provider literals — with the legit
+    provenance docstring line asserted unmatched (AGENTS §6.13).
+    Mutation canary round 2: a canary carrying only the two previously
+    escaping forms failed RED with `file:line` evidence. Net: 34 passed.
 
-* **[STATUS: NOT STARTED] T-4.2 — Coverage & CI parity**
+* **[STATUS: COMPLETE] T-4.2 — Coverage & CI parity**
   - Coverage ≥ 70% on `services`, `utils`, `models` (gate unchanged, ADR 0002 D6).
   - CI-exact serial run: `pytest --maxfail=1 --disable-warnings`;
     full parallel run `pytest -n auto` must also be green (AGENTS §6.3).
   - **Depends on:** T-4.1
+  - **Verified:** full parallel run `pytest -n auto` → 804 passed,
+    13 skipped, total coverage 74.26% (gate reached); CI-exact serial
+    `pytest --maxfail=1 --disable-warnings` → 804 passed, 13 skipped,
+    20 deselected (frontend marker), total coverage 74.27% (gate
+    reached), EXIT=0. Note: the live gate in `pytest.ini` measures
+    `--cov=services --cov=core --cov=api --cov=utils` (the task prose's
+    `models` reference predates the ADR 0002 D6 gate definition; the
+    pytest.ini gate is authoritative and unchanged).
+  - **PR #160 review hardening:** Greptile P1 identified that the
+    rewritten live suite still constructed
+    `PhilosophyEnhancedTranslationService()` without an engine, so
+    `RUN_LIVE_INTEGRATION=1` reached `UnboundTranslationStub` and raised
+    `GcpSyncCredentialsRequiredError` instead of translating. Fixed with
+    fail-closed fixtures in `tests/test_complete_integration.py`:
+    `byok_engine` builds a user-bound `GcpSyncTranslator` from
+    `TEST_GCP_SA_JSON_PATH` / `TEST_GCP_PROJECT_ID` /
+    `TEST_GCP_BUCKET_NAME` (via `BYOKCredentialsManager.set_credentials`;
+    `pytest.fail` with the BYOK contract message when any var is
+    missing), and `bound_service` wraps it via
+    `PhilosophyEnhancedTranslationService(translation_service=...)`.
+    All 9 service constructions and 6 processor constructions
+    (`philosophy_translation_service=...`) now ride the bound engine;
+    test_8 moved off the module-level convenience function (which
+    constructs its own unbound processor) onto the injectable processor
+    path plus an explicit `create_translated_document_with_philosophy_awareness`
+    call. Verified: default run unchanged (12 class tests skip;
+    module-level `test_async_complete_integration` is translation-free
+    and needs no engine), and `RUN_LIVE_INTEGRATION=1` without
+    credentials fails at fixture setup with the BYOK fail-closed
+    message. Full parallel suite after the fixes: 805 passed, 13
+    skipped, 74.25% coverage (gate reached), EXIT=0.
 
-* **[STATUS: NOT STARTED] T-4.3 — Flip ADR status + spec statuses (zero-drift)**
+* **[STATUS: COMPLETE] T-4.3 — Flip ADR status + spec statuses (zero-drift)**
   - Flip `docs/adr/0004-retire-lingo-dev-translation-stack.md` to **Accepted**.
   - Mark completed tasks `[STATUS: COMPLETE]` **only where artifacts verify**.
   - Confirm no dead-code report drift (AGENTS §6.2 dead-doc rule).
   - **Depends on:** T-4.2
+  - **Verified:** ADR 0004 Status flipped to **Accepted** (2026-11-06)
+    citing the track completion chain (PRs #157/#158 + this track);
+    every task T-1.1–T-4.3 carries `[STATUS: COMPLETE]` with artifact
+    verification notes recorded at completion time; no `reports/`
+    directory exists in the repository, so the §6.2 dead-doc pruning
+    rule has no stale audit reports to prune (checked `ls reports/`).
 
 ---
 
