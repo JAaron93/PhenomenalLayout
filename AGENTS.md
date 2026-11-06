@@ -153,6 +153,7 @@ Agents must NEVER introduce or write code that relies on the following deprecate
 ### 6.1 Architectural Pushback & AI Review Governance
 * **No Reflexive Acquiescence**: When automated AI reviewers (e.g., Greptile) flag intentional deprecations or deletions mandated by ADR 0001, agents MUST NOT restore obsolete code.
 * **Defensive Decoupling**: Decouple legacy callers with `NotImplementedError` or `try...except ImportError` fallbacks, post clear architectural pushback citing the ADR/spec on the PR thread, and drive the review to completion without regressing migration goals.
+* **Verify findings against live code before acting**: Greptile review status is a CI check on this repo; push-triggered re-reviews may lag (trigger one via the greptile MCP `trigger_code_review` when needed). Findings can be subtly wrong — in PR #158 a P2 claimed a wrapper `provider` parameter was a "no-op" when the downstream engine actually validates it; the correct fix was correcting the documentation wording, not the code. Either way, reply on the thread with the fix commit hash.
 
 ### 6.2 Test Fixture Reload & Submodule Hygiene (Python 3.13)
 * **Safe Dynamic Reloading**: In tests that dynamically reload environment-dependent submodules via `importlib.reload(mod)`, always synchronize `sys.modules[mod.__name__] = mod` prior to calling `importlib.reload` to prevent Python 3.13 `sys.modules` identity desynchronization.
@@ -244,3 +245,23 @@ Established in PR #147 — verified against 752-test suite at 70.75% coverage.
 * **DB-level lexical comparisons**: `ChoiceDatabase.cleanup_expired_sessions` compares ISO strings in SQL; mixed aware/naive lexical ordering is only wrong at exact sub-second boundaries (immaterial for hour-scale expiry policies). Prefer manager-level normalization over row-level SQL timestamp surgery.
 
 Established in PR #153 — verified against the 761-test suite in both parallel (`-n auto`) and CI-exact serial modes.
+
+### 6.12 Formatting & Type Gates — Ruff-Only CI (No Black)
+* **CI gates are exactly `ruff check .` + `mypy .`** (`.github/workflows/ci.yml`); there is no black gate. Do NOT run mechanical black reformat passes: a full reformat split single-line `# noqa`-carrying fixture definitions into multi-line defs, tripping `ARG001`/`RUF100` and breaking the ruff gate (attempted and reverted in PR #158). Make surgical edits that match the surrounding style instead.
+* **Pre-push gate parity**: run `ruff check .`, `mypy .` (local mypy version must match the CI pin), and the CI-exact serial pytest command (§6.3) before every push.
+
+### 6.13 Dependency Eradication Sweep Discipline
+* **Case-insensitive greps only**: env vars are uppercase (`LINGO_API_KEY`), module names lowercase (`mcp_lingo_client`); case-sensitive sweeps missed the env var twice during ADR 0004 Track C.
+* **Include relative-import forms** (`from .translation_service import …`) — module-path greps alone miss intra-package delegation shims.
+* **Sweep the full artifact graph, not just `services/`**: `examples/`, `scripts/` (incl. `scripts/verify/`), `docs/` (incl. `docs/fixes/`), tests, `.env.example`, steering docs, and review-agent configs. Companion artifacts are one removal unit — the MCP timeout verify script and its `docs/fixes/MCP_LINGO_TIMEOUT_CONFIGURATION.md` write-up were split across two sweeps before the doc was caught.
+* **Classify residual hits instead of purging blindly**: enforcement nets (`tests/test_lingo_eradication.py`), ADRs, executed specs (`.kiro/specs/…`), historical quest records (`.qoder/quests/`), and "replaces the X-era test" docstrings legitimately mention retired stacks. Only *operational* docs describing deleted components are drift — delete them (§6.2); never rewrite history.
+* **Extend the negative-sweep net red-first**: add each newly discovered artifact path to `_LEGACY_FILES` in `tests/test_lingo_eradication.py`, verify the assertion fails, then remove the artifact and verify green.
+
+### 6.14 Deprecated-but-Forwarded Parameter Contracts
+* §6.8 covers parameters silenced as true no-ops. Distinct case: a backward-compat parameter that is still **forwarded** to a downstream validator. Documentation (docstrings AND `docs/`) must state the accepted values and the failure mode — never claim "no effect".
+* **Precedent**: `provider` in `services/philosophy_enhanced_translation_service.py` forwards to `GcpSyncTranslator._validate_provider` (`services/gcp_sync_translation_service.py:80,142`), which accepts only `None`/`"gcp"`/`"auto"` and raises `ValueError` on anything else (e.g. the retired `"lingo"`). The wrapper docstrings say "validated, otherwise ignored — one-provider tier"; all parameter documentation must match that contract.
+
+### 6.15 Dependency Sync Restores Dev-Manifest Transitives
+* `scripts/sync-deps.sh dev` (pip-sync) resolves from the dev manifest alone and strips transitives that hand-written manifests rely on (verified in PR #158: `python-multipart` — required at FastAPI route-registration time — vanished after a sync). After every sync: `uv pip install -r requirements.txt -r requirements-dev.txt`, then verify with `pip check`, the eradication net (`pytest tests/test_lingo_eradication.py`), and an app-import probe before trusting the environment.
+
+Established in PR #158 — eradication sweep, Greptile review cycle, and venv realignment lessons from ADR 0004 Track C.

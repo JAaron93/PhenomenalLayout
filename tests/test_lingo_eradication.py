@@ -34,6 +34,7 @@ _LEGACY_FILES: tuple[str, ...] = (
     "services/parallel_translation_service.py",
     "services/enhanced_translation_service.py",
     "scripts/verify/verify_mcp_timeout_configuration.py",
+    "docs/fixes/MCP_LINGO_TIMEOUT_CONFIGURATION.md",
     "examples/mcp_demo_file.txt",
     "examples/parallel_translation_demo.py",
     "examples/neologism_integration_example.py",

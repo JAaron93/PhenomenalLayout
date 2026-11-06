@@ -253,6 +253,20 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     `docs/PHILOSOPHY_ENHANCED_TRANSLATION_ARCHITECTURE_COMPLETE.md` carries
     a historical pre-ADR-0004 banner (design history preserved, live
     contract pointers added).
+  - Verified (final pre-merge sweep): full-repo case-insensitive Lingo
+    sweep classified every residual hit as enforcement/history (net,
+    ADRs, executed specs, `.qoder/quests/` records, "replaces the
+    Lingo-era" docstrings, the `requirements.in` provenance comment) —
+    except `docs/fixes/MCP_LINGO_TIMEOUT_CONFIGURATION.md`, an operational
+    how-to for the T-3.1-deleted `mcp_lingo_client.py` (companion verify
+    script already removed). Deleted under §6.2 dead-doc pruning; the
+    negative-sweep net gained a 29th assertion for it (red-first).
+  - `AGENTS.md`: §6.1 gained the verify-findings-against-live-code review
+    discipline; new §6.12 (ruff-only CI gates, no black reformat passes),
+    §6.13 (eradication sweep discipline incl. case-insensitive greps,
+    relative imports, companion-artifact units, hit classification),
+    §6.14 (deprecated-but-forwarded parameter contracts — `provider`
+    precedent), §6.15 (dependency sync restores dev-manifest transitives).
   - `.greptile/rules.md` + `.greptile/instructions.md`: Lingo Eradication
     section (mirror Dolphin section; never request restoration; flag
     re-introduction).
