@@ -6,27 +6,7 @@ system dependencies are documented. They do not reach external networks.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-
-import pytest
-
-
-@pytest.mark.parametrize(
-    "var",
-    [
-        "LINGO_API_KEY",
-    ],
-)
-def test_required_env_vars_documented_and_optionally_set(var: str) -> None:
-    # The variables may not be set in local runs; ensure they are documented
-    # and the README exists so operators can configure them.
-    readme = Path("README.md")
-    assert readme.exists(), "README.md must exist for deployment guidance"
-    text = readme.read_text(encoding="utf-8")
-    assert var in text, f"{var} must be documented in README.md"
-    # Optional: presence check, not enforced in CI unless env provided
-    _ = os.getenv(var)
 
 
 def test_minimum_dependency_pins_present() -> None:

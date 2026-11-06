@@ -35,25 +35,40 @@ This directory contains examples demonstrating the use of the Neologism Detectio
    python -m spacy download de_core_news_sm
    ```
 
-3. Set up environment variables for translation services:
-   ```bash
-   export LINGO_API_KEY=your_lingo_api_key
-   ```
+3. Translation credentials (Bring Your Own Key):
 
-### Running the Integration Example
+   PhenomenalLayout uses only personal Google Cloud Translation v3 credentials.
+   Your Service Account JSON key is validated in the application and held in
+   session memory only — no environment variables are required.
+
+### Running the Usage Examples
 
 ```bash
 cd examples
-python neologism_integration_example.py
+python philosophy_enhanced_usage_examples.py
 ```
 
-This will:
-1. Initialize the Philosophy-Enhanced Translator
+> **ADR 0004 fail-closed behavior:** the script constructs
+> `PhilosophyEnhancedTranslationService()` without a bound engine. The
+> neologism-analysis examples run without credentials, but its first
+> translation call raises `GcpSyncCredentialsRequiredError` (code
+> `GCP_CREDENTIALS_REQUIRED`) and the remaining examples are skipped.
+> Credentials entered in the web interface live in that server process's
+> session memory and cannot bind this standalone script — to see live
+> translation, bind a user-bound `GcpSyncTranslator` BYOK engine first, as
+> shown in the top-level
+> [README](../README.md#user-bound-gcp-translation-engine-byok).
+
+The script will:
+1. Initialize the PhilosophyEnhancedTranslationService (unbound — see the
+   fail-closed note above)
 2. Analyze sample German philosophical text for neologisms
-3. Translate the text while preserving detected neologisms
-4. Generate translation suggestions for philosophical terms
-5. Display comprehensive analysis results
-6. Export results to JSON format
+3. Attempt translation — fails closed here without a bound engine
+
+With a bound BYOK engine, it additionally translates the text while
+preserving detected neologisms, generates translation suggestions for
+philosophical terms, displays comprehensive analysis results, and exports
+results to JSON format.
 
 ## Example Output
 
@@ -115,7 +130,7 @@ The system is optimized for:
 ## Integration with Existing Systems
 
 The neologism detector integrates seamlessly with:
-- Lingo.dev translation service with parallel processing
+- Google Cloud Document Translation (v3) with user-bound BYOK engines
 - Document processing pipeline
 - Language detection system
 - Terminology management system

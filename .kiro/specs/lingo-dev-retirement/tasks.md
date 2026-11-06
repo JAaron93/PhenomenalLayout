@@ -171,7 +171,14 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
 > PARALLEL EXECUTION: C-1 (code deletion) is sequential after B; C-2 (dependency
 > prune) and C-3 (governance docs) are mutually independent.
 
-* **[STATUS: NOT STARTED] T-3.1 — Delete Lingo service modules + orphans**
+* **[STATUS: COMPLETE] T-3.1 — Delete Lingo service modules + orphans**
+  - Verified: `tests/test_lingo_eradication.py` RED on collection before
+    implementation (16 initial failures), then 19 passed at GREEN.
+  - Verified: `examples/neologism_integration_example.py` and the dead
+    delegation typing shim in `services/philosophy_enhanced_translation_service.py`
+    (relative import missed by the first recon sweep) were caught by the
+    extended net; `ruff` + `mypy .` + full `-n auto` replay (74.26% coverage)
+    + CI-exact serial replay (74.27%) all green.
   - `services/translation_service.py`, `services/mcp_lingo_client.py`,
     `services/parallel_translation_service.py`, `services/enhanced_translation_service.py`.
   - `scripts/verify/verify_mcp_timeout_configuration.py`;
@@ -188,9 +195,19 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     `examples/parallel_translation_demo.py`,
     `examples/neologism_integration_example.py` (update or delete),
     `examples/README.md` Lingo sections.
+  - Note: the shim sweep (`from .translation_service import`) is now covered
+    by `TestPackageExportRemoved::test_philosophy_service_has_no_legacy_delegation_shim`.
   - **Depends on:** T-2.4
 
-* **[STATUS: NOT STARTED] T-3.2 — Dependency prune + manifest regen (AGENTS §6.7)**
+* **[STATUS: COMPLETE] T-3.2 — Dependency prune + manifest regen (AGENTS §6.7)**
+  - Verified: §6.7 setup-script sweep clean (no `import mcp`/`import lingo`
+    probes in `scripts/`, `Makefile`, `justfile`, `.github/`, `tests/conftest.py`).
+  - Verified: deleted-mcp guard `TestDependencyPrune` RED (4 assertions), then
+    GREEN; `python-multipart` restored as an explicit `requirements.in` dep
+    (FastAPI `UploadFile`/`Form` routes need it at registration — previously
+    a transitive of the removed MCP SDK only); regen diff strictly
+    subtractive for the 11-pin MCP subtree, zero version bumps;
+    `test_deployment_config.py::test_minimum_dependency_pins_present` green.
   - Remove `mcp>=2.2.0,<3.0` from `requirements.in:18`; run the mandatory
     setup-script sweep (`grep -rn "import mcp\|import lingo" scripts/ Makefile
     justfile .github/ tests/conftest.py`) and fix any stale probes.
@@ -200,14 +217,60 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     never reintroduce `reportlab`).
   - **Depends on:** T-3.1 (parallel with T-3.3)
 
-* **[STATUS: NOT STARTED] T-3.3 — Configuration & env eradication**
+* **[STATUS: COMPLETE] T-3.3 — Configuration & env eradication**
+  - Verified: `TestConfigurationEradication` net (5 surfaces) RED × 6 pre-edit,
+    then GREEN; README-assertion coupling handled by deleting
+    `test_required_env_vars_documented_and_optionally_set` (would have failed
+    the T-3.4 README sweep); `scripts/run_tests_with_env.py` repurposed per
+    sweep result (was reporting "zero Lingo refs" only because the grep was
+    case-sensitive); `tests/test_complete_integration.py` Lingo gate
+    neutralized to `RUN_LIVE_INTEGRATION=1` (provider-string parity deferred
+    to T-4.1).
   - `.env.example:1-19`: remove LINGO block (BYOK credentials are session-memory
     only per §2.3 — no env replacement needed).
   - `config/settings.py:393-394`: drop `LINGO_API_KEY` ("Only Lingo.dev" comment).
   - `app.py:4-5,181`: docwording → GCP-only.
   - **Depends on:** T-3.1 (parallel with T-3.2)
 
-* **[STATUS: NOT STARTED] T-3.4 — Governance codification (ADR 0004 D7)**
+* **[STATUS: COMPLETE] T-3.4 — Governance codification (ADR 0004 D7)**
+  - Verified: `.greptile/rules.md` §7 + `.greptile/instructions.md` §2.2
+    mirror the Dolphin eradication sections (never request restoration;
+    flag re-introductions; negative-sweep net named as the enforcement
+    artifact); AGENTS.md §4 deny-list row added; README Lingo sections
+    swept (~45-788 band) with the migration-table row added and the
+    Lingo-era benchmark suite replaced by a historical note;
+    `.kiro/steering/product.md:13` and `tech.md:82` reworded GCP-only.
+  - Verified: philosophy-path docs parity —
+    `docs/philosophy_enhanced_translation_api.md` now states the sync-tier
+    mapping explicitly (neologism path rides GCP Translation v3's
+    synchronous text API via user-bound `GcpSyncTranslator`; books use the
+    async `batchTranslateDocument` pipeline), documents `provider` as a
+    deprecated legacy routing argument validated by the engine — accepted
+    values `None`/`"gcp"`/`"auto"` (default `"auto"`); any other value
+    raises `ValueError` (4 param sites) — and replaces the multi-provider
+    fallback error-handling example with fail-closed
+    `GcpSyncCredentialsRequiredError` semantics;
+    `docs/PHILOSOPHY_ENHANCED_TRANSLATION_ARCHITECTURE_COMPLETE.md` carries
+    a historical pre-ADR-0004 banner (design history preserved, live
+    contract pointers added).
+  - Verified (final pre-merge sweep): full-repo case-insensitive Lingo
+    sweep classified every residual hit as enforcement/history (net,
+    ADRs, executed specs, `.qoder/quests/` records, "replaces the
+    Lingo-era" docstrings, the `requirements.in` provenance comment) —
+    except `docs/fixes/MCP_LINGO_TIMEOUT_CONFIGURATION.md`, an operational
+    how-to for the T-3.1-deleted `mcp_lingo_client.py` (companion verify
+    script already removed). Deleted under §6.2 dead-doc pruning; the
+    negative-sweep net gained a 29th assertion for it (red-first).
+  - `AGENTS.md`: §6.1 gained the verify-findings-against-live-code review
+    discipline; new §6.12 (ruff-only CI gates, no black reformat passes),
+    §6.13 (eradication sweep discipline incl. case-insensitive greps,
+    relative imports, companion-artifact units, hit classification),
+    §6.14 (deprecated-but-forwarded parameter contracts — `provider`
+    precedent), §6.15 (dependency sync exactness and shared-venv
+    manifest skew — corrected after review: `sync-deps.sh dev` passes
+    both manifests to `pip-sync`; the observed `python-multipart` loss
+    was exact-equality uninstall against pre-T-3.2 manifests, not
+    dev-only resolution).
   - `.greptile/rules.md` + `.greptile/instructions.md`: Lingo Eradication
     section (mirror Dolphin section; never request restoration; flag
     re-introduction).
@@ -224,6 +287,10 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
 * **[STATUS: NOT STARTED] T-4.1 — Eradication regression net**
   - Grep-based test asserting no `lingo|mcp`-SDK references inside
     `services/`, `config/`, `api/` (negative sweep; mirrors Dolphin pollution tests).
+  - Rewrite the legacy provider semantics in `tests/test_complete_integration.py`
+    (`provider="lingo"` call sites, available-provider assertions) against the
+    BYOK engine; its never-satisfiable Lingo gate is already neutralized to
+    `RUN_LIVE_INTEGRATION=1` opt-in (T-3.3).
   - **Depends on:** T-3.1–T-3.4
 
 * **[STATUS: NOT STARTED] T-4.2 — Coverage & CI parity**

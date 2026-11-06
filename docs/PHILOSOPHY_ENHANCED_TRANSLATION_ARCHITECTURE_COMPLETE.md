@@ -1,5 +1,20 @@
 # Philosophy-Enhanced PDF Translation System Architecture
 
+> **Historical design document (pre-ADR-0004).** This is the original
+> architecture proposal for the philosophy-enhanced translation system and is
+> preserved as design history — it describes the retired Lingo.dev era
+> (`TranslationService` inheritance, `provider` strings, parallel
+> translation services). The live architecture differs: translation rides
+> **user-bound `GcpSyncTranslator` BYOK engines** over Google Cloud
+> Translation v3's synchronous text API (books use the asynchronous
+> `batchTranslateDocument` pipeline), with fail-closed
+> `GcpSyncCredentialsRequiredError` semantics and no provider routing. See
+> [ADR 0004](adr/0004-retire-lingo-dev-translation-stack.md),
+> [ADR 0001](adr/0001-migrate-to-google-cloud-document-translation.md),
+> [ADR 0002](adr/0002-bespoke-frontend-gcp-only-translation.md), and
+> [philosophy_enhanced_translation_api.md](philosophy_enhanced_translation_api.md)
+> for the current contract.
+
 ## Executive Summary
 
 This document outlines a comprehensive architecture for enhancing the existing PDF translation system with philosophy-focused capabilities. The design prioritizes Klages terminology while creating a flexible foundation for supporting multiple philosophical traditions. The system will handle documents up to 2,000 pages with sophisticated neologism detection and user-controlled translation behavior.

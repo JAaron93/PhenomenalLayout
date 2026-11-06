@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "PhenomenalLayout"
 version = "1.0.0"
-description = "Advanced layout preservation engine for document translation - orchestrating Lingo.dev translation services with Google Cloud Document Translation for pixel-perfect formatting integrity"
+description = "Advanced layout preservation engine for document translation - user-bound Google Cloud Document Translation (BYOK) for pixel-perfect formatting integrity"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
 requires-python = ">=3.12"
@@ -111,7 +111,7 @@ unfixable = []
 "scripts/test_linting_setup.py" = ["SIM102"]  # Intentionally non-compliant demo file for the linting walkthrough
 
 [tool.ruff.lint.flake8-unused-arguments]
-# *args/**kwargs are signature-parity stubs (mcp fallbacks, __getattr__ dispatch, test placeholder clients)
+# *args/**kwargs are signature-parity stubs (__getattr__ dispatch, test placeholder clients)
 ignore-variadic-names = true
 
 [tool.ruff.lint.pydocstyle]

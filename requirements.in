@@ -5,6 +5,9 @@
 fastapi>=0.143.0,<1.0
 uvicorn[standard]>=0.54.0,<1.0
 python-dotenv>=1.2.4,<2.0
+# Required at route-registration time by FastAPI UploadFile/Form endpoints
+# (api/routes.py); formerly carried transitively by the removed Lingo MCP SDK.
+python-multipart>=0.0.33,<1.0
 
 # PDF Processing
 pypdf>=6.21.3,<7.0
@@ -15,7 +18,6 @@ requests>=2.32,<3.0
 
 # Cloud Services & Deployment
 modal>=1.1,<2.0
-mcp>=2.2.0,<3.0
 
 # Google Cloud Platform (BYOK batch translation pipeline)
 google-cloud-translate>=3.28.0,<4.0
