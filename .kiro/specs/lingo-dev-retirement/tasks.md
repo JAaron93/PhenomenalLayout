@@ -266,7 +266,11 @@ Track A ──► Track B ──► Track C ──► Track D (final green + doc
     §6.13 (eradication sweep discipline incl. case-insensitive greps,
     relative imports, companion-artifact units, hit classification),
     §6.14 (deprecated-but-forwarded parameter contracts — `provider`
-    precedent), §6.15 (dependency sync restores dev-manifest transitives).
+    precedent), §6.15 (dependency sync exactness and shared-venv
+    manifest skew — corrected after review: `sync-deps.sh dev` passes
+    both manifests to `pip-sync`; the observed `python-multipart` loss
+    was exact-equality uninstall against pre-T-3.2 manifests, not
+    dev-only resolution).
   - `.greptile/rules.md` + `.greptile/instructions.md`: Lingo Eradication
     section (mirror Dolphin section; never request restoration; flag
     re-introduction).
