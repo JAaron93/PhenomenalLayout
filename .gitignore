@@ -9,6 +9,8 @@ secrets.json
 *.secrets
 *.key
 *.keys
+*.pem
+*.crt
 # (keep the specific patterns only if you have a concrete need to *track* certain .key files)
 api_keys.json
 # Python bytecode and caches
