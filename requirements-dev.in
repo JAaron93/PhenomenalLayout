@@ -1,0 +1,32 @@
+# Development and CI dependencies — hand-written source manifest.
+#
+# requirements-dev.txt is compiled from this file:
+#   uv pip compile requirements-dev.in --constraint requirements.txt -o requirements-dev.txt
+#
+# The --constraint keeps transitive pins shared with the runtime tier on the
+# same versions, so `pip-sync requirements.txt requirements-dev.txt` never
+# sees conflicting pins for one package. pip-sync requires every manifest it
+# syncs to be a fully compiled closure: it uninstalls anything that is not an
+# explicit pin, so hand-written manifests orphan their transitive dependencies.
+#
+# Install development environment: scripts/sync-deps.sh dev
+#   (or: pip install -r requirements.txt -r requirements-dev.txt)
+
+# Test harness (dev-only)
+pytest==9.2.0
+pytest-asyncio==1.4.1.post1
+pytest-timeout==2.4.0
+pytest-cov==7.1.0
+
+# Linters & type-checkers (dev-only)
+mypy==2.4.1
+ruff==0.17.3
+black==26.10.1
+
+# Optional: richer output and sharding (dev-only)
+pytest-xdist==3.8.0
+pytest-rerunfailures==16.7
+pytest-playwright==0.10.0
+
+# Dependency-sync tooling (dev-only)
+pip-tools==7.6.2
