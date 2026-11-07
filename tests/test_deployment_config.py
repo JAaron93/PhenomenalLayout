@@ -120,6 +120,79 @@ def test_dev_manifest_is_compiled_closure() -> None:
     )
 
 
+def test_compiled_union_covers_dependency_closure() -> None:
+    """The union of both compiled manifests must cover the dependency closure.
+
+    pip-sync uninstalls every installed distribution that is not itself an
+    explicit pin in the manifests it syncs, so a single missing pin — e.g. a
+    transitive dependency dropped from a compiled manifest — reintroduces the
+    orphaning oscillation this repository fixed. This walks the installed
+    environment's dependency metadata from every pinned package (no network)
+    and asserts that each environment-applicable dependency is itself pinned
+    in the union of requirements.txt and requirements-dev.txt.
+    """
+    from importlib.metadata import Distribution, distributions
+
+    from packaging.requirements import Requirement
+    from packaging.utils import canonicalize_name
+
+    def pinned_names(path: str) -> set[str]:
+        manifest = Path(path)
+        assert manifest.exists(), f"{path} must exist"
+        names: set[str] = set()
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            names.add(canonicalize_name(Requirement(stripped).name))
+        return names
+
+    union = pinned_names("requirements.txt") | pinned_names("requirements-dev.txt")
+
+    # pip-sync exempts these regardless of pinning
+    # (piptools.sync.PACKAGES_TO_IGNORE).
+    ignored = {
+        "pip",
+        "pip-tools",
+        "pip-review",
+        "pkg-resources",
+        "python",
+        "wsgiref",
+        "argparse",
+    }
+
+    installed: dict[str, Distribution] = {}
+    for dist in distributions():
+        name = dist.metadata["Name"]
+        if name:
+            installed[canonicalize_name(name)] = dist
+
+    visited: set[str] = set()
+    missing: list[str] = []
+    queue: list[str] = [key for key in union if key in installed and key not in ignored]
+    while queue:
+        key = queue.pop()
+        if key in visited:
+            continue
+        visited.add(key)
+        for req_text in installed[key].requires or []:
+            req = Requirement(req_text)
+            if req.marker is not None and not req.marker.evaluate():
+                continue
+            dep_key = canonicalize_name(req.name)
+            if dep_key in ignored:
+                continue
+            if dep_key not in union:
+                missing.append(f"{key} -> {dep_key} ({req_text})")
+            elif dep_key in installed:
+                queue.append(dep_key)
+
+    assert not missing, (
+        "Compiled manifests must cover the full dependency closure — "
+        f"pip-sync would uninstall these unpinned dependencies: {missing}"
+    )
+
+
 def test_poppler_and_fonts_documented() -> None:
     readme = Path("README.md")
     assert readme.exists(), "README.md must exist for deployment guidance"
