@@ -28,12 +28,20 @@ echo "🔄 Updating runtime dependencies..."
 uv pip compile requirements.in -o requirements.txt --upgrade
 
 echo ""
+echo "🔄 Updating development dependencies..."
+# Compiled against the freshly updated runtime closure so transitive pins
+# shared between the tiers stay on the same versions — pip-sync merges both
+# manifests and rejects conflicting pins for one package.
+uv pip compile requirements-dev.in --constraint requirements.txt -o requirements-dev.txt --upgrade
+
+echo ""
 echo "📋 Summary of changes:"
 echo "  - requirements.txt: Updated from requirements.in"
+echo "  - requirements-dev.txt: Updated from requirements-dev.in (constrained by requirements.txt)"
 echo ""
 echo "🎯 Next steps:"
-echo "  1. Review the updated requirements.txt"
-echo "  2. Run: pip-sync requirements.txt requirements-dev.txt (for development)"
+echo "  1. Review the updated requirements.txt and requirements-dev.txt"
+echo "  2. Run: ./scripts/sync-deps.sh dev (or: pip-sync requirements.txt requirements-dev.txt)"
 echo "  3. Test that everything works: python -c 'import app; print(\"✅ OK\")'"
 
 echo ""

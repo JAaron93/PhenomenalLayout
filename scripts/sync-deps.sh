@@ -16,10 +16,19 @@ if [[ -z "$VIRTUAL_ENV" ]]; then
     exit 1
 fi
 
-# Ensure pip-tools is installed
+# pip-sync requires every manifest it syncs to be a fully compiled closure:
+# its desired state is exactly the set of explicit pins in the files passed
+# to it, and it uninstalls every installed distribution that is not itself
+# an explicit pin. requirements.txt and requirements-dev.txt are uv-compiled
+# closures (sources: requirements.in / requirements-dev.in), so the union
+# below is complete and repeat syncs are idempotent. Do NOT pass hand-written
+# manifests to pip-sync — their transitive dependencies get orphaned.
+
+# Ensure pip-tools is installed so first-sync bootstrap works on a fresh
+# venv (keep this pin in sync with requirements-dev.in).
 if ! command -v pip-sync &> /dev/null; then
     echo "📥 Installing pip-tools..."
-    python -m pip install "pip-tools>=7.5,<8.0"
+    python -m pip install "pip-tools==7.6.2"
 fi
 
 echo ""

@@ -372,8 +372,9 @@ We manage pinned dependencies with pip-tools for reproducible builds.
 
 Core files
 - requirements.in → High-level runtime deps
-- requirements.txt → Pinned runtime deps (auto-generated from requirements.in)
-- requirements-dev.txt → Pinned dev and CI test/lint dependencies
+- requirements.txt → Pinned runtime deps (compiled from requirements.in)
+- requirements-dev.in → High-level dev and CI deps
+- requirements-dev.txt → Pinned dev and CI deps (compiled from requirements-dev.in, constrained by requirements.txt)
 
 Common workflows
 ```bash
@@ -383,13 +384,16 @@ Common workflows
 # Prod-only setup (runtime deps)
 ./scripts/sync-deps.sh prod
 
-# Update runtime pins from requirements.in
+# Update runtime + dev pins (recompiles both manifests)
 ./scripts/update-deps.sh
 ```
 
 Important
-- Don't edit requirements.txt directly. Edit requirements.in and run `uv pip compile requirements.in -o requirements.txt`
-- Runtime Pillow, pdf2image, and ReportLab have been retired under ADR 0002. Test fixtures keep ReportLab in requirements-dev.txt only.
+- Don't edit `requirements.txt` or `requirements-dev.txt` directly — both are compiled closures. Edit `requirements.in` / `requirements-dev.in` and recompile:
+  `uv pip compile requirements.in -o requirements.txt`
+  `uv pip compile requirements-dev.in --constraint requirements.txt -o requirements-dev.txt`
+- pip-sync requires compiled closures: it uninstalls anything that is not an explicit pin in the manifests it syncs, so hand-written manifests lose their transitive dependencies on every sync.
+- Runtime Pillow, pdf2image, and ReportLab have been retired under ADR 0002. Test fixtures use the stdlib-only `build_test_pdf` helper from `tests/conftest.py`; `reportlab` is absent from every requirements manifest.
 
 ### Optional Security Scanning
 
