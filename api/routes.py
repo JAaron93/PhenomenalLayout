@@ -1,5 +1,6 @@
 """FastAPI route handlers for document translation API."""
 
+import contextlib
 import json
 import logging
 from datetime import UTC, datetime
@@ -541,9 +542,10 @@ async def get_terminology() -> TerminologyResponse:
 @api_router.post("/upload")
 async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
     """Enhanced upload endpoint with advanced processing."""
+    file_path: str | None = None
     try:
         # Save file first so validators can inspect header and structure
-        file_path: str = file_handler.save_upload_file(file)
+        file_path = file_handler.save_upload_file(file)
 
         # Basic format validation
         fmt = pdf_validator.validate_pdf_extension_and_header(file_path)
@@ -665,9 +667,29 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
         }
 
     except HTTPException:
-        # Allow previously constructed HTTP errors to pass through
+        if file_path:
+            with contextlib.suppress(Exception):
+                file_handler.cleanup_file(file_path)
         raise
+    except ValueError as e:
+        if file_path:
+            with contextlib.suppress(Exception):
+                file_handler.cleanup_file(file_path)
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": DOC_INVALID_FORMAT,
+                "message": "Only PDF format supported",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "context": {
+                    "path": Path(file.filename).name if file.filename else "unknown"
+                },
+            },
+        ) from e
     except Exception as e:
+        if file_path:
+            with contextlib.suppress(Exception):
+                file_handler.cleanup_file(file_path)
         logger.exception("Enhanced upload error: %s", e)
         raise HTTPException(
             status_code=500,
@@ -1835,8 +1857,12 @@ async def dual_pane_endpoint(
 ) -> dict[str, Any]:
     """Fetch synchronized German and English page pair for side-by-side reading mode."""
     _verify_resource_ownership(user_id, current_user)
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
     try:
         contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
         orch = get_book_orchestrator()
         _verify_job_ownership(session_id, user_id, orch)
         pair = orch.get_bilingual_view(
