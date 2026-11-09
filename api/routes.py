@@ -667,30 +667,16 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
         }
 
     except HTTPException:
-        if file_path:
-            with contextlib.suppress(Exception):
-                file_handler.cleanup_file(file_path)
+        # Clean up the saved file before propagating the HTTP error
+        if file_path is not None:
+            with contextlib.suppress(OSError):
+                Path(file_path).unlink(missing_ok=True)
         raise
-    except ValueError as e:
-        if file_path:
-            with contextlib.suppress(Exception):
-                file_handler.cleanup_file(file_path)
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": DOC_INVALID_FORMAT,
-                "message": "Only PDF format supported",
-                "timestamp": datetime.now(UTC).isoformat(),
-                "context": {
-                    "path": Path(file.filename).name if file.filename else "unknown"
-                },
-            },
-        ) from e
     except Exception as e:
-        if file_path:
-            with contextlib.suppress(Exception):
-                file_handler.cleanup_file(file_path)
         logger.exception("Enhanced upload error: %s", e)
+        if file_path is not None:
+            with contextlib.suppress(OSError):
+                Path(file_path).unlink(missing_ok=True)
         raise HTTPException(
             status_code=500,
             detail={

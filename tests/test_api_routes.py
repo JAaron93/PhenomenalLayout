@@ -99,9 +99,8 @@ def test_upload_cleans_up_file_on_encryption_rejection(
     """Verify that when an encrypted PDF is rejected, it does not leak on disk."""
     from core.translation_handler import file_handler
 
-    monkeypatch.chdir(tmp_path)
-    # Ensure fresh uploads directory in tmp_path
-    file_handler.upload_dir = str(tmp_path / "uploads")
+    # Use monkeypatch.setattr so the original upload_dir is restored after teardown
+    monkeypatch.setattr(file_handler, "upload_dir", str(tmp_path / "uploads"))
     Path(file_handler.upload_dir).mkdir(parents=True, exist_ok=True)
 
     client = _make_app()
@@ -125,8 +124,8 @@ def test_upload_cleans_up_file_on_corrupt_header_rejection(
     """Verify that when a corrupt PDF header fails validation, it does not leak on disk."""
     from core.translation_handler import file_handler
 
-    monkeypatch.chdir(tmp_path)
-    file_handler.upload_dir = str(tmp_path / "uploads")
+    # Use monkeypatch.setattr so the original upload_dir is restored after teardown
+    monkeypatch.setattr(file_handler, "upload_dir", str(tmp_path / "uploads"))
     Path(file_handler.upload_dir).mkdir(parents=True, exist_ok=True)
 
     client = _make_app()
