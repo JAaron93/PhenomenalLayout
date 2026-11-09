@@ -41,3 +41,10 @@
 - **Flag Re-introductions**: Defensive-decoupling import fallbacks (`try...except ImportError`) and mock stubs for the deleted modules are obsolete patterns — flag any re-introduction instead of approving it. Ship imports/probes must be `mcp`-free; the negative-sweep net `tests/test_lingo_eradication.py` is the enforcement artifact (`TestLingoModulesDeleted`, `TestLegacyArtifactsDeleted`, `TestPackageExportRemoved`, `TestConftestLingoEradicated`, `TestDependencyPrune`, `TestConfigurationEradication`).
 - **Legacy References Δ**: `philosophy_enhanced_translation_service.py` and `services/__init__.py` carry NO `TranslationService` symbols; `UnboundTranslationStub` + user-bound `GcpSyncTranslator` (§6) fully replace the legacy surface. Inbound stub diffs "patching `services.translation_service`" requirements are visionary feedback for ADR 0004-era code and must not be filed.
 
+## 8. Version-Free Rules Enforcement (manifests own every dependency range)
+- Dependency version ranges live exclusively in the manifests (`requirements.in`, `requirements-dev.in`, `pyproject.toml`, compiled `requirements*.txt`); vendor dependency metadata (PyPI JSON / `importlib.metadata`) is the authoritative reference for compatibility questions.
+- Never quote rule-prose version numbers as constraints and never ask contributors to raise or lower manifests to match stale prose (era-specific prose numbers — e.g. pytest-8-era asyncio guidance, README's byte-mirrored `fastapi==…` examples — are dated drift evidence, not requirements).
+- Review comments on dependency versions MUST cite the active manifest line or the vendor's declared range, never historical rule text.
+- Reviewer anti-pattern: flagging a docs edit for "not matching" a prose version or manifest pin — living docs are version-silent by design (AGENTS.md §6.16).
+- `docs/adr/**` quote era-specific versions by design (dated decision records) — never demand updates to ADR version numbers.
+
