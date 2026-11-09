@@ -1,0 +1,38 @@
+# vf_verify.sh Gate-A allowlist — Version-Free Rules governance (Nov 2026)
+# Each key is a path:line that vf_inventory.sh still matches, with its disposition.
+# Full-line comments only ('#'); one path:line key per entry.
+
+# ---- Class D: dated decision records (docs/adr/** is immutable history; exempt by design) ----
+./docs/adr/0003-python-312-floor-and-runtime-dependency-refresh.md:22
+./docs/adr/0004-retire-lingo-dev-translation-stack.md:42
+./docs/adr/0004-retire-lingo-dev-translation-stack.md:106
+
+# ---- Class FP: GCS lifecycle-rule literal (bucket config, not a package version) ----
+./AGENTS.md:64
+
+# ---- Class FP: runtime parameter thresholds inside dated fix notes (docs/fixes/** exempt) ----
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:120
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:37
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:40
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:43
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:48
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:76
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:79
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:82
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:87
+
+# ---- Class FP: math/crypto literals, no package involved ----
+./docs/CACHE_KEY_OPTIMIZATION.md:61
+./docs/CACHE_KEY_OPTIMIZATION.md:101
+./docs/CACHE_KEY_OPTIMIZATION.md:102
+./docs/CACHE_KEY_OPTIMIZATION.md:103
+./docs/CACHE_KEY_OPTIMIZATION.md:120
+./docs/COMPUTE_SCORE_IMPROVEMENTS.md:102
+./docs/COMPUTE_SCORE_IMPROVEMENTS.md:103
+./docs/COMPUTE_SCORE_IMPROVEMENTS.md:104
+./docs/DEFAULT_MIN_TEXT_LENGTH_DOCUMENTATION.md:51
+./docs/DEFAULT_MIN_TEXT_LENGTH_DOCUMENTATION.md:54
+./docs/DEFAULT_MIN_TEXT_LENGTH_DOCUMENTATION.md:57
+./docs/DEFAULT_MIN_TEXT_LENGTH_DOCUMENTATION.md:60
+./docs/REUSABLE_HELPER_FUNCTIONS.md:167
+./docs/REUSABLE_HELPER_FUNCTIONS.md:170

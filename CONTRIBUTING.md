@@ -21,7 +21,7 @@ This project uses pinned dev tooling and automation to keep CI stable and reprod
 ## Tooling and configs
 
 - Pytest is configured in `pytest.ini`:
-  - `asyncio_mode = auto` for `pytest-asyncio>=1.4` on pytest 9.x.
+  - `asyncio_mode = auto` for pytest-asyncio (version range owned by `requirements-dev.in`, compiled into `requirements-dev.txt`) on pytest 9.x.
   - Markers: `slow`, `load`. Run only non-slow and non-load tests with `pytest -q -m "not slow and not load"`.
   - Coverage gate is applied by default at $\ge 70\%$ (pytest.ini `--cov-fail-under=70`); set `FOCUSED=1` to disable locally for focused test runs.
 - Ruff and mypy live in `pyproject.toml` under `[tool.ruff]` and `[tool.mypy]` so local and CI share rules.
@@ -29,7 +29,7 @@ This project uses pinned dev tooling and automation to keep CI stable and reprod
 
 ## Development environment
 
-Prerequisite: Python 3.12 or later (3.13 recommended — matches CI). The floor is `requires-python = ">=3.12"` in `pyproject.toml`; PEP 695 generic syntax is required and Python 3.11 is not importable (see [ADR 0003](docs/adr/0003-python-312-floor-and-runtime-dependency-refresh.md)). Verify with: `python3 --version`
+Prerequisite: the Python floor declared via `requires-python` in `pyproject.toml` — supported minor series are the classifiers in the same file (see [ADR 0003](docs/adr/0003-python-312-floor-and-runtime-dependency-refresh.md)). `python3 --version` must satisfy that floor: PEP 695 generic syntax is required and interpreters below it are not importable.
 
 ```bash
 python3 -m venv .venv
@@ -78,7 +78,7 @@ Please triage Dependabot PRs promptly. Prefer green CI before merging. If a tool
 
 ## Async tests guidance
 
-With `pytest-asyncio>=0.23` and pytest 8, the asyncio mode must be declared. We default to `auto`. If a test requires explicit mode, use `@pytest.mark.asyncio`.
+pytest-asyncio requires the asyncio mode to be declared in pytest configuration. We default to `auto`. If a test requires explicit mode, use `@pytest.mark.asyncio`.
 
 ## Commit style
 
