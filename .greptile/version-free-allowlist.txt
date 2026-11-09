@@ -1,6 +1,23 @@
 # vf_verify.sh Gate-A allowlist — Version-Free Rules governance (Nov 2026)
 # Each key is a path:line that vf_inventory.sh still matches, with its disposition.
 # Full-line comments only ('#'); one path:line key per entry.
+#
+# HARNESS HOME (not vendored in this repo — governance PRs must touch prose only):
+# the verify scripts ship with the `version-free-rules-auditor` agent-skill bundle
+# on maintainer machines:
+#     ~/.agents/skills/version-free-rules-auditor/scripts/
+#   vf_inventory.sh — scans living prose for binding-version literals (deps: rg)
+#   vf_verify.sh    — Gate A (zero unlabeled hits minus this allowlist)
+#                     + Gate B (diff touches prose/review-config paths only)
+# Canonical run:
+#     ~/.agents/skills/version-free-rules-auditor/scripts/vf_verify.sh \
+#       <repo-root> --base origin/main --allow .greptile/version-free-allowlist.txt
+# FRESH-CHECKOUT FALLBACK (no skill bundle installed, approximate with rg only):
+#     # Gate A: package-name-glued comparators in living prose, minus this list
+#     rg -n "[a-zA-Z0-9._-]+(>=|<=|==|~=|>|<)[0-9]" -t md . | grep -vFf .greptile/version-free-allowlist.txt
+#     # Gate B: repository-relative paths only (see script's allow-list of extensions)
+#     git diff --name-only origin/main...HEAD
+# Allow-key format is column-1 exact match as emitted by vf_inventory.sh ("/"-prefixed path:line).
 
 # ---- Class D: dated decision records (docs/adr/** is immutable history; exempt by design) ----
 ./docs/adr/0003-python-312-floor-and-runtime-dependency-refresh.md:22
