@@ -286,12 +286,12 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Requirements
 
-- Python 3.12 or 3.13 supported (3.13 recommended; enforced via `requires-python = ">=3.12"` in `pyproject.toml`).
-- Core libs are pinned in `requirements.txt` (e.g., `fastapi==0.162.0`, `starlette==1.10.0`, `pypdf==6.21.4`, `google-cloud-translate==3.28.0`, `google-cloud-storage==3.17.1`).
+- Python is supported at the versions declared in `pyproject.toml` (`requires-python` floor + classifiers; floor decision in ADR 0003).
+- Core libs are pinned exactly in `requirements.txt` (compiled closure of `requirements.in`) — consult the manifests for active pins; never quote pin numbers in docs.
 - Poppler & OCR runtimes: Retired under ADR 0002. OCR and document layout parsing are outsourced directly to Google Cloud Document Translation Advanced v3.
-- Client/Server: `fastapi`, `uvicorn`, `httpx`, `starlette>=1.0.0`
+- Client/Server: `fastapi`, `uvicorn`, `httpx`. `starlette` is transitive via fastapi: it must remain within the range fastapi's active release declares (Pin-Mirroring invariant, AGENTS.md §6.16).
 - UI: Bespoke zero-build vanilla ES modules single-page application served directly from `static/`
-- Testing: `pytest>=9.0,<10.0`, `pytest-cov`, `pytest-asyncio`, `pytest-playwright`
+- Testing: `pytest`, `pytest-cov`, `pytest-asyncio`, `pytest-playwright` — exact dev pins live in `requirements-dev.txt` (compiled from `requirements-dev.in`).
 - BYOK credentials: personal Google Cloud Translation v3 Service Account JSON, validated in-session (no env keys)
 
 ## 📁 Key Files

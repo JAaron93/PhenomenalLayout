@@ -1,0 +1,55 @@
+# vf_verify.sh Gate-A allowlist — Version-Free Rules governance (Nov 2026)
+# Each key is a path:line that vf_inventory.sh still matches, with its disposition.
+# Full-line comments only ('#'); one path:line key per entry.
+#
+# HARNESS HOME (not vendored in this repo — governance PRs must touch prose only):
+# the verify scripts ship with the `version-free-rules-auditor` agent-skill bundle
+# on maintainer machines:
+#     ~/.agents/skills/version-free-rules-auditor/scripts/
+#   vf_inventory.sh — scans living prose for binding-version literals (deps: rg)
+#   vf_verify.sh    — Gate A (zero unlabeled hits minus this allowlist)
+#                     + Gate B (diff touches prose/review-config paths only)
+# Canonical run:
+#     ~/.agents/skills/version-free-rules-auditor/scripts/vf_verify.sh \
+#       <repo-root> --base origin/main --allow .greptile/version-free-allowlist.txt
+# FRESH-CHECKOUT FALLBACK (no skill bundle installed, approximate with rg only):
+#     # Gate A: package-name-glued comparators in living prose, minus this list
+#     rg -n "[a-zA-Z0-9._-]+(>=|<=|==|~=|>|<)[0-9]" -t md . | grep -vFf .greptile/version-free-allowlist.txt
+#     # Gate B: repository-relative paths only (see script's allow-list of extensions)
+#     git diff --name-only origin/main...HEAD
+# Allow-key format is column-1 exact match as emitted by vf_inventory.sh ("/"-prefixed path:line).
+
+# ---- Class D: dated decision records (docs/adr/** is immutable history; exempt by design) ----
+./docs/adr/0003-python-312-floor-and-runtime-dependency-refresh.md:22
+./docs/adr/0004-retire-lingo-dev-translation-stack.md:42
+./docs/adr/0004-retire-lingo-dev-translation-stack.md:106
+
+# ---- Class FP: GCS lifecycle-rule literal (bucket config, not a package version) ----
+./AGENTS.md:64
+
+# ---- Class FP: runtime parameter thresholds inside dated fix notes (docs/fixes/** exempt) ----
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:120
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:37
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:40
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:43
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:48
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:76
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:79
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:82
+./docs/fixes/MEMORY_MONITOR_VALIDATION.md:87
+
+# ---- Class FP: math/crypto literals, no package involved ----
+./docs/CACHE_KEY_OPTIMIZATION.md:61
+./docs/CACHE_KEY_OPTIMIZATION.md:101
+./docs/CACHE_KEY_OPTIMIZATION.md:102
+./docs/CACHE_KEY_OPTIMIZATION.md:103
+./docs/CACHE_KEY_OPTIMIZATION.md:120
+./docs/COMPUTE_SCORE_IMPROVEMENTS.md:102
+./docs/COMPUTE_SCORE_IMPROVEMENTS.md:103
+./docs/COMPUTE_SCORE_IMPROVEMENTS.md:104
+./docs/DEFAULT_MIN_TEXT_LENGTH_DOCUMENTATION.md:51
+./docs/DEFAULT_MIN_TEXT_LENGTH_DOCUMENTATION.md:54
+./docs/DEFAULT_MIN_TEXT_LENGTH_DOCUMENTATION.md:57
+./docs/DEFAULT_MIN_TEXT_LENGTH_DOCUMENTATION.md:60
+./docs/REUSABLE_HELPER_FUNCTIONS.md:167
+./docs/REUSABLE_HELPER_FUNCTIONS.md:170
