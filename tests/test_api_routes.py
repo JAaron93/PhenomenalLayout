@@ -91,3 +91,82 @@ def test_upload_accepts_valid_pdf(
     body = res.json()
     assert body["filename"] == "ok.pdf"
     assert body["content_type"] == "pdf"
+
+
+def test_upload_cleans_up_file_on_encryption_rejection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify that when an encrypted PDF is rejected, it does not leak on disk."""
+    from core.translation_handler import file_handler
+
+    # Use monkeypatch.setattr so the original upload_dir is restored after teardown
+    monkeypatch.setattr(file_handler, "upload_dir", str(tmp_path / "uploads"))
+    Path(file_handler.upload_dir).mkdir(parents=True, exist_ok=True)
+
+    client = _make_app()
+    enc = tmp_path / "enc.pdf"
+    write_encrypted_pdf(enc)
+
+    with enc.open("rb") as fh:
+        res = client.post(
+            "/api/upload",
+            files={"file": ("enc.pdf", fh, "application/pdf")},
+        )
+    assert res.status_code == 400
+    # Confirm no files were leaked in upload_dir
+    leaked = [p for p in Path(file_handler.upload_dir).iterdir() if p.name != ".gitkeep"]
+    assert leaked == []
+
+
+def test_upload_cleans_up_file_on_corrupt_header_rejection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify that when a corrupt PDF header fails validation, it does not leak on disk."""
+    from core.translation_handler import file_handler
+
+    # Use monkeypatch.setattr so the original upload_dir is restored after teardown
+    monkeypatch.setattr(file_handler, "upload_dir", str(tmp_path / "uploads"))
+    Path(file_handler.upload_dir).mkdir(parents=True, exist_ok=True)
+
+    client = _make_app()
+    corrupt = tmp_path / "corrupt.pdf"
+    corrupt.write_bytes(b"NOT A REAL PDF HEADER")
+
+    with corrupt.open("rb") as fh:
+        res = client.post(
+            "/api/upload",
+            files={"file": ("corrupt.pdf", fh, "application/pdf")},
+        )
+    assert res.status_code == 400
+    assert res.json()["detail"]["error_code"] == "DOC_INVALID_FORMAT"
+    leaked = [p for p in Path(file_handler.upload_dir).iterdir() if p.name != ".gitkeep"]
+    assert leaked == []
+
+
+def test_bilingual_view_rejects_non_pdf_file() -> None:
+    from api.auth import create_jwt_token
+
+    client = _make_app()
+    token = create_jwt_token("alice")
+    res = client.post(
+        "/api/book/dual-pane/sess-1?user_id=alice&page_number=1",
+        files={"file": ("invalid.txt", b"plain text", "text/plain")},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 400
+    assert "Only PDF files are supported" in res.json()["detail"]
+
+
+def test_bilingual_view_rejects_empty_file() -> None:
+    from api.auth import create_jwt_token
+
+    client = _make_app()
+    token = create_jwt_token("alice")
+    res = client.post(
+        "/api/book/dual-pane/sess-1?user_id=alice&page_number=1",
+        files={"file": ("empty.pdf", b"", "application/pdf")},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 400
+    assert "Uploaded file is empty" in res.json()["detail"]
+

@@ -51,6 +51,41 @@ class TestSaveUploadedFile:
             handler.save_uploaded_file(_GradioFileStub("/etc/hostname.txt"))
 
 
+class TestSaveFastAPIUploadFile:
+    def test_accepts_valid_pdf_upload_file(self, handler: FileHandler) -> None:
+        import io
+
+        from fastapi import UploadFile
+
+        buf = io.BytesIO(b"%PDF-1.4 test")
+        uf = UploadFile(file=buf, filename="document.pdf")
+        saved = handler.save_upload_file(uf)
+        assert saved.startswith(handler.upload_dir + os.sep)
+        assert saved.endswith(".pdf")
+        assert Path(saved).read_bytes() == b"%PDF-1.4 test"
+
+    def test_stores_normalized_pdf_extension(self, handler: FileHandler) -> None:
+        import io
+
+        from fastapi import UploadFile
+
+        buf = io.BytesIO(b"%PDF-1.4 test")
+        uf = UploadFile(file=buf, filename="DOCUMENT.PDF")
+        saved = handler.save_upload_file(uf)
+        assert Path(saved).suffix == ".pdf"
+
+    def test_rejects_unsupported_file_extension(self, handler: FileHandler) -> None:
+        import io
+
+        from fastapi import UploadFile
+
+        buf = io.BytesIO(b"malicious payload")
+        uf = UploadFile(file=buf, filename="malware.exe")
+        with pytest.raises(ValueError, match="Unsupported file type"):
+            handler.save_upload_file(uf)
+
+
+
 class TestExtractFileInfo:
     def test_case1_temp_path_roundtrip(self, tmp_path: Path) -> None:
         from core.translation_handler import extract_file_info

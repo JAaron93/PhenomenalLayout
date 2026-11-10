@@ -79,8 +79,10 @@ class FileHandler:
         try:
             if upload_file.filename is None:
                 raise ValueError("Upload file has no filename")
+            if not self._is_valid_file_type(upload_file.filename):
+                raise ValueError(f"Unsupported file type: {upload_file.filename}")
             file_id = str(uuid.uuid4())
-            file_ext = Path(upload_file.filename).suffix
+            file_ext = ".pdf"
             filename = f"{file_id}{file_ext}"
 
             file_path = os.path.join(self.upload_dir, filename)
