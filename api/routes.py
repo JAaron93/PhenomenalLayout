@@ -672,6 +672,24 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
             with contextlib.suppress(OSError):
                 Path(file_path).unlink(missing_ok=True)
         raise
+    except ValueError as e:
+        # save_upload_file rejects an unsupported/missing filename before any
+        # bytes are written, so file_path is None here; clean up deterministically
+        # anyway to guarantee no orphaned file leaks.
+        if file_path is not None:
+            with contextlib.suppress(OSError):
+                Path(file_path).unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": DOC_INVALID_FORMAT,
+                "message": "Only PDF format supported",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "context": {
+                    "path": Path(file.filename).name if file.filename else "unknown"
+                },
+            },
+        ) from e
     except Exception as e:
         logger.exception("Enhanced upload error: %s", e)
         if file_path is not None:
