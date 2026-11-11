@@ -197,10 +197,20 @@ class TestDetectorInitialization:
 class TestDetectLanguageOptimized:
     """Single-text optimized detection including cache and failure paths."""
 
-    def test_inner_result_cache_hit_on_equivalent_kwargs(self) -> None:
+    def test_inner_result_cache_hit_on_equivalent_kwargs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """An explicit min_length equal to the default hits the inner cache."""
         detector = DynamicLanguageDetector()
         detector.clear_caches()
+        calls: list[Any] = []
+        original_scores = detector._compute_all_scores
+
+        def counting_scores(*args: Any, **kwargs: Any) -> Any:
+            calls.append(args)
+            return original_scores(*args, **kwargs)
+
+        monkeypatch.setattr(detector, "_compute_all_scores", counting_scores)
 
         first = detector.detect_language_optimized(GERMAN_TEXT)
         second = detector.detect_language_optimized(
@@ -208,6 +218,7 @@ class TestDetectLanguageOptimized:
         )
 
         assert first == second == "German"
+        assert len(calls) == 1
 
     def test_scoring_failure_is_swallowed_and_returns_unknown(self) -> None:
         """Detection errors are logged and surface as "Unknown"."""
@@ -221,20 +232,33 @@ class TestDetectLanguageOptimized:
 class TestBatchDetection:
     """Batch detection with cache-reuse behavior."""
 
-    def test_batch_second_run_serves_every_text_from_cache(self) -> None:
+    def test_batch_second_run_serves_every_text_from_cache(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A repeated batch is fully served by the result cache."""
         detector = DynamicLanguageDetector()
         texts = [
             GERMAN_TEXT,
             "The quick brown fox jumps over the lazy dog nearby.",
         ]
+        calls: list[Any] = []
+        original_scores = detector._compute_all_scores
+
+        def counting_scores(*args: Any, **kwargs: Any) -> Any:
+            calls.append(args)
+            return original_scores(*args, **kwargs)
+
+        monkeypatch.setattr(detector, "_compute_all_scores", counting_scores)
 
         first = detector.detect_languages_batch(texts)
+        calls_after_first = len(calls)
         second = detector.detect_languages_batch(texts)
 
         assert first == second
         assert first[0] == "German"
         assert first[1] == "English"
+        assert calls_after_first == len(texts)
+        assert len(calls) == calls_after_first
 
 
 class TestConfidenceReporting:

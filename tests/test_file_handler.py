@@ -194,16 +194,22 @@ class TestCleanupOldFiles:
         assert handler.cleanup_old_files() == 0
 
     def test_counts_unremovable_files_as_errors(
-        self, handler: FileHandler
+        self, handler: FileHandler, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # Simulate the unremovable file via unlink patching rather than
+        # directory permissions: a root test runner would bypass chmod.
         stale = Path(handler.temp_dir) / "stale.pdf"
         stale.write_bytes(b"stale")
         self._age_file(stale, hours=48)
-        os.chmod(handler.temp_dir, 0o500)
-        try:
-            assert handler.cleanup_old_files(max_age_hours=24) == 0
-        finally:
-            os.chmod(handler.temp_dir, 0o700)
+        real_unlink = Path.unlink
+
+        def refuse_unlink(path: Path, *args: object) -> None:
+            if path.name == "stale.pdf":
+                raise PermissionError(f"refusing to unlink {path}")
+            real_unlink(path)
+
+        monkeypatch.setattr(Path, "unlink", refuse_unlink)
+        assert handler.cleanup_old_files(max_age_hours=24) == 0
         assert stale.exists()
 
 

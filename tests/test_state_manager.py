@@ -123,9 +123,9 @@ class TestTaskTracking:
                 tracked.get_tracked_translation_task()
         finally:
             tracked._translation_task = None
-            coro = task.get_coro()
-            if coro is not None:
-                coro.close()
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                loop.run_until_complete(task)
             loop.close()
 
     def test_tracked_task_in_foreign_loop_raises_when_checked(
@@ -148,9 +148,9 @@ class TestTaskTracking:
             asyncio.run(check())
         finally:
             tracked._translation_task = None
-            coro = task.get_coro()
-            if coro is not None:
-                coro.close()
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                owner_loop.run_until_complete(task)
             owner_loop.close()
 
 
