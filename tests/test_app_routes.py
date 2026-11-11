@@ -504,7 +504,12 @@ class TestOwnershipAndAuthorization:
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
         # Override auth to simulate an authenticated non-admin user 'attacker'
-        from api.auth import get_current_user_dependency
+        # Override via the ROUTER's captured binding (api.routes), not the
+        # live api.auth binding: sibling-test `importlib.reload(api.auth)`
+        # creates a new function object, so overriding the fresh api.auth
+        # import silently misses the route's captured dependency (-> 401
+        # instead of 403). api.routes still holds the captured object.
+        from api.routes import get_current_user_dependency
 
         app.dependency_overrides[get_current_user_dependency] = lambda: {
             "user_id": "attacker",
@@ -530,11 +535,58 @@ class TestOwnershipAndAuthorization:
         res_del = client.delete("/api/v1/byok/credentials?user_id=victim")
         assert res_del.status_code == 403
 
+    def test_override_survives_auth_dependency_rebind(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression guard: a prior-test rebinding of
+        api.auth.get_current_user_dependency (e.g. importlib.reload in a
+        sibling file) must not defeat the ownership override.
+
+        Routes capture Depends(get_current_user_dependency) at api.routes
+        import time. Overriding via the api.routes binding therefore works
+        even after api.auth's attribute is rebound to a new function object;
+        overriding via the fresh api.auth binding would silently miss the
+        captured dependency and yield 401 instead of 403.
+        """
+        import api.auth
+
+        app = FastAPI()
+        app.include_router(api_router, prefix="/api/v1")
+        from api.routes import get_current_user_dependency
+
+        app.dependency_overrides[get_current_user_dependency] = lambda: {
+            "user_id": "attacker",
+            "role": UserRole.READ_ONLY,
+            "authenticated": True,
+        }
+        # Simulate the polluter: rebind the api.auth attribute to a NEW object.
+        monkeypatch.setattr(
+            api.auth, "get_current_user_dependency", lambda _request: None
+        )
+        client = TestClient(app)
+
+        res = client.post(
+            "/api/v1/byok/credentials",
+            json={
+                "user_id": "victim",
+                "project_id": "victim-proj",
+                "bucket_name": "victim-bkt",
+                "sa_json": '{"type": "service_account"}',
+            },
+        )
+        assert res.status_code == 403
+        assert "Access denied" in res.json()["detail"]
+
     def test_cross_user_vocabulary_modification_rejected(self) -> None:
         """Verify non-admin caller cannot alter another user's persistent vocabulary."""
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
-        from api.auth import get_current_user_dependency
+        # Override via the ROUTER's captured binding (api.routes), not the
+        # live api.auth binding: sibling-test `importlib.reload(api.auth)`
+        # creates a new function object, so overriding the fresh api.auth
+        # import silently misses the route's captured dependency (-> 401
+        # instead of 403). api.routes still holds the captured object.
+        from api.routes import get_current_user_dependency
 
         app.dependency_overrides[get_current_user_dependency] = lambda: {
             "user_id": "attacker",
@@ -562,7 +614,12 @@ class TestOwnershipAndAuthorization:
         """Verify non-admin caller cannot resume or inspect another user's job session."""
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
-        from api.auth import get_current_user_dependency
+        # Override via the ROUTER's captured binding (api.routes), not the
+        # live api.auth binding: sibling-test `importlib.reload(api.auth)`
+        # creates a new function object, so overriding the fresh api.auth
+        # import silently misses the route's captured dependency (-> 401
+        # instead of 403). api.routes still holds the captured object.
+        from api.routes import get_current_user_dependency
 
         app.dependency_overrides[get_current_user_dependency] = lambda: {
             "user_id": "attacker",
@@ -579,7 +636,14 @@ class TestOwnershipAndAuthorization:
         """Verify unauthenticated/anonymous caller cannot access or mutate user resources, eliminating shared state."""
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
-        from api.auth import ANONYMOUS_USER, get_current_user_dependency
+        from api.auth import ANONYMOUS_USER
+
+        # Override via the ROUTER's captured binding (api.routes), not the
+        # live api.auth binding: sibling-test `importlib.reload(api.auth)`
+        # creates a new function object, so overriding the fresh api.auth
+        # import silently misses the route's captured dependency (-> 401
+        # instead of 403). api.routes still holds the captured object.
+        from api.routes import get_current_user_dependency
 
         # Simulate unauthenticated anonymous request
         app.dependency_overrides[get_current_user_dependency] = lambda: ANONYMOUS_USER
@@ -611,7 +675,12 @@ class TestOwnershipAndAuthorization:
         """Verify non-admin caller with empty user_id cannot bypass ownership checks."""
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
-        from api.auth import get_current_user_dependency
+        # Override via the ROUTER's captured binding (api.routes), not the
+        # live api.auth binding: sibling-test `importlib.reload(api.auth)`
+        # creates a new function object, so overriding the fresh api.auth
+        # import silently misses the route's captured dependency (-> 401
+        # instead of 403). api.routes still holds the captured object.
+        from api.routes import get_current_user_dependency
 
         # Caller with empty user_id
         app.dependency_overrides[get_current_user_dependency] = lambda: {
@@ -629,7 +698,12 @@ class TestOwnershipAndAuthorization:
         """Verify workflows function seamlessly when MEMORY_API_ENABLE_AUTH=false."""
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
-        from api.auth import get_current_user_dependency
+        # Override via the ROUTER's captured binding (api.routes), not the
+        # live api.auth binding: sibling-test `importlib.reload(api.auth)`
+        # creates a new function object, so overriding the fresh api.auth
+        # import silently misses the route's captured dependency (-> 401
+        # instead of 403). api.routes still holds the captured object.
+        from api.routes import get_current_user_dependency
 
         app.dependency_overrides[get_current_user_dependency] = lambda: {
             "user_id": "scholar-01",
@@ -667,7 +741,12 @@ class TestOwnershipAndAuthorization:
 
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
-        from api.auth import get_current_user_dependency
+        # Override via the ROUTER's captured binding (api.routes), not the
+        # live api.auth binding: sibling-test `importlib.reload(api.auth)`
+        # creates a new function object, so overriding the fresh api.auth
+        # import silently misses the route's captured dependency (-> 401
+        # instead of 403). api.routes still holds the captured object.
+        from api.routes import get_current_user_dependency
         from services.batch_job_recovery import ActiveJobState
 
         # Authenticated as user 'usr'
