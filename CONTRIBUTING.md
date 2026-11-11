@@ -23,7 +23,7 @@ This project uses pinned dev tooling and automation to keep CI stable and reprod
 - Pytest is configured in `pytest.ini`:
   - `asyncio_mode = auto` for pytest-asyncio (version range owned by `requirements-dev.in`, compiled into `requirements-dev.txt`) on pytest 9.x.
   - Markers: `slow`, `load`. Run only non-slow and non-load tests with `pytest -q -m "not slow and not load"`.
-  - Coverage gate is applied by default at $\ge 70\%$ (pytest.ini `--cov-fail-under=70`); set `FOCUSED=1` to disable locally for focused test runs.
+  - Coverage gate is applied by default via pytest.ini `--cov-fail-under` (currently $\ge 80\%$); set `FOCUSED=1` to disable locally for focused test runs.
 - Ruff and mypy live in `pyproject.toml` under `[tool.ruff]` and `[tool.mypy]` so local and CI share rules.
 - Runtime deps: `requirements.txt` (compiled from `requirements.in`). Dev-only pins: `requirements-dev.txt`.
 
