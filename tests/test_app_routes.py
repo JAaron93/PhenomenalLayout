@@ -550,6 +550,13 @@ class TestOwnershipAndAuthorization:
         """
         import api.auth
 
+        # Simulate the polluter FIRST: rebind the api.auth attribute to a
+        # NEW object before the override is installed, mirroring the real
+        # failure (an importlib.reload in a sibling file that ran earlier).
+        monkeypatch.setattr(
+            api.auth, "get_current_user_dependency", lambda _request: None
+        )
+
         app = FastAPI()
         app.include_router(api_router, prefix="/api/v1")
         from api.routes import get_current_user_dependency
@@ -559,10 +566,6 @@ class TestOwnershipAndAuthorization:
             "role": UserRole.READ_ONLY,
             "authenticated": True,
         }
-        # Simulate the polluter: rebind the api.auth attribute to a NEW object.
-        monkeypatch.setattr(
-            api.auth, "get_current_user_dependency", lambda _request: None
-        )
         client = TestClient(app)
 
         res = client.post(
