@@ -10,7 +10,7 @@ python-dotenv>=1.2.4,<2.0
 python-multipart>=0.0.33,<1.0
 
 # PDF Processing
-pypdf>=6.21.3,<7.0
+pypdf>=7.0.0,<8.0
 
 # Translation & NLP
 spacy>=3.8,<4.0
