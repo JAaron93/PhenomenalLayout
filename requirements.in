@@ -2,7 +2,7 @@
 # High-level dependencies - pip-compile will resolve all sub-dependencies
 
 # Web Framework & API
-fastapi>=0.143.0,<1.0
+fastapi>=0.162.2,<1.0
 uvicorn[standard]>=0.54.0,<1.0
 python-dotenv>=1.2.4,<2.0
 # Required at route-registration time by FastAPI UploadFile/Form endpoints
