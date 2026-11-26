@@ -22,7 +22,7 @@ modal>=1.6.4,<2.0
 # Google Cloud Platform (BYOK batch translation pipeline)
 google-cloud-translate>=3.28.0,<4.0
 google-cloud-storage>=3.17.0,<4.0
-google-api-python-client>=2.201.0,<3.0
+google-api-python-client>=2.202.0,<3.0
 
 # Authentication
 PyJWT[crypto]>=2.11,<3.0

@@ -72,7 +72,7 @@ google-api-core[grpc]==2.43.2
     #   google-cloud-core
     #   google-cloud-storage
     #   google-cloud-translate
-google-api-python-client==2.201.0
+google-api-python-client==2.202.0
     # via -r requirements.in
 google-auth==2.62.0
     # via
