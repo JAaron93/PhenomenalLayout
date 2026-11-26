@@ -17,7 +17,7 @@ spacy>=3.8,<4.0
 requests>=2.32,<3.0
 
 # Cloud Services & Deployment
-modal>=1.1,<2.0
+modal>=1.6.4,<2.0
 
 # Google Cloud Platform (BYOK batch translation pipeline)
 google-cloud-translate>=3.28.0,<4.0
