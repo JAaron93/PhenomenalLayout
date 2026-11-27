@@ -65,7 +65,7 @@ cymem==2.0.16
     #   preshed
     #   spacy
     #   thinc
-fastapi==0.162.5
+fastapi==0.165.0
     # via -r requirements.in
 frozenlist==1.8.0
     # via
