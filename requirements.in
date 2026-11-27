@@ -2,7 +2,7 @@
 # High-level dependencies - pip-compile will resolve all sub-dependencies
 
 # Web Framework & API
-fastapi>=0.143.0,<1.0
+fastapi>=0.162.5,<1.0
 uvicorn[standard]>=0.54.0,<1.0
 python-dotenv>=1.2.4,<2.0
 # Required at route-registration time by FastAPI UploadFile/Form endpoints
@@ -10,25 +10,38 @@ python-dotenv>=1.2.4,<2.0
 python-multipart>=0.0.33,<1.0
 
 # PDF Processing
-pypdf>=6.21.3,<7.0
+pypdf>=7.0.1,<8.0
 
 # Translation & NLP
 spacy>=3.8,<4.0
 requests>=2.32,<3.0
 
 # Cloud Services & Deployment
-modal>=1.1,<2.0
+modal>=1.6.4,<2.0
 
 # Google Cloud Platform (BYOK batch translation pipeline)
 google-cloud-translate>=3.28.0,<4.0
 google-cloud-storage>=3.17.0,<4.0
-google-api-python-client>=2.201.0,<3.0
+google-api-python-client>=2.202.0,<3.0
 
 # Authentication
 PyJWT[crypto]>=2.11,<3.0
 
 # HTTP Client
 httpx>=0.28,<1.0
+
+# Explicit pins for dwell-passing transitive upgrades (audit 2026-11-27)
+pydantic>=2.14.3,<3.0
+pydantic-core>=2.50.4,<3.0
+google-api-core>=2.44.0,<3.0
+google-auth>=2.62.2,<3.0
+anyio>=4.16.0,<5.0
+annotated-doc>=0.0.6,<1.0
+cbor2>=6.2.1,<7.0
+markdown-it-py>=4.3.0,<5.0
+typing-inspection>=0.4.5,<1.0
+smart-open>=9.0.3,<10.0
+typer>=0.29.1,<1.0
 
 # Development Utilities
 rich>=14.1,<16.0
