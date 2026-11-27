@@ -1,0 +1,5 @@
+# Dwell-gate audit constraints (2026-11-27, 14-day minimum release age) for dev tier.
+# Used as --constraint input to uv pip compile for requirements-dev.txt.
+coverage==7.17.3
+ruff==0.17.5
+pytest-asyncio==1.5.0
