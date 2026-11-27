@@ -8,7 +8,6 @@ aiosignal==1.4.0
     # via aiohttp
 annotated-doc==0.0.6
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   fastapi
     #   typer
@@ -16,7 +15,6 @@ annotated-types==0.8.0
     # via pydantic
 anyio==4.16.0
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   fastapi
     #   httpx
@@ -33,7 +31,6 @@ catalogue==2.0.10
     #   thinc
 cbor2==6.2.1
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   modal
 certifi==2026.10.23
@@ -69,28 +66,22 @@ cymem==2.0.16
     #   spacy
     #   thinc
 fastapi==0.162.5
-    # via
-    #   -c constraints/dwell-audit.txt
-    #   -r requirements.in
+    # via -r requirements.in
 frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-google-api-core==2.44.0
+google-api-core[grpc]==2.44.0
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   google-api-python-client
     #   google-cloud-core
     #   google-cloud-storage
     #   google-cloud-translate
 google-api-python-client==2.202.0
-    # via
-    #   -c constraints/dwell-audit.txt
-    #   -r requirements.in
+    # via -r requirements.in
 google-auth==2.62.2
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   google-api-core
     #   google-api-python-client
@@ -114,7 +105,7 @@ google-crc32c==1.9.0
     #   google-resumable-media
 google-resumable-media==2.11.0
     # via google-cloud-storage
-googleapis-common-protos==1.76.0
+googleapis-common-protos[grpc]==1.76.0
     # via
     #   google-api-core
     #   grpc-google-iam-v1
@@ -164,7 +155,6 @@ jinja2==3.1.6
     # via spacy
 markdown-it-py==4.3.0
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   rich
 markupsafe==3.0.4
@@ -172,9 +162,7 @@ markupsafe==3.0.4
 mdurl==0.1.2
     # via markdown-it-py
 modal==1.6.4
-    # via
-    #   -c constraints/dwell-audit.txt
-    #   -r requirements.in
+    # via -r requirements.in
 multidict==7.2.1
     # via
     #   aiohttp
@@ -230,7 +218,6 @@ pycparser==3.12
     # via cffi
 pydantic==2.14.3
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   fastapi
     #   spacy
@@ -239,19 +226,18 @@ pydantic==2.14.3
     #   weasel
 pydantic-core==2.50.4
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   pydantic
 pygments==2.21.0
     # via rich
-pyjwt==2.15.1
-    # via -r requirements.in
+pyjwt[crypto]==2.15.1
+    # via
+    #   -r requirements.in
+    #   pyjwt
 pyparsing==3.3.3
     # via httplib2
-pypdf==7.0.1
-    # via
-    #   -c constraints/dwell-audit.txt
-    #   -r requirements.in
+pypdf==7.1.1
+    # via -r requirements.in
 python-dotenv==1.2.4
     # via
     #   -r requirements.in
@@ -272,15 +258,10 @@ rich==15.0.0
     #   -r requirements.in
     #   modal
     #   typer
-setuptools==84.2.1
-    # via
-    #   spacy
-    #   thinc
 shellingham==1.5.4
     # via typer
-smart-open==9.0.3
+smart-open[http]==9.0.3
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   weasel
 spacy==3.8.18
@@ -308,7 +289,6 @@ tqdm==4.70.1
     #   spacy
 typer==0.29.1
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   spacy
     #   weasel
@@ -318,6 +298,8 @@ types-toml==0.10.8.20260518
     # via modal
 typing-extensions==4.16.0
     # via
+    #   aiohttp
+    #   aiosignal
     #   anyio
     #   fastapi
     #   grpcio
@@ -325,11 +307,11 @@ typing-extensions==4.16.0
     #   opentelemetry-api
     #   pydantic
     #   pydantic-core
+    #   starlette
     #   synchronicity
     #   typing-inspection
 typing-inspection==0.4.5
     # via
-    #   -c constraints/dwell-audit.txt
     #   -r requirements.in
     #   fastapi
     #   pydantic
@@ -337,7 +319,7 @@ uritemplate==4.2.0
     # via google-api-python-client
 urllib3==2.8.0
     # via requests
-uvicorn==0.54.0
+uvicorn[standard]==0.54.0
     # via -r requirements.in
 uvloop==0.23.0
     # via uvicorn
